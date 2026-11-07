@@ -2,9 +2,8 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
-import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
+import { groupedRowClass, LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { MovementRow } from '@/shared/ui/MovementRow';
-import { Divider } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 
@@ -28,8 +27,11 @@ export function Movements() {
         <FlashList
           data={screen.items}
           keyExtractor={(movement) => movement.id}
-          renderItem={({ item }) => <MovementRow movement={item} onPress={screen.open} />}
-          ItemSeparatorComponent={Divider}
+          renderItem={({ item, index }) => (
+            <View className={groupedRowClass(index, screen.items.length)}>
+              <MovementRow movement={item} onPress={screen.open} />
+            </View>
+          )}
           contentContainerStyle={LIST_CONTENT_STYLE}
           onEndReached={screen.loadMore}
           onEndReachedThreshold={0.4}

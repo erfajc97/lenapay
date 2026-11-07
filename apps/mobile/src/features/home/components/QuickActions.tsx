@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import type { MoneyBlocker } from '@/shared/helpers/permissions';
 import { AppText } from '@/shared/ui/AppText';
+import { elevation, pressedScale } from '@/shared/ui/elevation';
 import { Icon, type IconName } from '@/shared/ui/Icon';
 
 import type { QuickActionsState } from '../helpers/homeRules';
@@ -18,17 +19,18 @@ function Action({ icon, label, blocker, onPress }: { icon: IconName; label: stri
       accessibilityLabel={label}
       accessibilityHint={disabled ? t(`blockers.${blocker}`) : undefined}
       accessibilityState={{ disabled }}
+      style={pressedScale}
       className={`flex-1 items-center gap-2 ${disabled ? 'opacity-40' : ''}`}
     >
-      <View className="h-14 w-14 items-center justify-center rounded-full bg-primary active:bg-primary-active">
-        <Icon name={icon} size={24} tone="on-primary" />
+      <View className={`h-16 w-16 items-center justify-center rounded-full border border-hero-from bg-primary ${disabled ? '' : elevation('glow')}`}>
+        <Icon name={icon} size={26} tone="on-primary" />
       </View>
       <AppText variant="label">{label}</AppText>
     </Pressable>
   );
 }
 
-/** Cobrar, Pagar, Mover. A blocked action stays visible, disabled, with the reason below. */
+/** Cobrar, Pagar, Mover as raised round buttons with a primary glow. A blocked action stays visible, disabled, with the reason below. */
 export function QuickActions({ state, onCollect, onPay, onMove }: { state: QuickActionsState; onCollect: () => void; onPay: () => void; onMove: () => void }) {
   const { t } = useTranslation();
   const reason = state.pay ?? state.collect;

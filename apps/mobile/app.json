@@ -14,8 +14,9 @@
     "android": {
       "package": "app.lenapay.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/icon.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#FFFFFF"
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
@@ -36,9 +37,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 120,
+          "imageWidth": 112,
+          "resizeMode": "contain",
           "backgroundColor": "#FFFFFF",
           "dark": {
+            "image": "./assets/splash-icon.png",
             "backgroundColor": "#0E1015"
           }
         }
@@ -50,7 +53,8 @@
           "faceIDPermission": "Lenapay usa Face ID para confirmar tus operaciones."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true

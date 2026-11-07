@@ -35,8 +35,8 @@
 
   --radius-input: 4px;
   --radius-chip: 8px;
-  --radius-card: 12px;
-  --radius-sheet: 16px;
+  --radius-card: 16px;
+  --radius-sheet: 24px;
   --radius-button: 20px;
 
   --color-currency-ars: #89CFF0;
@@ -44,6 +44,24 @@
   /* Text on the fixed light currency chips and on primary buttons (not in brand.md: contrast pairs). */
   --color-on-currency: #181A21;
   --color-on-primary: #FFFFFF;
+
+  /*
+   * Elevation (docs/brand.md "Elevation"). Read ONLY through src/shared/ui/elevation.ts, never
+   * as raw shadow classes in features. Colours are 8-digit hex (the native box-shadow parser
+   * reads hex, not rgba()). Light: soft layered shadows tinted with the page ink (#0E1015).
+   * Dark: shadows do not read on a near-black page, so surfaces get a top highlight instead.
+   */
+  --shadow-sm: 0 1px 2px 0 #0E10150F, 0 2px 6px -1px #0E101512;
+  --shadow-md: 0 1px 3px 0 #0E101512, 0 8px 20px -6px #0E10151F;
+  --shadow-lg: 0 2px 6px -1px #0E101514, 0 16px 32px -10px #0E10152E;
+  --shadow-xl: 0 4px 12px -2px #0E10151A, 0 24px 56px -12px #0E101547;
+  --shadow-bar: 0 -1px 3px 0 #0E10150D, 0 -8px 24px -6px #0E10151F;
+  --shadow-glow: 0 4px 8px -2px #125BFF40, 0 10px 24px -6px #125BFF66;
+  --shadow-glow-pressed: 0 2px 6px -2px #125BFF4D;
+  --shadow-glow-dark: 0 6px 22px -6px #296BFE80;
+  --shadow-edge: inset 0 1px 0 0 #FFFFFF0F;
+  --shadow-edge-strong: inset 0 1px 0 0 #FFFFFF1A, 0 12px 32px -8px #00000099;
+  --shadow-focus: 0 0 0 4px #125BFF29;
 }
 
 @layer theme {
@@ -71,6 +89,11 @@
       --color-danger-bg: #FEE8E7;
       --color-accent: #FC8846;
       --color-overlay: rgba(14, 16, 21, 0.45);
+      /* Hero (balance) gradient and its glossy layers; white text on it stays above 5:1. */
+      --color-hero-from: #1F5FF5;
+      --color-hero-to: #0A3FC2;
+      --color-hero-sheen: rgba(255, 255, 255, 0.12);
+      --color-hero-tile: rgba(4, 22, 77, 0.28);
     }
     @variant dark {
       --color-primary: #296BFE;
@@ -95,6 +118,10 @@
       --color-danger-bg: #3D1216;
       --color-accent: #F99165;
       --color-overlay: rgba(0, 0, 0, 0.6);
+      --color-hero-from: #1A56E0;
+      --color-hero-to: #0A2B85;
+      --color-hero-sheen: rgba(255, 255, 255, 0.08);
+      --color-hero-tile: rgba(0, 8, 40, 0.35);
     }
   }
 }

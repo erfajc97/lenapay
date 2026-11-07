@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/Button';
 import { FormField } from '@/shared/ui/FormField';
 import { LinkButton } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
+import { Wordmark } from '@/shared/ui/Wordmark';
 
 import { DemoHint } from './components/DemoHint';
 import { useLoginForm } from './hooks/useAuthForms';
@@ -16,6 +17,9 @@ export function Login() {
   const { form, submit, pending } = useLoginForm();
   return (
     <Screen title={t('login.title')} back footer={<Button label={t('login.submit')} onPress={submit} loading={pending} />}>
+      <View className="pb-2 pt-1">
+        <Wordmark size="small" />
+      </View>
       <DemoHint visible={isMockApi} title={t('demo.title')} body={t('demo.login')} />
       <FormField control={form.control} name="email" label={t('fields.email')} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" returnKeyType="next" />
       <FormField control={form.control} name="password" label={t('fields.password')} secureTextEntry autoComplete="current-password" textContentType="password" returnKeyType="go" onSubmitEditing={submit} />

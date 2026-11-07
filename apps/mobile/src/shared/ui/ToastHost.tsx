@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToastStore } from '@/shared/stores/useToastStore';
 
 import { AppText } from './AppText';
+import { elevation } from './elevation';
 import { Icon } from './Icon';
 
 const TOAST_MS = 3_500;
@@ -33,7 +34,7 @@ export function ToastHost() {
         accessibilityRole="alert"
         accessibilityLabel={toast.message}
         accessibilityHint={t('common.dismiss')}
-        className="flex-row items-center gap-3 rounded-card border border-border-subtle bg-bg-surface px-4 py-3"
+        className={`flex-row items-center gap-3 rounded-card border border-border-subtle bg-bg-surface px-4 py-3 ${elevation('lg')}`}
       >
         <Icon name={icon} size={22} tone={tone} />
         <AppText variant="label" className="flex-1">

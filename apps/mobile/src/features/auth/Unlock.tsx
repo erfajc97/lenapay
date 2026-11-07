@@ -3,10 +3,11 @@ import { View } from 'react-native';
 
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
+import { elevation } from '@/shared/ui/elevation';
 import { Icon } from '@/shared/ui/Icon';
 import { Screen } from '@/shared/ui/Screen';
+import { Wordmark } from '@/shared/ui/Wordmark';
 
-import { Wordmark } from './components/Wordmark';
 import { useForgetSession, useUnlock } from './mutations/useAuthMutations';
 
 /** Biometric unlock of a stored session (M1 lane: biometric unlock). */
@@ -25,7 +26,7 @@ export function Unlock() {
     >
       <View className="items-center gap-6 pt-16">
         <Wordmark />
-        <View className="h-24 w-24 items-center justify-center rounded-full bg-primary-bg">
+        <View className={`h-24 w-24 items-center justify-center rounded-full border border-border-subtle bg-bg-surface ${elevation('lg')}`}>
           <Icon name="finger-print" size={48} tone="primary" />
         </View>
         <AppText variant="title" className="text-center">

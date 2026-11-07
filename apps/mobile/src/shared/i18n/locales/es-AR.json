@@ -1,5 +1,5 @@
 {
-  "brand": { "name": "Lenapay" },
+  "brand": { "name": "Lenapay", "by": "by", "byLebaneLabel": "Lenapay by Lebane" },
   "common": {
     "back": "Volver",
     "cancel": "Cancelar",

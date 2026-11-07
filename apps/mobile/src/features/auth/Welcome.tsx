@@ -5,11 +5,11 @@ import { View } from 'react-native';
 import { isMockApi } from '@/shared/api';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
+import { Card } from '@/shared/ui/Card';
 import { Chip } from '@/shared/ui/Chip';
 import { Icon } from '@/shared/ui/Icon';
 import { Screen } from '@/shared/ui/Screen';
-
-import { Wordmark } from './components/Wordmark';
+import { Wordmark } from '@/shared/ui/Wordmark';
 
 const HIGHLIGHTS = [
   { icon: 'qr-code-outline', key: 'welcome.highlightCvu' },
@@ -30,13 +30,13 @@ export function Welcome() {
       }
     >
       <View className="gap-6 pt-10">
-        <View className="flex-row items-center justify-between">
-          <Wordmark />
+        <View className="flex-row items-start justify-between">
+          <Wordmark byLebane />
           {isMockApi ? <Chip label={t('common.demoMode')} tone="warning" /> : null}
         </View>
         <AppText variant="title">{t('welcome.tagline')}</AppText>
         <AppText tone="secondary">{t('welcome.body')}</AppText>
-        <View className="gap-4">
+        <Card className="gap-4">
           {HIGHLIGHTS.map((item) => (
             <View key={item.key} className="flex-row items-center gap-3">
               <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-bg">
@@ -45,7 +45,7 @@ export function Welcome() {
               <AppText className="flex-1">{t(item.key)}</AppText>
             </View>
           ))}
-        </View>
+        </Card>
       </View>
     </Screen>
   );

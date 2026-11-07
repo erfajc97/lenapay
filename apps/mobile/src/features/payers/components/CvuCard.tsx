@@ -6,13 +6,16 @@ import { groupCbu } from '@/shared/helpers/cbu';
 import { AppText } from '@/shared/ui/AppText';
 import { Card } from '@/shared/ui/Card';
 import { Chip, CurrencyChip } from '@/shared/ui/Chip';
+import { elevation, pressedScale } from '@/shared/ui/elevation';
 import { Icon, type IconName } from '@/shared/ui/Icon';
 import { Divider, LinkButton } from '@/shared/ui/Rows';
 
 function IconAction({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} className="min-h-11 flex-1 items-center justify-center gap-1 rounded-chip py-2 active:bg-primary-soft">
-      <Icon name={icon} size={20} tone="primary" />
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={pressedScale} className="min-h-11 flex-1 items-center justify-center gap-1.5 py-1">
+      <View className={`h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-primary-soft ${elevation('sm')}`}>
+        <Icon name={icon} size={20} tone="primary" />
+      </View>
       <AppText variant="caption" tone="brand">
         {label}
       </AppText>

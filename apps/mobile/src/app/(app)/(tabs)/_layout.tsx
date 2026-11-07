@@ -2,21 +2,21 @@ import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { useThemeColor } from '@/shared/ui/Icon';
-import { TabIcon } from '@/shared/ui/TabIcon';
+import { TabBarBackground, TabIcon } from '@/shared/ui/TabIcon';
 
 export default function TabsLayout() {
   const { t } = useTranslation();
   const active = useThemeColor('primary');
   const inactive = useThemeColor('text-muted');
-  const surface = useThemeColor('bg-surface');
-  const border = useThemeColor('border-subtle');
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: active,
         tabBarInactiveTintColor: inactive,
-        tabBarStyle: { backgroundColor: surface, borderTopColor: border },
+        // The bar's surface, rounded corners and shadow come from TabBarBackground (one elevation helper).
+        tabBarStyle: { backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0 },
+        tabBarBackground: () => <TabBarBackground />,
         tabBarLabelStyle: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11 },
       }}
     >
