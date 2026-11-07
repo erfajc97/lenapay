@@ -7,6 +7,7 @@ import { useMovements } from '@/shared/queries/movements';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { useApprovals } from '@/shared/queries/payouts';
 import { useMe } from '@/shared/queries/session';
+import { useMovementFiltersStore } from '@/shared/stores/useMovementFiltersStore';
 
 import { balanceFor, kycNotice, quickActions } from '../helpers/homeRules';
 
@@ -19,6 +20,7 @@ export function useHome() {
   const approvals = useApprovals(org?.kycStatus === 'approved' ? org.id : undefined);
   const movements = useMovements(org?.kycStatus === 'approved' ? org.id : undefined, {});
   const [currency, setCurrency] = useState<Currency>('ARS');
+  const showOnly = useMovementFiltersStore((state) => state.showOnly);
 
   return {
     orgsQuery,
@@ -40,6 +42,15 @@ export function useHome() {
       void balances.refetch();
       void approvals.refetch();
       void movements.refetch();
+    },
+    // The hero tiles open Movements filtered to what they add up: held = pending, in this currency.
+    openHeld: () => {
+      showOnly({ status: 'pending', currency });
+      router.push('/movements');
+    },
+    openTotal: () => {
+      showOnly({ currency });
+      router.push('/movements');
     },
     openMovement: (movement: Movement) => router.push({ pathname: '/movements/[id]', params: { id: movement.id } }),
   };

@@ -7,6 +7,7 @@ import { MovementRow } from '@/shared/ui/MovementRow';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 
+import { FilterSheet } from './components/FilterSheet';
 import { MovementFilters } from './components/MovementFilters';
 import { useMovementsScreen } from './hooks/useMovementsScreen';
 
@@ -16,7 +17,7 @@ export function Movements() {
   const screen = useMovementsScreen();
   return (
     <Screen title={t('movements.title.screen')} inTabs scroll={false}>
-      <MovementFilters draft={screen.draft} setFilter={screen.setFilter} activeCount={screen.activeCount} onReset={screen.reset} />
+      <MovementFilters draft={screen.draft} activeCount={screen.activeCount} onOpen={screen.open} onReset={screen.reset} />
       {screen.movements.isLoading ? (
         <View className="px-4">
           <SkeletonList rows={6} />
@@ -29,7 +30,7 @@ export function Movements() {
           keyExtractor={(movement) => movement.id}
           renderItem={({ item, index }) => (
             <View className={groupedRowClass(index, screen.items.length)}>
-              <MovementRow movement={item} onPress={screen.open} />
+              <MovementRow movement={item} onPress={screen.openMovement} />
             </View>
           )}
           contentContainerStyle={LIST_CONTENT_STYLE}
@@ -48,6 +49,7 @@ export function Movements() {
           }
         />
       )}
+      <FilterSheet screen={screen} />
     </Screen>
   );
 }

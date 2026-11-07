@@ -15,7 +15,7 @@ export function StepUpSheet() {
   const { t } = useTranslation();
   const sheet = useStepUpSheet();
   return (
-    <Sheet visible={sheet.open} title={t('stepUp.title')} onClose={sheet.close}>
+    <Sheet visible={sheet.open} title={t('stepUp.title')} onClose={sheet.close} onDismissed={sheet.dismissed}>
       <View className="items-center gap-2 py-2">
         <View className="h-16 w-16 items-center justify-center rounded-full bg-primary-bg">
           <Icon name={sheet.mode === 'biometric' ? 'finger-print' : 'lock-closed-outline'} size={32} tone="primary" />

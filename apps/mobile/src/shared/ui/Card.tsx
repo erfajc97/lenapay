@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { elevation, pressedScale } from './elevation';
+import { elevation, pressedScale, SURFACE_TONE } from './elevation';
 
-const SURFACE = 'rounded-card border border-border-subtle bg-bg-surface p-4';
+const SURFACE = `rounded-card border border-border-subtle ${SURFACE_TONE.md} p-4`;
 
 /** Surface card: subtle border, radius 16, soft layered shadow (brand.md "Elevation": md). */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {

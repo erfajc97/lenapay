@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { Payout } from '@/shared/api/types';
 import { approvalBlocker } from '@/shared/helpers/permissions';
@@ -33,7 +33,16 @@ export function useApprovalDetail() {
   const payout = usePayout(org?.id, payoutId);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
-  const decide = useDecidePayout(org?.id, payoutId, () => setRejecting(false));
+  // Leaving while the reason sheet still slides out freezes iOS: go back on its dismissal.
+  const leaveAfterSheet = useRef(false);
+  const decide = useDecidePayout(org?.id, payoutId, (kind) => {
+    if (kind === 'approve') {
+      router.back();
+      return;
+    }
+    leaveAfterSheet.current = true;
+    setRejecting(false);
+  });
 
   const blocker = payout.data && me.data && org ? approvalBlocker({ payout: payout.data, userId: me.data.id, role: org.role }) : 'status';
   const reasonError = rejectReasonError(reason);
@@ -46,6 +55,11 @@ export function useApprovalDetail() {
     rejecting,
     openReject: () => setRejecting(true),
     closeReject: () => setRejecting(false),
+    rejectSheetDismissed: () => {
+      if (!leaveAfterSheet.current) return;
+      leaveAfterSheet.current = false;
+      router.back();
+    },
     reason,
     setReason,
     reasonError: reason === '' ? null : reasonError,

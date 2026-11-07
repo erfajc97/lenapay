@@ -1,50 +1,56 @@
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import type { MovementFilterDraft } from '@/shared/stores/useMovementFiltersStore';
-import { FilterChip } from '@/shared/ui/Chip';
-import { LinkButton } from '@/shared/ui/Rows';
+import { AppText } from '@/shared/ui/AppText';
+import { Icon } from '@/shared/ui/Icon';
 
-type SetFilter = <K extends keyof MovementFilterDraft>(key: K, value: MovementFilterDraft[K]) => void;
+import { formatDayInput } from '../helpers/filters';
+import type { FilterKey } from '../hooks/useMovementsScreen';
+import { FilterPill } from './FilterPill';
 
-const TYPES = ['payin', 'payout', 'transfer'] as const;
-const STATUSES = ['pending', 'settled', 'failed', 'cancelled'] as const;
-const CURRENCIES = ['ARS', 'USD'] as const;
-const RANGES = ['7d', '30d', '90d'] as const;
-
-function Row({ children }: { children: React.ReactNode }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2 px-4">
-      {children}
-    </ScrollView>
-  );
+/** What each pill shows: its name while empty, the chosen value once set. */
+function useFilterLabels(draft: MovementFilterDraft): Record<FilterKey, string | null> {
+  const { t } = useTranslation();
+  const customRange = draft.customFrom && draft.customTo ? `${formatDayInput(draft.customFrom).slice(0, 5)} – ${formatDayInput(draft.customTo).slice(0, 5)}` : null;
+  return {
+    type: draft.type ? t(`movements.type.${draft.type}`) : null,
+    status: draft.status ? t(`status.movement.${draft.status}`) : null,
+    currency: draft.currency ? t(`currency.${draft.currency}`) : null,
+    date: draft.range === 'all' ? null : draft.range === 'custom' ? customRange : t(`movements.range.${draft.range}`),
+  };
 }
 
-/** Type, status, currency and date filters as chip rows (R-MOV-1). Tapping a selected chip clears it. */
-export function MovementFilters({ draft, setFilter, activeCount, onReset }: { draft: MovementFilterDraft; setFilter: SetFilter; activeCount: number; onReset: () => void }) {
+const KEYS: FilterKey[] = ['type', 'status', 'currency', 'date'];
+
+/**
+ * Sticky filter bar under the header (R-MOV-1): one pill per filter (Tipo, Estado, Moneda,
+ * Fecha) that opens its sheet, and "Limpiar" while any filter is active.
+ */
+export function MovementFilters({ draft, activeCount, onOpen, onReset }: { draft: MovementFilterDraft; activeCount: number; onOpen: (key: FilterKey) => void; onReset: () => void }) {
   const { t } = useTranslation();
+  const values = useFilterLabels(draft);
   return (
-    <View className="gap-2 pb-2">
-      <Row>
-        {TYPES.map((type) => (
-          <FilterChip key={type} label={t(`movements.type.${type}`)} selected={draft.type === type} onPress={() => setFilter('type', draft.type === type ? null : type)} />
+    <View className="flex-row items-center border-b border-border-subtle bg-bg-page pb-3">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1" contentContainerClassName="items-center gap-2 px-4">
+        {KEYS.map((key) => (
+          <FilterPill key={key} name={t(`movements.filter.${key}`)} value={values[key]} onPress={() => onOpen(key)} />
         ))}
-        {CURRENCIES.map((currency) => (
-          <FilterChip key={currency} label={currency} selected={draft.currency === currency} onPress={() => setFilter('currency', draft.currency === currency ? null : currency)} />
-        ))}
-      </Row>
-      <Row>
-        {RANGES.map((range) => (
-          <FilterChip key={range} label={t(`movements.range.${range}`)} selected={draft.range === range} onPress={() => setFilter('range', draft.range === range ? 'all' : range)} />
-        ))}
-        {STATUSES.map((status) => (
-          <FilterChip key={status} label={t(`status.movement.${status}`)} selected={draft.status === status} onPress={() => setFilter('status', draft.status === status ? null : status)} />
-        ))}
-      </Row>
+      </ScrollView>
+      {/* Outside the scroll row, so "Limpiar" is always visible however many pills are set. */}
       {activeCount > 0 ? (
-        <View className="px-4">
-          <LinkButton label={t('movements.clearFilters', { count: activeCount })} onPress={onReset} />
-        </View>
+        <Pressable
+          onPress={onReset}
+          accessibilityRole="button"
+          accessibilityLabel={t('movements.clearFilters', { count: activeCount })}
+          hitSlop={8}
+          className="min-h-9 flex-row items-center gap-1 border-l border-border-subtle pl-3 pr-4"
+        >
+          <Icon name="close-circle" size={18} tone="primary" />
+          <AppText variant="label" tone="brand">
+            {t('movements.filter.clear')}
+          </AppText>
+        </Pressable>
       ) : null}
     </View>
   );

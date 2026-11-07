@@ -193,6 +193,9 @@
     "available": "Disponible",
     "held": "Retenido",
     "posted": "Total",
+    "heldHint": "Muestra los movimientos pendientes en esta moneda.",
+    "postedHint": "Muestra los movimientos en esta moneda.",
+    "heldShare": "{{percent}} % retenido",
     "collect": "Cobrar",
     "pay": "Pagar",
     "move": "Mover",
@@ -360,7 +363,22 @@
     },
     "type": { "payin": "Cobros", "payout": "Pagos", "transfer": "Entre cuentas" },
     "kind": { "payin": "Cobro", "payout": "Pago", "transfer": "Entre cuentas" },
-    "range": { "7d": "7 días", "30d": "30 días", "90d": "90 días" },
+    "range": { "today": "Hoy", "7d": "7 días", "30d": "30 días", "month": "Este mes", "custom": "Personalizado" },
+    "filter": {
+      "type": "Tipo",
+      "status": "Estado",
+      "currency": "Moneda",
+      "date": "Fecha",
+      "all": "Todos",
+      "anyDate": "Cualquier fecha",
+      "clear": "Limpiar",
+      "from": "Desde",
+      "to": "Hasta",
+      "dayPlaceholder": "DD/MM/AAAA",
+      "apply": "Aplicar",
+      "rangeInvalid": "Ingresá las dos fechas como DD/MM/AAAA.",
+      "rangeOrder": "La fecha de inicio tiene que ser anterior a la de fin."
+    },
     "clearFilters_one": "Quitar {{count}} filtro",
     "clearFilters_other": "Quitar {{count}} filtros",
     "noResults": "No hay movimientos con esos filtros",
@@ -539,6 +557,9 @@
     "personalPreview": "Modo personal (vista previa)",
     "personalPreviewBody": "Muestra tu billetera personal junto a tus empresas.",
     "version": "Versión {{version}}",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "appearance": "Apariencia",
+    "appearanceBody": "Elegí cómo se ve Lenapay. Sistema sigue el modo de tu teléfono.",
+    "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" }
   }
 }

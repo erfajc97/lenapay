@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyboardBehavior } from '../platform';
+import { keyboardBehavior, modalReportsDismiss } from '../platform';
 
 // Why: the wrong keyboard behaviour hides the "Confirmar" button under the keyboard on one
 // platform only, which is the one nobody tested (ME11).
@@ -9,5 +9,16 @@ describe('keyboardBehavior', () => {
     expect(keyboardBehavior('ios')).toBe('padding');
     expect(keyboardBehavior('android')).toBe('height');
     expect(keyboardBehavior('web')).toBeUndefined();
+  });
+});
+
+// Why: navigation waits for a sheet's dismissal; on the platform that never reports it the
+// sheet must report it itself, or the screen never leaves (and on iOS reporting it early
+// navigates under a Modal still on screen, which freezes the app).
+describe('modalReportsDismiss', () => {
+  it('trusts the Modal on iOS and web, not on Android', () => {
+    expect(modalReportsDismiss('ios')).toBe(true);
+    expect(modalReportsDismiss('web')).toBe(true);
+    expect(modalReportsDismiss('android')).toBe(false);
   });
 });

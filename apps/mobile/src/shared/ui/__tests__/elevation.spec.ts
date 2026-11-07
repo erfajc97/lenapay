@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { type Elevation, elevation, FOCUS_RING, pressedScale, PRESSED_SCALE } from '../elevation';
+import { type Elevation, elevation, FOCUS_RING, pressedScale, PRESSED_SCALE, SURFACE_TONE } from '../elevation';
 
 // Why: shadows that are written ad hoc drift from the tokens and break dark mode (a black
 // shadow on a near-black page reads as nothing, so dark surfaces lose their edge). Every
@@ -27,10 +27,17 @@ describe('elevation', () => {
     expect(pressed[0]).not.toBe(`active:shadow-${level}`);
   });
 
-  it('dark surfaces get a highlight, not a shadow, except the coloured glow', () => {
-    expect(elevation('md')).toContain('dark:shadow-edge');
+  it('dark surfaces get a highlight edge that grows with the level, and the glow stays coloured', () => {
+    expect(elevation('sm')).toContain('dark:shadow-edge');
+    expect(elevation('md')).toContain('dark:shadow-edge-md');
     expect(elevation('xl')).toContain('dark:shadow-edge-strong');
     expect(elevation('glow')).toContain('dark:shadow-glow-dark');
+  });
+
+  // Why: in dark mode a card on the page only reads if its surface is lighter than the page,
+  // and a sheet or toast above a card lighter still; the same tone everywhere flattens the UI.
+  it('raised surfaces get lighter with the level', () => {
+    expect(SURFACE_TONE).toEqual({ md: 'bg-surface-1', bar: 'bg-surface-2', lg: 'bg-surface-2', xl: 'bg-surface-3' });
   });
 
   it('the focus ring is the primary border plus the focus glow', () => {

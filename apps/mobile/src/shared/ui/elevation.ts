@@ -3,7 +3,8 @@
  * the `--shadow-*` tokens of global.css: uniwind turns them into the `boxShadow` style, which
  * React Native draws on iOS and Android (new architecture) and react-native-web on the web.
  * Every level pairs its light shadow with a dark replacement, because a shadow does not read
- * on a near-black page: dark surfaces get a top highlight instead. Features never write
+ * on a near-black page: dark surfaces get a top highlight, a hairline ring and a deep drop,
+ * and a lighter surface tone per level (`SURFACE_TONE`). Features never write
  * shadow classes or shadow styles themselves; they pick a level here (or use a primitive that
  * already does).
  */
@@ -11,12 +12,15 @@ export type Elevation = 'sm' | 'md' | 'lg' | 'xl' | 'bar' | 'glow';
 
 const RESTING: Record<Elevation, string> = {
   sm: 'shadow-sm dark:shadow-edge',
-  md: 'shadow-md dark:shadow-edge',
+  md: 'shadow-md dark:shadow-edge-md',
   lg: 'shadow-lg dark:shadow-edge-strong',
   xl: 'shadow-xl dark:shadow-edge-strong',
   bar: 'shadow-bar dark:shadow-edge-strong',
   glow: 'shadow-glow dark:shadow-glow-dark',
 };
+
+/** Background of a raised surface: white in light, one step lighter per level in dark. */
+export const SURFACE_TONE = { md: 'bg-surface-1', bar: 'bg-surface-2', lg: 'bg-surface-2', xl: 'bg-surface-3' } as const;
 
 /** While pressed the surface sinks one level, together with the scale of `pressedScale`. */
 const PRESSED: Record<Elevation, string> = {

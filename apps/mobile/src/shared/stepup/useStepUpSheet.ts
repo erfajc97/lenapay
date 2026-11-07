@@ -15,6 +15,7 @@ export function useStepUpSheet() {
   const { t } = useTranslation();
   const open = useStepUpStore((state) => state.open);
   const cancel = useStepUpStore((state) => state.cancel);
+  const dismissed = useStepUpStore((state) => state.dismissed);
   const verify = useVerifyStepUp();
   const [password, setPassword] = useState('');
   const [choosePassword, setChoosePassword] = useState(false);
@@ -61,5 +62,6 @@ export function useStepUpSheet() {
       reset();
       cancel();
     },
+    dismissed,
   };
 }

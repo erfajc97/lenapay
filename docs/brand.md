@@ -44,24 +44,32 @@ and the Lebane Payments admin). Code uses tokens only (M9/ME15); hex values live
 - Spacing scale 4/8/12/16/20/24/32.
 
 ## Elevation
-Depth comes from layered, ink-tinted shadows in light mode and from a top highlight in dark mode
-(a black shadow does not read on the #0E1015 page). The tokens are the `--shadow-*` entries of
-`apps/mobile/global.css` `@theme`; code reads them ONLY through `src/shared/ui/elevation.ts`
-(`elevation(level)`, `FOCUS_RING`, `pressedScale`), which pairs every level with its dark
-replacement. A spec fails if any other file writes shadow classes or shadow styles. Uniwind turns
-the classes into the `boxShadow` style, which React Native 0.88 draws on iOS and Android (new
-architecture; Android 9+) and react-native-web on the web — no `shadowColor`/`elevation` pairs.
+Depth comes from layered, ink-tinted shadows in light mode. In dark mode an ink shadow alone does
+not read on the #0E1015 page, so every dark level combines four cues: a surface one step lighter
+per level (`surface-1/2/3`), a 1 px top highlight (white 8–12 %), a hairline outer ring (white
+3–6 %) and a deep black drop; primary and hero elements get a primary glow at ~35 % with a large
+blur, which does read on dark. The tokens are the `--shadow-*` entries of
+`apps/mobile/global.css` `@theme` and the `--color-surface-*` colours; code reads them ONLY
+through `src/shared/ui/elevation.ts` (`elevation(level)`, `SURFACE_TONE`, `FOCUS_RING`,
+`pressedScale`), which pairs every level with its dark replacement. A spec fails if any other
+file writes shadow classes or shadow styles. Uniwind turns the classes into the `boxShadow`
+style, which React Native 0.88 draws on iOS and Android (new architecture; Android 9+) and
+react-native-web on the web — no `shadowColor`/`elevation` pairs.
 
-| Level | Light token | Dark | Use |
-|---|---|---|---|
-| `sm` | `shadow-sm` | `shadow-edge` (1 px top highlight) | secondary buttons, segmented thumb, small round actions |
-| `md` | `shadow-md` | `shadow-edge` | cards and pressable cards (pressed: sinks to `sm`) |
-| `lg` | `shadow-lg` | `shadow-edge-strong` | toasts, floating badges |
-| `xl` | `shadow-xl` | `shadow-edge-strong` | sheets and dialogs (over a blurred backdrop, expo-blur) |
-| `bar` | `shadow-bar` (upward) | `shadow-edge-strong` | the floating tab bar (rounded top corners, active tab pill) |
-| `glow` | `shadow-glow` (primary-tinted) | `shadow-glow-dark` | primary buttons, quick actions, the balance hero |
-| focus | `shadow-focus` (4 px primary ring at 16 %) | same | focused inputs, with the `primary` border |
+| Level | Light token | Dark shadow | Dark surface (`SURFACE_TONE`) | Use |
+|---|---|---|---|---|
+| `sm` | `shadow-sm` | `shadow-edge` (8 % highlight, 3 % ring, short drop) | — (component's own) | secondary buttons, segmented thumb, filter pills, small round actions |
+| `md` | `shadow-md` | `shadow-edge-md` (10 % highlight, 4 % ring, 24 px drop) | `surface-1` #1B1E26 | cards and pressable cards (pressed: sinks to `sm`) |
+| `lg` | `shadow-lg` | `shadow-edge-strong` (12 % highlight, 6 % ring, 40 px drop) | `surface-2` #222631 | toasts, floating badges |
+| `xl` | `shadow-xl` | `shadow-edge-strong` | `surface-3` #2A2F3B | sheets and dialogs (over a blurred backdrop, expo-blur) |
+| `bar` | `shadow-bar` (upward) | `shadow-edge-strong` | `surface-2` | the floating tab bar (rounded top corners, active tab pill) |
+| `glow` | `shadow-glow` (primary-tinted) | `shadow-glow-dark` (#296BFE at 35 %, 36 px blur) | — | primary buttons, quick actions, the balance hero |
+| focus | `shadow-focus` (4 px primary ring at 16 %) | same | — | focused inputs, with the `primary` border |
 
+- Light surfaces stay white (`surface-1/2/3` = #FFFFFF); the light shadows are ~30 % stronger
+  than v2 so cards clearly lift off the #F4F6F8 page.
+- Hero glass tiles (Retenido / Total) are not elevated: `hero-glass` fill, `hero-glass-border`
+  hairline and a `hero-track` progress bar, all translucent white on the gradient.
 - Pressed controls scale to 0.97 and their shadow drops one level (`glow` → `glow-pressed`).
 - Inactive (disabled) buttons are flat: no elevation at 50 % opacity.
 - Lists: rows of a virtualized list are drawn as ONE grouped card (`groupedRowClass`), bordered,

@@ -23,3 +23,9 @@ type KycNotice = 'draft' | 'submitted' | 'rejected' | null;
 export function kycNotice(org: Pick<Org, 'kycStatus'>): KycNotice {
   return org.kycStatus === 'approved' ? null : org.kycStatus;
 }
+
+/** Held as a share (0..1) of the total posted balance: the bar under the "Retenido" tile. */
+export function heldShare(balance: Balance | null): number {
+  if (!balance || balance.posted <= 0) return 0;
+  return Math.min(1, Math.max(0, balance.held / balance.posted));
+}

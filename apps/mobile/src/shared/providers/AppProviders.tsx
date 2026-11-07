@@ -19,6 +19,7 @@ import { LivePayinBanner } from '@/shared/realtime/LivePayinBanner';
 import { useBootSession } from '@/shared/session/useBootSession';
 import { StepUpSheet } from '@/shared/stepup/StepUpSheet';
 import { useSessionStore } from '@/shared/stores/useSessionStore';
+import { useApplyThemePreference } from '@/shared/theme/useApplyThemePreference';
 import { ToastHost } from '@/shared/ui/ToastHost';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -27,8 +28,8 @@ wireQueryLifecycle();
 const PERSIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Root providers: fonts, safe areas, TanStack Query with persistence, the session boot and
- * the global hosts (step-up sheet, toasts, live payin banner).
+ * Root providers: fonts, safe areas, TanStack Query with persistence, the session boot, the
+ * theme picked in Settings and the global hosts (step-up sheet, toasts, live payin banner).
  */
 export function AppProviders({ children }: { children: ReactNode }) {
   const [fontsLoaded, fontError] = useFonts({
@@ -40,6 +41,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     JetBrainsMono_500Medium,
   });
   useBootSession();
+  const statusBarStyle = useApplyThemePreference();
   const booting = useSessionStore((state) => state.status === 'booting');
   const ready = (fontsLoaded || Boolean(fontError)) && !booting;
 
@@ -50,7 +52,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <SafeAreaProvider>
       <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister, buster: PERSIST_BUSTER, maxAge: PERSIST_MAX_AGE_MS }}>
-        <StatusBar style="auto" />
+        <StatusBar style={statusBarStyle} />
         {ready ? children : null}
         <StepUpSheet />
         <LivePayinBanner />

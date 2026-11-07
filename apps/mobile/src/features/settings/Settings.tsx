@@ -8,22 +8,26 @@ import { canManageTeam, canSeeReconciliation } from '@/shared/helpers/permission
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
+import { THEME_PREFERENCES } from '@/shared/theme/themePreference';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Chip } from '@/shared/ui/Chip';
 import { Avatar, Divider, IconBadge, ListRow, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
+import { Segmented } from '@/shared/ui/Segmented';
 
 import { useLogout } from './mutations/useSettingsMutations';
 
-/** "Más": profile, organization tools, security, personal-mode preview, logout. */
+/** "Más": profile, organization tools, security, appearance, personal-mode preview, logout. */
 export function Settings() {
   const { t } = useTranslation();
   const me = useMe();
   const { org } = useActiveOrg();
   const preview = usePreferencesStore((state) => state.personalModePreview);
   const setPreview = usePreferencesStore((state) => state.setPersonalModePreview);
+  const theme = usePreferencesStore((state) => state.themePreference);
+  const setTheme = usePreferencesStore((state) => state.setThemePreference);
   const logout = useLogout();
   const role = org?.role ?? 'viewer';
 
@@ -66,6 +70,17 @@ export function Settings() {
           subtitle={t('settings.personalPreviewBody')}
           leading={<IconBadge name="person-outline" />}
           trailing={<Switch value={preview} onValueChange={setPreview} accessibilityLabel={t('settings.personalPreview')} trackColorOnClassName="accent-primary" />}
+        />
+      </Card>
+
+      <SectionTitle title={t('settings.appearance')} />
+      <Card className="gap-3">
+        <AppText tone="secondary">{t('settings.appearanceBody')}</AppText>
+        <Segmented
+          label={t('settings.appearance')}
+          value={theme}
+          onChange={setTheme}
+          options={THEME_PREFERENCES.map((value) => ({ value, label: t(`settings.theme.${value}`) }))}
         />
       </Card>
 

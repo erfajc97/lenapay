@@ -7,3 +7,8 @@ export function keyboardBehavior(os: string): 'padding' | 'height' | undefined {
   if (os === 'android') return 'height';
   return undefined;
 }
+
+/** React Native's Modal fires `onDismiss` on iOS (react-native-web too); Android never does. */
+export function modalReportsDismiss(os: string): boolean {
+  return os !== 'android';
+}

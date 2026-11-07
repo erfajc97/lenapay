@@ -83,7 +83,7 @@ export function ApprovalDetail() {
       </Card>
       {payout.rejectionReason ? <Notice tone="danger" icon="close-circle-outline" title={t('approvals.rejectionReason')} body={payout.rejectionReason} /> : null}
 
-      <Sheet visible={detail.rejecting} title={t('approvals.rejectTitle')} onClose={detail.closeReject}>
+      <Sheet visible={detail.rejecting} title={t('approvals.rejectTitle')} onClose={detail.closeReject} onDismissed={detail.rejectSheetDismissed}>
         <TextField
           label={t('fields.reason')}
           value={detail.reason}

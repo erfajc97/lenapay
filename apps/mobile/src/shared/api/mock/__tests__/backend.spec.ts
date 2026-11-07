@@ -113,3 +113,16 @@ describe('accounts and transfers', () => {
     expect(available(b, 'acc_torre', 'ARS')).toBe(before + 149_100_00);
   });
 });
+
+// Why: the contract's `from`/`to` are inclusive business dates; comparing them to timestamps
+// as strings dropped every movement of the last day ("2026-11-07T15:00Z" > "2026-11-07").
+describe('movement date filters', () => {
+  it('includes both ends of the range and nothing outside it', () => {
+    const b = backend();
+    b.transfer(ORG, { fromAccountId: 'acc_main', toAccountId: 'acc_torre', currency: 'ARS', amount: 1_00, concept: 'Fecha' }, creds('k-date'));
+    const ids = (from: string, to: string) => b.listMovements(ORG, { type: 'transfer', from, to }, null).items.filter((item) => item.concept === 'Fecha').length;
+    expect(ids('2026-11-07', '2026-11-07')).toBe(2);
+    expect(ids('2026-11-01', '2026-11-06')).toBe(0);
+    expect(ids('2026-11-08', '2026-11-30')).toBe(0);
+  });
+});

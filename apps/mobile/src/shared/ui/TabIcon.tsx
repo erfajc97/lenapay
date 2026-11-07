@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ColorValue, View } from 'react-native';
 
-import { elevation } from './elevation';
+import { elevation, SURFACE_TONE } from './elevation';
 import type { IconName } from './Icon';
 
 /**
@@ -21,7 +21,7 @@ export function TabIcon({ name, color, focused }: { name: IconName; color: Color
 export function TabBarBackground() {
   return (
     <View className="absolute inset-0 bg-bg-page">
-      <View className={`absolute inset-0 rounded-t-sheet border-x border-t border-border-subtle bg-bg-surface ${elevation('bar')}`} />
+      <View className={`absolute inset-0 rounded-t-sheet border-x border-t border-border-subtle ${SURFACE_TONE.bar} ${elevation('bar')}`} />
     </View>
   );
 }

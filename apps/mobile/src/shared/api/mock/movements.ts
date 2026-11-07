@@ -51,7 +51,8 @@ export function buildMovements(state: MockState, orgId: string, filters: Movemen
     .filter((item) => !filters.type || item.type === filters.type)
     .filter((item) => !filters.status || item.status === filters.status)
     .filter((item) => !filters.currency || item.currency === filters.currency)
-    .filter((item) => !filters.from || item.createdAt >= filters.from)
-    .filter((item) => !filters.to || item.createdAt <= filters.to)
+    // `from`/`to` are inclusive business dates (YYYY-MM-DD); the mock's business day is UTC.
+    .filter((item) => !filters.from || item.createdAt.slice(0, 10) >= filters.from)
+    .filter((item) => !filters.to || item.createdAt.slice(0, 10) <= filters.to)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

@@ -53,7 +53,7 @@ export function Home() {
       {home.balances.isError ? (
         <ErrorState error={home.balances.error} onRetry={() => void home.balances.refetch()} />
       ) : (
-        <BalanceCard currency={home.currency} onCurrency={home.setCurrency} balance={home.balance} loading={home.balances.isLoading} />
+        <BalanceCard currency={home.currency} onCurrency={home.setCurrency} balance={home.balance} loading={home.balances.isLoading} onOpenHeld={home.openHeld} onOpenTotal={home.openTotal} />
       )}
       <QuickActions state={home.actions} onCollect={() => router.push('/payers')} onPay={() => router.push('/pay')} onMove={() => router.push('/move')} />
       {home.pendingApprovals > 0 ? (

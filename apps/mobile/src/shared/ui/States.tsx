@@ -15,8 +15,8 @@ export function Skeleton({ className }: { className?: string }) {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: false }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: false }),
       ]),
     );
     loop.start();

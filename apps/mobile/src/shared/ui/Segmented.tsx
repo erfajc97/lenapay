@@ -7,7 +7,7 @@ import { elevation } from './elevation';
 type SegmentedTone = 'surface' | 'hero';
 
 const TRACK: Record<SegmentedTone, string> = { surface: 'bg-border-subtle', hero: 'bg-hero-tile' };
-const THUMB: Record<SegmentedTone, string> = { surface: `bg-bg-surface ${elevation('sm')}`, hero: `bg-on-primary ${elevation('sm')}` };
+const THUMB: Record<SegmentedTone, string> = { surface: `bg-bg-surface dark:bg-surface-3 ${elevation('sm')}`, hero: `bg-on-primary ${elevation('sm')}` };
 const TEXT: Record<SegmentedTone, { selected: TextTone; idle: TextTone }> = {
   surface: { selected: 'primary', idle: 'muted' },
   hero: { selected: 'onCurrency', idle: 'onPrimary' },
