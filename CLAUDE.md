@@ -99,7 +99,7 @@ G7. **Git writes by the main agent only.** Builders and auditors never run `git 
     destroys uncommitted work. Check: `git log -1 --format=%B` matches the format; agent
     reports contain no git writes.
 
-G8. **Tracking.** When a task closes, update {{tracking_docs}}: the task status, the
+G8. **Tracking.** When a task closes, update docs/backlog.md and docs/progress.md: the task status, the
     checklist row with its evidence (file:line, test name or command output) and
     docs/progress.md. Exactly one progress log is the source of truth. Why: progress kept
     from memory is wrong by the second day. Check: the closed task's ID is ticked in
@@ -528,6 +528,321 @@ A20. **A third party with no SLA on a critical path is hedged.** When a request 
     own; Node: the loser's `AbortSignal` fired); the cache test proves a backup answer and
     an empty answer are not stored.
 <!-- /kit:block api-common -->
+
+<!-- kit:block api-go v1 -->
+## Rules — Go API: chi + oapi-codegen + pgx/sqlc + River (`AG`)
+
+The stack-agnostic API rules are `A1…A20` and, with the money addon, `MO1…MO6`; these say
+how each one is done in Go, for every scope of kind api with stack `go`: net/http with chi
+v5, a contract-first OpenAPI 3 spec served by an oapi-codegen strict server, Postgres
+through a pgx v5 pool and sqlc, goose migrations, River jobs, log/slog and the standard
+`testing` package. Commands run from the scope's path (the folder with `go.mod`).
+
+AG1. **Layout: `cmd/`, features under `internal/`, `platform` never imports a feature.**
+    `apps/api` follows (A1 in Go terms):
+    ```
+    go.mod  go.sum  sqlc.yaml  .golangci.yml  .testcoverage.yml
+    api/openapi.yaml  api/oapi-codegen.yaml  api/spec.go (embeds the spec)
+    cmd/<app>/main.go             api, worker, migrate, mock<provider>: wiring only
+    migrations/<YYYYMMDDHHMMSS>_<what>.sql   (+ embed.go)
+    internal/api/                 generated strict server and models (api.gen.go)
+    internal/app/                 composition: the strict Server, AccessRules(), router
+    internal/platform/            config/ db/ httpx/ apperr/ log/ auth/ money/ clock/ realtime/ …
+    internal/<feature>/
+      handler*.go  service*.go  model*.go  port*.go  jobs*.go  errors.go  doc.go  *_test.go
+      store/                      queries.sql + sqlc output (+ hand-written query helpers)
+      provider/<vendor>/  provider/fake/   adapters of the feature's port and its fake
+    ```
+    `handler*.go` is HTTP only (generated request → domain input → service → generated
+    response) and never imports `store` or pgx; `service*.go` owns rules and the
+    transaction and never imports `net/http` or `internal/api`; `store/` is data access only
+    and never imports `net/http`, `internal/api` or `httpx`. A feature never imports another
+    feature's `store/` (it calls that feature's service); `internal/platform` never imports a
+    feature or `internal/app`. No package-level mutable state (`var x = …` that code writes
+    or that holds a client, pool or config; sentinel errors, compiled regexps and
+    `embed.FS` are fine) and no `init()` with side effects: `main` builds every dependency
+    and passes it down. Why: the tree says what the API does, and explicit wiring is what
+    lets a test swap any dependency. Check: `/kit:audit quick` (layout, layer imports,
+    cross-feature `store` imports, `init()`, globals); Grep `^func init\(\)` and
+    `^var\s+[a-z]\w*\s*=` in non-test files → each one justified.
+
+AG2. **Contract first: OpenAPI 3 + oapi-codegen strict server on chi.** `api/openapi.yaml`
+    is the contract (A18): a route, field, status or error response is added to the spec
+    FIRST, then `go generate ./internal/api` (oapi-codegen v2 with `models`, `chi-server`
+    and `strict-server`, run as `go tool oapi-codegen`) regenerates `internal/api/api.gen.go`,
+    and only then the handler is written. Every operation has an `operationId`; the
+    composition `Server` in `internal/app` embeds one handler struct per feature and asserts
+    `var _ api.StrictServerInterface = (*Server)(nil)`, so a missing operation is a compile
+    error. Routes that need the raw request (signed webhooks, SSE) stay in the spec and are
+    left out of generation with `output-options.exclude-operation-ids`, then mounted by
+    hand. No other router or framework (gin, echo, fiber, gorilla/mux). Handlers return
+    generated response types built field by field (A5); sqlc rows never reach JSON
+    (`emit_json_tags: false`). Why: one spec generates the server, the clients and the
+    validator, so they cannot drift. Check: `go generate ./... && git diff --exit-code`
+    → no diff; Grep `gin-gonic|labstack/echo|gofiber|gorilla/mux` in `go.mod` → none.
+
+AG3. **Validation from the spec, caps in the spec.** The kin-openapi request validator
+    (`github.com/oapi-codegen/nethttp-middleware`, `OapiRequestValidatorWithOptions` with
+    `ErrorHandlerWithOpts` mapped to the A7 envelope and `NoopAuthenticationFunc`, since
+    AG15 owns security) runs before the strict server, loaded from the spec file itself
+    (`api/spec.go` embeds `openapi.yaml`; the generated embedded copy drops excluded
+    operations). Every request object schema has `additionalProperties: false`; every
+    string a `maxLength` equal to its column's CHECK, every array `maxItems`, every integer
+    `minimum`/`maximum`, enums as `enum`; amounts are decimal strings with a `pattern`, never
+    `number` (A3, A6). Validation errors name the field (`details.field`) and never echo the
+    value. Business rules the schema cannot express are checked in the service. Why: the
+    validator only rejects what the spec declares, and an uncapped string is a 500 at the
+    database. Check: a spec test walks every request schema and fails on an object without
+    `additionalProperties: false`, a string without `maxLength` or an array without
+    `maxItems`; the router test sends an unknown field, a float amount and an over-long
+    string → `validation.failed`.
+
+AG4. **One error type, one writer, errors wrapped.** Services return `*apperr.Error`
+    (`apperr.New(apperr.CodeX, details)` / `apperr.Wrap(code, cause, details)`) with the
+    code from ONE catalog (`internal/platform/apperr`: the code, its HTTP status and its
+    message key; locale copy per code, A7). `httpx.WriteError` is the only place that turns
+    an error into a response: the strict server's `RequestErrorHandlerFunc` and
+    `ResponseErrorHandlerFunc`, the validator hook and hand-mounted handlers all call it;
+    an unknown error is logged once with the request id and answered as `internal.error`.
+    Errors are wrapped with `fmt.Errorf("…: %w", err)` and inspected with `errors.Is` /
+    `errors.As`, never `==` against a wrapped error or `err.Error()` text. No `panic` on a
+    request path; the `Recover` middleware turns a panic into a logged 500 envelope and
+    re-panics `http.ErrAbortHandler`. Why: one place decides status, code and redaction.
+    Check: Grep `http\.Error\(` outside `internal/platform/httpx` → none; Grep `\bpanic\(`
+    under `internal/` outside tests → each one justified; golangci-lint `errorlint` on; a
+    test proves every `apperr.All()` code has a status and copy in every locale.
+
+AG5. **Server hardening and graceful shutdown.** The `http.Server` sets
+    `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, `IdleTimeout` and `MaxHeaderBytes`
+    (a stream lifts its own write deadline with `http.ResponseController`). The middleware
+    order is fixed: request id → recover → access log → security headers → CORS (origins
+    from config, every custom header listed) → client IP (`middleware.ClientIPFrom*`, the
+    trusted proxies from config) → rate limit (`httprate.LimitBy` on the canonical client
+    IP; stricter per route for auth, OTP and money) → body limit (`http.MaxBytesReader`,
+    1 MiB by default, A12) → guard (AG15) → per-request timeout →
+    validator. `main` runs on `signal.NotifyContext(…, SIGINT, SIGTERM)` and an `errgroup`;
+    on cancel it calls `srv.Shutdown` with a deadline from `context.WithoutCancel`, stops
+    River (`client.Stop`), closes streams and finally the pool. Why: a zero timeout is a
+    slowloris door, and a deploy must not cut requests or jobs in half. Check: Grep
+    `http\.Server\{` and confirm the five fields; Grep `ListenAndServe\(` outside
+    `cmd/` → none; Grep `cmd/*/main.go` for `NotifyContext` and `Shutdown(` → present.
+
+AG6. **`context.Context` everywhere I/O happens.** Every function that does I/O or may block
+    takes `ctx context.Context` as its first parameter and passes it on; outbound requests
+    use `http.NewRequestWithContext`; queries take the request's ctx, so the per-request
+    deadline cancels them. `context.Background()` / `context.TODO()` appear only in `main`
+    and tests (`t.Context()`); work that must outlive the request uses
+    `context.WithoutCancel(ctx)` plus its own timeout, or a River job. Values in a context
+    are only request-scoped data with unexported key types (request id, principal). Why: a
+    lost ctx is a query that keeps running after the client left and a shutdown that never
+    ends. Check: Grep `context\.(Background|TODO)\(\)` under `internal/` outside `_test.go`
+    → none; golangci-lint `contextcheck` and `noctx` on.
+
+AG7. **Third parties behind a port, with a fake and a mock server.** Each provider (bank or
+    PSP, KYC, mail, SMS, storage) is an interface (`port.go`) in the feature that uses it,
+    with ctx-first methods and domain types; the HTTP adapter lives in
+    `provider/<vendor>/` and is the only code that knows the vendor's URLs, headers and
+    JSON. `provider/fake/` implements the same port in memory with the provider's real
+    semantics (idempotent by our reference, async completion, scriptable failures) and
+    backs a standalone mock server of the vendor's wire format (`cmd/mock<vendor>`), used
+    for local dev and for the adapter's contract test (`httptest` against it). Tests and
+    local dev never call the real vendor; tests that do carry the `live` build tag. A
+    timeout, network error or 5xx is `ErrUncertain`, never "failed" (A9, MO4). Why: the
+    feature is tested and demoed without the vendor, and the adapter is proven against
+    the same format. Check: Grep `net/http` imports under `internal/<feature>/` outside
+    `provider/` and `handler*.go` → none; each port has a `provider/fake` implementing it
+    (`var _ Port = (*fake.Provider)(nil)`) and an adapter contract test.
+
+AG8. **Outbound HTTP: one client per adapter, every timeout set.** The adapter builds its
+    own `*http.Client` with `Timeout` and a `Transport` with dial, TLS-handshake and
+    response-header timeouts; never `http.DefaultClient`, `http.Get/Post/Head/PostForm` or
+    `&http.Client{}`, never `InsecureSkipVerify`. Every response body is closed and read
+    through `io.LimitReader`. Retries only for network errors, 429 and 5xx, with jittered
+    backoff inside the caller's ctx deadline, and a POST is retried only with the
+    provider's idempotency key set to our reference. Why: `http.DefaultClient` has no
+    timeout, and a hung vendor must not hang the API (A9). Check: Grep
+    `http\.DefaultClient|http\.(Get|Post|Head|PostForm)\(|http\.Client\{\s*\}|InsecureSkipVerify:\s*true`
+    → none; Grep `http\.Client\{` outside `provider/` and `internal/platform/` → none;
+    golangci-lint `bodyclose` and `noctx` on.
+
+AG9. **Postgres through pgx v5 and sqlc; no ORM, no SQL strings.** One `*pgxpool.Pool`
+    built in `main` (`db.NewPool`, with `statement_timeout`,
+    `idle_in_transaction_session_timeout` and `timezone=UTC` runtime params) and passed
+    down. Queries live in `internal/<feature>/store/queries.sql` and are generated by sqlc
+    (`sql_package: pgx/v5`, `emit_json_tags: false`, uuid and timestamptz overrides) with
+    `schema: migrations`, so sqlc reads the real migrations. Generated code is committed and
+    never edited. No ORM or query builder (gorm, ent, bun, sqlx, sqlboiler) and no
+    `lib/pq`; no SQL built with `fmt.Sprintf` or `+`; raw `Query/Exec` with a literal only
+    in `internal/platform` (LISTEN, test database setup). Lists page with a limit from the
+    A3 ceiling and an `ORDER BY` with a unique tiebreaker. Why: A2 by construction, and
+    every query is type-checked against the schema at generate time. Check:
+    `sqlc diff` (or `sqlc generate && git diff --exit-code`) → no diff; `sqlc vet` passes;
+    Grep `fmt\.Sprintf\(\s*.\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b` (case-insensitive)
+    → none; Grep `gorm\.io|entgo\.io|uptrace/bun|jmoiron/sqlx|lib/pq` in `go.mod` → none.
+
+AG10. **goose migrations by hand, with a drift test.** Migrations are SQL files
+    `migrations/<YYYYMMDDHHMMSS>_<what>.sql` with `-- +goose Up` / `-- +goose Down`
+    (functions inside `-- +goose StatementBegin/End`), a first-line comment saying why,
+    embedded with `//go:embed *.sql` and applied by `db.Migrate` (goose v3 `NewProvider` on
+    `stdlib.OpenDBFromPool`) from `cmd/migrate` and the tests: never by hand against a
+    shared database, never edited once applied (A11). They carry every constraint: `NOT
+    NULL`, `CHECK` (lengths equal to the spec's caps, amounts, enums as `CHECK … IN`),
+    `UNIQUE` incl. partial, FKs with explicit `ON DELETE`, an index per filter, sort or join
+    column. River's tables come from `river migrate-get` saved as a goose migration, so
+    one tool owns the schema. The drift test migrates an empty database up, all the way
+    down (`DownTo(ctx, 0)`) and up again; with sqlc reading the same files, generated code
+    and database cannot disagree. Why: a migration that only works one way is found in
+    production, and only constraints in the schema are enforced. Check: the drift test
+    passes; `ls migrations/` names are ordered timestamps; every new filter or sort column
+    has an index in its migration.
+
+AG11. **Transactions through ONE helper; locks and serializable retry.** Every multi-statement
+    write runs in `db.WithTx(ctx, pool, opts, func(tx pgx.Tx) error)` (built on
+    `pgx.BeginTxFunc`: commit on nil, rollback on error or panic), called from the service,
+    with `store.New(tx)` inside; what decides is read INSIDE the transaction; no network
+    call inside it (call the provider before, re-check after on the locked row); no
+    goroutine shares a `tx`. Contended rows are locked with `SELECT … FOR UPDATE` as the
+    first statement, several rows in ONE global order (`ORDER BY id`), or changed with a
+    conditional `UPDATE … WHERE <condition>` declared `:execrows` whose row count is
+    checked (0 → the catalog code, never silently ignored). Money and other invariants under
+    contention run in `db.WithSerializable`, which retries SQLSTATE `40001`/`40P01` a bounded
+    number of times with jittered backoff and then returns `operation.in_progress` (409):
+    this is MO3 in Go. Why: check-then-write without a lock lets two requests pass the same
+    check. Check: Grep `\.Begin(Tx)?\(` outside `internal/platform/db` → none; Grep
+    `:execrows` queries and confirm every caller checks the count; a concurrency test fires
+    N goroutines at one row and asserts exactly the allowed number of effects.
+
+AG12. **Money is `int64` minor units with its currency; never `float64`.** On top of A6:
+    amounts are `money.Amount{Minor int64, Currency}` in code and `bigint` columns with a
+    `char(3)` ISO 4217 currency (CHECK `^[A-Z]{3}$`) on EVERY row that holds an amount;
+    the contract carries a decimal string plus currency, converted exactly at the edge by
+    `money.ParseDecimal` / `Amount.Decimal` with the currency's exponent (more fraction
+    digits than the currency has is a validation error, never a rounding); `Add` refuses a
+    currency mismatch and int64 overflow; splits go through ONE largest-remainder helper
+    `money.Split` (MO1). `float32`/`float64`, `math.Round` and `strconv.ParseFloat` never
+    touch an amount. Why: `4.35 * 100` is `434.99999999999994`, and a sum across
+    currencies is meaningless. Check: Grep `float(32|64)` and `ParseFloat` on lines naming
+    an amount, balance, price, fee, total or cents, and anywhere under `**/money/**` →
+    none; the money tests pin rounding direction and the round trip of `"0.12"` (FT13).
+
+AG13. **Jobs and outbox with River; no fire-and-forget goroutines.** Background work (A10)
+    is a River job (`river` with `riverpgxv5`): args types with `Kind()` and `InsertOpts()`
+    (`MaxAttempts`, `UniqueOpts{ByArgs: true}` so a retried transaction cannot enqueue
+    twice), inserted with `InsertTx` in the SAME transaction as the effect it follows
+    (transactional outbox: the job exists if and only if the effect committed). Workers
+    are idempotent (River delivers at least once), set a `Timeout`, live in the feature's
+    `jobs*.go` and run in `cmd/worker`; the API process holds an insert-only client.
+    Periodic work is a `river.PeriodicJob` (run on the elected leader only, so N replicas
+    enqueue it once). A handler, service or store never starts a `go` statement; bounded
+    fan-out inside a request uses `errgroup.WithContext` with `SetLimit`. Why: a goroutine
+    started from a request dies with the pod and nobody retries it. Check: Grep
+    `^\s*go\s+(func\b|[\w.]+\()` in `handler*.go`, `service*.go` and `store/` → none;
+    Grep `\.Insert\(` (not `InsertTx`) in services next to a write → each one justified.
+
+AG14. **Configuration parsed once into a typed struct.** `internal/platform/config` is the
+    only reader of the environment (A8): `config.Load(environ)` parses every variable with
+    `github.com/caarlos0/env/v11` (`required`, `notEmpty`, defaults) into one `Config`,
+    validates it (production refuses development values: `*` CORS, http or localhost
+    provider URLs) and returns an error naming the keys, never the values; `main` exits
+    non-zero on it before opening any port. Secrets are `config.Secret` (its `String`,
+    `GoString`, `LogValue` and `MarshalText` print `[REDACTED]`; `Reveal()` is the only
+    way to read it). Why: a missing secret must stop the boot, not the first request.
+    Check: Grep `os\.(Getenv|LookupEnv|Environ)\(` outside `internal/platform/config` → none;
+    a test loads a production environment with a development value and expects an error.
+
+AG15. **Auth: JWT from a JWKS, default-deny by operationId.** Bearer tokens are verified
+    with `github.com/golang-jwt/jwt/v5` and keys from the identity provider's JWKS
+    (`github.com/MicahParks/keyfunc/v3`, refreshed in the background): `WithValidMethods`
+    (RS256/ES256 only), `WithIssuer`, `WithAudience`, `WithExpirationRequired`,
+    `WithIssuedAt`, a small leeway. `internal/app.AccessRules()` maps EVERY operationId of
+    the spec to exactly one rule (`Public`, `Signed`, `Authenticated`, `Role(r)`, optionally
+    `.WithStepUp(maxAge)` for money movements, approvals and payout-destination changes:
+    MFA in `amr` and `auth_time` recent). One middleware finds the request's spec operation
+    (kin-openapi router) BEFORE any handler or validator runs and applies its rule; an
+    operation without a rule, or a path outside the spec, is denied. The route-marker test
+    (A14) walks the spec: every operation has a rule, no rule names an unknown operation,
+    and `security: []` is declared exactly on the operations whose rule needs no token.
+    Ownership is part of the query (`WHERE id = $1 AND owner_id = $2`), never checked
+    after loading; foreign → 404. Why: a forgotten marker must break the build, not expose
+    an endpoint. Check: `TestAccessRulesCoverTheSpec` passes; Grep `auth\.Public\(\)` in
+    the diff and justify each hit.
+
+AG16. **Signed webhooks: raw body, constant time, stored then processed.** A webhook route is
+    hand-mounted (AG2) under the `Signed` rule: it reads the raw body (already capped),
+    verifies the provider's signature (HMAC-SHA256 over the exact bytes, plus a timestamp
+    within a tolerance window against replays) with `hmac.Equal`, then decodes; it stores
+    the event in a table keyed by `(provider, event_id)` (a redelivery inserts nothing) and
+    enqueues the processing job with `InsertTx` in the same transaction, then answers 2xx.
+    The job uses only the reference from the event and re-reads the state at the provider
+    (MO4); amounts or statuses in a webhook body are never trusted. Why: a forged or
+    replayed webhook is the cheapest way to mint money. Check: Grep `==` or `bytes\.Equal`
+    on a signature, MAC or digest → none (`hmac.Equal` only); a test sends a valid
+    signature, a body changed after signing, another secret, the last accepted and first
+    rejected timestamp age, and a redelivery (one job).
+
+AG17. **slog JSON logs with the request id; no PII.** `log/slog` with `slog.NewJSONHandler`
+    is configured once in `main` (`internal/platform/log.New`, then `slog.SetDefault`): a
+    handler adds `request_id` from the context to every line, and `ReplaceAttr` redacts
+    authorization, cookies, passwords, tokens, secrets, account numbers (CVU/CBU) and
+    document numbers whatever the caller passes; types that hold personal data implement
+    `slog.LogValuer`. Code logs with `slog.InfoContext(ctx, …)` / `ErrorContext`; no
+    `fmt.Print*`, `log.Print*`/`log.Fatal*`, `println`, logrus, zap or zerolog. The request
+    id (A15) is read from a safe `X-Request-ID` or generated, returned in the header and the
+    error envelope, and put in the args of every job a request enqueues. With the
+    observability addon, OpenTelemetry hooks (`otelhttp`, a pgx tracer, River's otel
+    middleware) live in `internal/platform/observability` and are no-ops without config
+    (OB1, OB2). Why: one id joins the user's report, the log line and the trace. Check:
+    Grep `fmt\.Print|log\.(Print|Fatal|Panic)|^\s*println\(` outside tests → none (also
+    golangci-lint `forbidigo`); the router test asserts the header and the envelope carry
+    the same id.
+
+AG18. **Tests: stdlib, tables, real Postgres, race detector, coverage gate.** Runner
+    `go test` (`go test`). Tests use the standard `testing` package with
+    table-driven cases and `t.Run`, `t.Parallel()` where they share nothing, `t.Context()`,
+    and hand-written fakes behind the ports (no mock generators; A17). Services are tested
+    against real Postgres: `testcontainers-go` `modules/postgres` started once per test
+    binary in `TestMain`, a template database migrated with the REAL migrations, one cloned
+    database per test (`CREATE DATABASE … TEMPLATE`); these files carry
+    `//go:build integration`. Handlers are tested through the whole router with
+    `httptest` (errors asserted by `code`, exact key sets, FT3, FT20). Time comes from an
+    injected `clock.Clock` (FT7); no `time.Sleep` in tests (poll with a deadline or use the
+    fake clock). Every package is run with `-race`. The G2 gate: `go test -race
+    -tags=integration -coverpkg=./internal/... -coverprofile=cover.out ./...` then
+    `go tool go-test-coverage --config=.testcoverage.yml` with `threshold.total:
+    70`, excluding generated code (`*.gen.go`, `store/`) and `cmd/`. Why: a
+    double cannot prove a `WHERE`, a lock or a constraint, and data races hide in
+    concurrent money code. Check: `go test -race ./...` and `go test -race -tags=integration ./...`
+    exit 0 with Docker up; Grep `time\.Sleep\(` in `_test.go` → none;
+    `.testcoverage.yml` has the threshold.
+
+AG19. **Tooling, pinned and green.** `go.mod` pins the `go` version (and `toolchain` when the
+    team needs one) and every dependency; `go.sum` is committed; tools are `tool` directives
+    in `go.mod` (oapi-codegen, goose, go-test-coverage, govulncheck) run with `go tool …`,
+    while sqlc and golangci-lint run at a pinned version (binary or image). `.golangci.yml`
+    (`version: "2"`) enables at least the standard set plus `bodyclose`, `contextcheck`,
+    `errorlint`, `forbidigo` (the calls banned by AG6, AG8, AG14, AG17), `gosec`, `noctx`,
+    `rowserrcheck`, `sqlclosecheck`, and the `gofumpt` and `goimports` formatters. CI runs
+    `go mod tidy && git diff --exit-code go.mod go.sum`, `go mod verify`,
+    `go vet ./...`, `go build ./...`, the tests with the gate,
+    `go build ./...` and `go tool govulncheck ./...` (A19). Why: an unpinned
+    toolchain or a skipped linter is a build that passes on one machine only. Check: run
+    each command and read its exit code; Grep `.golangci.yml` for the linters above.
+
+AG20. **Mutation check with `go test`.** G3 for this scope uses the shared recipe's
+    copy-and-restore mode (runner-agnostic: backup, write the mutant, run, restore in a
+    `finally`, verify the sha256), one mutant per run, on a green package. From the repo
+    root:
+    `node .claude/kit/mutant/mutant.mjs --mode copy --cwd <scope path> --file internal/<feature>/service.go --from '<snippet>' --to '<mutant>' -- go test -count=1 ./internal/<feature>/...`
+    (add `-tags=integration` when the killing test is an integration test). `-count=1`
+    defeats the test cache; no `-cover`. KILLED needs a `--- FAIL: TestX` line; a mutant
+    that does not compile or fails `go vet` (`[build failed]`, an unused variable) is
+    INVALID, never killed. Run it only while no `air`/watcher or other agent reads the file
+    (G3); `auditor-tests` reasons the mutant and re-runs nothing on disk. Why: there is no
+    in-memory transform for Go, so the file itself must change, and only a verified restore
+    keeps that safe. Check: the builder report's mutation table lists each command with
+    `KILLED` and `sha256 unchanged`; `git status` shows no source change after the run.
+<!-- /kit:block api-go -->
+
 
 <!-- kit:block mobile-common v1 -->
 ## Rules — Mobile (`M`)
