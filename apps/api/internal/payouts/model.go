@@ -24,6 +24,16 @@ const (
 	StatusCancelled       Status = "cancelled"
 )
 
+// Field caps shared with the contract and the DB CHECKs of payouts (A3, G12).
+const (
+	maxConcept      = 140
+	maxRejectReason = 280
+	minIdemKey      = 16
+	maxIdemKey      = 128
+	maxHolderName   = 200
+	maxBankName     = 120
+)
+
 // QuoteInput asks for the fee and total of a payout before confirming (R-OUT-2).
 type QuoteInput struct {
 	AccountID uuid.UUID
@@ -58,7 +68,7 @@ type Event struct {
 	CreatedAt  time.Time
 }
 
-// Payout is a payout with its history.
+// Payout is a payout with its history (Events is filled by Get; lists leave it empty).
 type Payout struct {
 	ID           uuid.UUID
 	OrgID        uuid.UUID
@@ -76,4 +86,11 @@ type Payout struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	SettledAt    *time.Time
+	// ProviderAttemptID is our reference of the last PSP attempt; ProviderTransferID is the
+	// PSP's id once settled (reconciliation matches statement lines on either).
+	ProviderAttemptID  *string
+	ProviderTransferID *string
 }
+
+// Total is amount + fee: what is held on creation and debited on settlement.
+func (p Payout) Total() (money.Amount, error) { return p.Amount.Add(p.Fee) }

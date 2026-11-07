@@ -159,3 +159,26 @@ func TestSeedEncodings(t *testing.T) {
 		t.Fatalf("cfg %+v", cfg)
 	}
 }
+
+// PSP_MODE picks the adapter; production never runs on the in-process fake (P2).
+func TestPSPModeAndShareURL(t *testing.T) {
+	t.Parallel()
+	cfg, err := Load(validDevelopment())
+	if err != nil || cfg.PSPMode != PSPModeHTTP || cfg.CVUShareBaseURL == "" {
+		t.Fatalf("defaults %q %q %v", cfg.PSPMode, cfg.CVUShareBaseURL, err)
+	}
+	dev := validDevelopment()
+	dev["PSP_MODE"] = PSPModeFake
+	if _, err := Load(dev); err != nil {
+		t.Fatalf("fake in development: %v", err)
+	}
+	dev["PSP_MODE"], dev["CVU_SHARE_BASE_URL"] = "bind", "lenapay.app"
+	if _, err := Load(dev); err == nil || !strings.Contains(err.Error(), "PSP_MODE") || !strings.Contains(err.Error(), "CVU_SHARE_BASE_URL") {
+		t.Fatalf("err = %v", err)
+	}
+	prod := validProduction()
+	prod["PSP_MODE"] = PSPModeFake
+	if _, err := Load(prod); err == nil || !strings.Contains(err.Error(), "PSP_MODE must be http in production") {
+		t.Fatalf("production with the fake PSP: %v", err)
+	}
+}

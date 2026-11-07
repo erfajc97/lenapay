@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
@@ -82,28 +83,34 @@ func NewServices(p Platform, ports Ports) *Services {
 	})
 	s.Orgs = orgs.NewService(orgs.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Users: s.Identity, Mailer: s.Notifications, Config: p.Config,
+		KYC: orgs.KYCCasesFunc(s.openKYCCase),
 	})
 
 	s.Accounts = accounts.NewService(accounts.Deps{Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Ledger: s.Ledger})
 	s.Payers = payers.NewService(payers.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP, Accounts: s.Accounts,
+		Orgs: s.Orgs, ShareBaseURL: p.Config.CVUShareBaseURL,
 	})
 	s.KYC = kyc.NewService(kyc.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Provider: ports.KYC, Documents: ports.KYCDocuments,
 		Orgs: s.Orgs, OnApprove: []kyc.ApprovalHook{s.Accounts, s.Payers},
+		Jobs: p.Jobs, AutoApproveAfter: p.Config.DevKYCAutoApproveDelay(),
 	})
 	s.Payins = payins.NewService(payins.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Jobs: p.Jobs, PSP: ports.PSP, Payers: s.Payers,
 		Ledger: s.Ledger, Fees: s.Fees, Notifications: s.Notifications,
 		WebhookSecret: p.Config.PSPWebhookSecret, Tolerance: p.Config.PSPWebhookTolerance,
+		Accounts: s.Accounts, Members: s.Orgs,
 	})
 	s.Payouts = payouts.NewService(payouts.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP,
 		Accounts: s.Accounts, Ledger: s.Ledger, Fees: s.Fees, Notifications: s.Notifications,
+		Orgs: s.Orgs, Location: p.Config.Location(),
 	})
 	s.Movements = movements.NewService(movements.Deps{Pool: p.Pool, Location: p.Config.Location()})
 	s.Reconciliation = reconciliation.NewService(reconciliation.Deps{
 		Pool: p.Pool, Clock: p.Clock, Jobs: p.Jobs, PSP: ports.PSP, Payins: s.Payins, Payouts: s.Payouts,
+		CVUs: s.Payers, Location: p.Config.Location(),
 	})
 	s.ERPLink = erplink.NewService(erplink.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Jobs: p.Jobs, Directory: ports.ERP,
@@ -133,4 +140,10 @@ func NewServer(s *Services, issuer *auth.Issuer, health Pinger) *Server {
 // membershipsForUser forwards to orgs (see the identity ↔ orgs note in NewServices).
 func (s *Services) membershipsForUser(ctx context.Context, userID uuid.UUID) ([]identity.MembershipSummary, error) {
 	return s.Orgs.MembershipsForUser(ctx, userID)
+}
+
+// openKYCCase forwards to kyc (orgs is built before kyc, which needs orgs.Service; the closure
+// reads s.KYC at call time, after both exist).
+func (s *Services) openKYCCase(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
+	return s.KYC.OpenCase(ctx, tx, orgID, orgKind)
 }

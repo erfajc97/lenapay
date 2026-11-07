@@ -12,42 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
-const claimPendingNotifications = `-- name: ClaimPendingNotifications :many
-SELECT id, org_id, user_id, kind, data, status, attempts, created_at, sent_at FROM notifications
-WHERE status = 'pending'
-ORDER BY created_at
-LIMIT $1
-FOR UPDATE SKIP LOCKED
+const getNotification = `-- name: GetNotification :one
+SELECT id, org_id, user_id, kind, data, status, attempts, created_at, sent_at FROM notifications WHERE id = $1
 `
 
-func (q *Queries) ClaimPendingNotifications(ctx context.Context, pageLimit int32) ([]Notification, error) {
-	rows, err := q.db.Query(ctx, claimPendingNotifications, pageLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Notification{}
-	for rows.Next() {
-		var i Notification
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.UserID,
-			&i.Kind,
-			&i.Data,
-			&i.Status,
-			&i.Attempts,
-			&i.CreatedAt,
-			&i.SentAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetNotification(ctx context.Context, id uuid.UUID) (Notification, error) {
+	row := q.db.QueryRow(ctx, getNotification, id)
+	var i Notification
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.UserID,
+		&i.Kind,
+		&i.Data,
+		&i.Status,
+		&i.Attempts,
+		&i.CreatedAt,
+		&i.SentAt,
+	)
+	return i, err
 }
 
 const insertNotification = `-- name: InsertNotification :exec
@@ -107,11 +90,44 @@ func (q *Queries) ListPushTokensForUser(ctx context.Context, userID uuid.UUID) (
 	return items, nil
 }
 
+const listStalePendingNotifications = `-- name: ListStalePendingNotifications :many
+SELECT id FROM notifications
+WHERE status = 'pending' AND created_at < $1
+ORDER BY created_at, id
+LIMIT $2
+`
+
+type ListStalePendingNotificationsParams struct {
+	CreatedBefore time.Time
+	PageLimit     int32
+}
+
+// The sweep re-queues deliveries whose job was lost (oldest first, bounded).
+func (q *Queries) ListStalePendingNotifications(ctx context.Context, arg ListStalePendingNotificationsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listStalePendingNotifications, arg.CreatedBefore, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markNotificationAttemptFailed = `-- name: MarkNotificationAttemptFailed :exec
 UPDATE notifications
 SET attempts = attempts + 1,
     status = CASE WHEN attempts + 1 >= $1::integer THEN 'failed' ELSE 'pending' END
-WHERE id = $2
+WHERE id = $2 AND status = 'pending'
 `
 
 type MarkNotificationAttemptFailedParams struct {
@@ -124,8 +140,9 @@ func (q *Queries) MarkNotificationAttemptFailed(ctx context.Context, arg MarkNot
 	return err
 }
 
-const markNotificationSent = `-- name: MarkNotificationSent :exec
-UPDATE notifications SET status = 'sent', sent_at = $1, attempts = attempts + 1 WHERE id = $2
+const markNotificationSent = `-- name: MarkNotificationSent :execrows
+UPDATE notifications SET status = 'sent', sent_at = $1, attempts = attempts + 1
+WHERE id = $2 AND status = 'pending'
 `
 
 type MarkNotificationSentParams struct {
@@ -133,9 +150,12 @@ type MarkNotificationSentParams struct {
 	ID     uuid.UUID
 }
 
-func (q *Queries) MarkNotificationSent(ctx context.Context, arg MarkNotificationSentParams) error {
-	_, err := q.db.Exec(ctx, markNotificationSent, arg.SentAt, arg.ID)
-	return err
+func (q *Queries) MarkNotificationSent(ctx context.Context, arg MarkNotificationSentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markNotificationSent, arg.SentAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertPushToken = `-- name: UpsertPushToken :exec

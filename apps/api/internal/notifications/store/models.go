@@ -416,6 +416,7 @@ type ReconciliationRun struct {
 	CreatedAt            time.Time
 	StartedAt            *time.Time
 	FinishedAt           *time.Time
+	OrgID                *uuid.UUID
 }
 
 type RefreshToken struct {

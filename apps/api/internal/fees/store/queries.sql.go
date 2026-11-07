@@ -55,31 +55,32 @@ func (q *Queries) GetEffectiveFeeRate(ctx context.Context, arg GetEffectiveFeeRa
 	return i, err
 }
 
-const insertFeePlan = `-- name: InsertFeePlan :exec
+const insertDefaultFeePlan = `-- name: InsertDefaultFeePlan :exec
 
-INSERT INTO fee_plans (id, name, is_default) VALUES ($1, $2, $3)
+INSERT INTO fee_plans (id, name, is_default)
+VALUES ($1, $2, true)
+ON CONFLICT DO NOTHING
 `
 
-type InsertFeePlanParams struct {
-	ID        uuid.UUID
-	Name      string
-	IsDefault bool
+type InsertDefaultFeePlanParams struct {
+	ID   uuid.UUID
+	Name string
 }
 
 // Fee plan queries. An org without a plan uses the default plan.
-func (q *Queries) InsertFeePlan(ctx context.Context, arg InsertFeePlanParams) error {
-	_, err := q.db.Exec(ctx, insertFeePlan, arg.ID, arg.Name, arg.IsDefault)
+// Concurrent boots race on the single-default index; the loser inserts nothing.
+func (q *Queries) InsertDefaultFeePlan(ctx context.Context, arg InsertDefaultFeePlanParams) error {
+	_, err := q.db.Exec(ctx, insertDefaultFeePlan, arg.ID, arg.Name)
 	return err
 }
 
-const upsertFeePlanRate = `-- name: UpsertFeePlanRate :exec
+const insertFeePlanRateIfMissing = `-- name: InsertFeePlanRateIfMissing :exec
 INSERT INTO fee_plan_rates (fee_plan_id, currency, payin_bps, payout_fixed_minor, payout_bps)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (fee_plan_id, currency) DO UPDATE
-SET payin_bps = EXCLUDED.payin_bps, payout_fixed_minor = EXCLUDED.payout_fixed_minor, payout_bps = EXCLUDED.payout_bps
+ON CONFLICT (fee_plan_id, currency) DO NOTHING
 `
 
-type UpsertFeePlanRateParams struct {
+type InsertFeePlanRateIfMissingParams struct {
 	FeePlanID        uuid.UUID
 	Currency         string
 	PayinBps         int32
@@ -87,8 +88,9 @@ type UpsertFeePlanRateParams struct {
 	PayoutBps        int32
 }
 
-func (q *Queries) UpsertFeePlanRate(ctx context.Context, arg UpsertFeePlanRateParams) error {
-	_, err := q.db.Exec(ctx, upsertFeePlanRate,
+// Never overwrites a rate an operator changed: boot only fills what is missing.
+func (q *Queries) InsertFeePlanRateIfMissing(ctx context.Context, arg InsertFeePlanRateIfMissingParams) error {
+	_, err := q.db.Exec(ctx, insertFeePlanRateIfMissing,
 		arg.FeePlanID,
 		arg.Currency,
 		arg.PayinBps,

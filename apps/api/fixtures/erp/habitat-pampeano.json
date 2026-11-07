@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-007",
+  "legalName": "Hábitat Pampeano SRL",
+  "cuit": "30712665544",
+  "users": [
+    {
+      "username": "contacto@habitatpampeano.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-007-prj-lpd",
+      "name": "La Plata Diagonal"
+    },
+    {
+      "ref": "erp-org-007-prj-tds",
+      "name": "Tandil Sierras"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-007-buyer-001",
+      "projectRef": "erp-org-007-prj-lpd",
+      "name": "Lucía Acosta",
+      "docType": "dni",
+      "docNumber": "21353054",
+      "email": "lucia.acosta@example.com"
+    },
+    {
+      "ref": "erp-org-007-buyer-002",
+      "projectRef": "erp-org-007-prj-tds",
+      "name": "Santiago Castro",
+      "docType": "dni",
+      "docNumber": "22366633",
+      "email": "santiago.castro@example.com"
+    },
+    {
+      "ref": "erp-org-007-buyer-003",
+      "projectRef": "erp-org-007-prj-lpd",
+      "name": "Julieta Sánchez",
+      "docType": "dni",
+      "docNumber": "23380212",
+      "email": "julieta.sanchez@example.com"
+    },
+    {
+      "ref": "erp-org-007-buyer-004",
+      "projectRef": "erp-org-007-prj-tds",
+      "name": "Herrera Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700264773"
+    }
+  ]
+}

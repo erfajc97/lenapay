@@ -12,11 +12,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const decideKYCCase = `-- name: DecideKYCCase :exec
+const decideKYCCase = `-- name: DecideKYCCase :execrows
 UPDATE kyc_cases
 SET status = $1, decision_reason = $2, provider_ref = $3,
     decided_at = $4, updated_at = $4
-WHERE id = $5
+WHERE id = $5 AND status = 'submitted'
 `
 
 type DecideKYCCaseParams struct {
@@ -27,15 +27,42 @@ type DecideKYCCaseParams struct {
 	ID             uuid.UUID
 }
 
-func (q *Queries) DecideKYCCase(ctx context.Context, arg DecideKYCCaseParams) error {
-	_, err := q.db.Exec(ctx, decideKYCCase,
+// draft → submitted → approved | rejected: only a submitted case is decided.
+func (q *Queries) DecideKYCCase(ctx context.Context, arg DecideKYCCaseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, decideKYCCase,
 		arg.Status,
 		arg.DecisionReason,
 		arg.ProviderRef,
 		arg.DecidedAt,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getKYCCase = `-- name: GetKYCCase :one
+SELECT id, org_id, kind, status, data, provider_ref, decision_reason, submitted_at, decided_at, created_at, updated_at FROM kyc_cases WHERE id = $1
+`
+
+func (q *Queries) GetKYCCase(ctx context.Context, id uuid.UUID) (KycCase, error) {
+	row := q.db.QueryRow(ctx, getKYCCase, id)
+	var i KycCase
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Kind,
+		&i.Status,
+		&i.Data,
+		&i.ProviderRef,
+		&i.DecisionReason,
+		&i.SubmittedAt,
+		&i.DecidedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getKYCCaseByOrg = `-- name: GetKYCCaseByOrg :one
@@ -109,25 +136,34 @@ func (q *Queries) GetKYCCaseForUpdate(ctx context.Context, id uuid.UUID) (KycCas
 
 const insertKYCCase = `-- name: InsertKYCCase :exec
 
-INSERT INTO kyc_cases (id, org_id, kind) VALUES ($1, $2, $3)
+INSERT INTO kyc_cases (id, org_id, kind, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $4)
 `
 
 type InsertKYCCaseParams struct {
-	ID    uuid.UUID
-	OrgID uuid.UUID
-	Kind  string
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Kind      string
+	CreatedAt time.Time
 }
 
-// KYC case and document queries.
+// KYC case and document queries. Org-facing reads filter by org_id (T1); the decision path
+// (internal API key, review job) addresses a case by id.
 func (q *Queries) InsertKYCCase(ctx context.Context, arg InsertKYCCaseParams) error {
-	_, err := q.db.Exec(ctx, insertKYCCase, arg.ID, arg.OrgID, arg.Kind)
+	_, err := q.db.Exec(ctx, insertKYCCase,
+		arg.ID,
+		arg.OrgID,
+		arg.Kind,
+		arg.CreatedAt,
+	)
 	return err
 }
 
 const insertKYCDocument = `-- name: InsertKYCDocument :exec
-INSERT INTO kyc_documents (id, org_id, case_id, kind, representative_dni, file_name, content_type, size_bytes, sha256, storage_key)
+INSERT INTO kyc_documents (id, org_id, case_id, kind, representative_dni, file_name, content_type, size_bytes, sha256, storage_key, created_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10)
+        $6, $7, $8, $9, $10,
+        $11)
 `
 
 type InsertKYCDocumentParams struct {
@@ -141,6 +177,7 @@ type InsertKYCDocumentParams struct {
 	SizeBytes         int64
 	Sha256            []byte
 	StorageKey        string
+	CreatedAt         time.Time
 }
 
 func (q *Queries) InsertKYCDocument(ctx context.Context, arg InsertKYCDocumentParams) error {
@@ -155,6 +192,7 @@ func (q *Queries) InsertKYCDocument(ctx context.Context, arg InsertKYCDocumentPa
 		arg.SizeBytes,
 		arg.Sha256,
 		arg.StorageKey,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -202,9 +240,10 @@ func (q *Queries) ListKYCDocuments(ctx context.Context, arg ListKYCDocumentsPara
 	return items, nil
 }
 
-const submitKYCCase = `-- name: SubmitKYCCase :exec
-UPDATE kyc_cases SET status = 'submitted', submitted_at = $1, updated_at = $1
-WHERE id = $2 AND org_id = $3
+const submitKYCCase = `-- name: SubmitKYCCase :execrows
+UPDATE kyc_cases SET status = 'submitted', submitted_at = $1, updated_at = $1,
+    decision_reason = NULL, decided_at = NULL
+WHERE id = $2 AND org_id = $3 AND status IN ('draft', 'rejected')
 `
 
 type SubmitKYCCaseParams struct {
@@ -213,14 +252,17 @@ type SubmitKYCCaseParams struct {
 	OrgID       uuid.UUID
 }
 
-func (q *Queries) SubmitKYCCase(ctx context.Context, arg SubmitKYCCaseParams) error {
-	_, err := q.db.Exec(ctx, submitKYCCase, arg.SubmittedAt, arg.ID, arg.OrgID)
-	return err
+func (q *Queries) SubmitKYCCase(ctx context.Context, arg SubmitKYCCaseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, submitKYCCase, arg.SubmittedAt, arg.ID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const updateKYCCaseData = `-- name: UpdateKYCCaseData :exec
+const updateKYCCaseData = `-- name: UpdateKYCCaseData :execrows
 UPDATE kyc_cases SET data = $1, status = 'draft', updated_at = $2
-WHERE id = $3 AND org_id = $4
+WHERE id = $3 AND org_id = $4 AND status IN ('draft', 'rejected')
 `
 
 type UpdateKYCCaseDataParams struct {
@@ -230,12 +272,16 @@ type UpdateKYCCaseDataParams struct {
 	OrgID     uuid.UUID
 }
 
-func (q *Queries) UpdateKYCCaseData(ctx context.Context, arg UpdateKYCCaseDataParams) error {
-	_, err := q.db.Exec(ctx, updateKYCCaseData,
+// Only a draft or rejected case changes; editing a rejected case reopens it as draft.
+func (q *Queries) UpdateKYCCaseData(ctx context.Context, arg UpdateKYCCaseDataParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateKYCCaseData,
 		arg.Data,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

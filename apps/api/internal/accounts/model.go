@@ -18,7 +18,7 @@ const (
 	KindPersonal Kind = "personal"
 )
 
-// CurrencyBalance is one currency of an account.
+// CurrencyBalance is one currency of an account (Posted.Currency names it).
 type CurrencyBalance struct {
 	Posted    money.Amount
 	Held      money.Amount

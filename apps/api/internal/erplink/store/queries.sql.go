@@ -59,8 +59,9 @@ func (q *Queries) GetIdentity(ctx context.Context, arg GetIdentityParams) (ErpId
 }
 
 const insertErpLink = `-- name: InsertErpLink :exec
-INSERT INTO erp_links (id, org_id, erp_org_id, display_name, linked_by)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO erp_links (id, org_id, erp_org_id, display_name, linked_by, linked_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6)
 `
 
 type InsertErpLinkParams struct {
@@ -69,6 +70,7 @@ type InsertErpLinkParams struct {
 	ErpOrgID    string
 	DisplayName string
 	LinkedBy    uuid.UUID
+	LinkedAt    time.Time
 }
 
 func (q *Queries) InsertErpLink(ctx context.Context, arg InsertErpLinkParams) error {
@@ -78,6 +80,7 @@ func (q *Queries) InsertErpLink(ctx context.Context, arg InsertErpLinkParams) er
 		arg.ErpOrgID,
 		arg.DisplayName,
 		arg.LinkedBy,
+		arg.LinkedAt,
 	)
 	return err
 }

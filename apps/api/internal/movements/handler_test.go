@@ -1,0 +1,76 @@
+package movements
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/erfajc97/lenapay/apps/api/internal/api"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+)
+
+type fakeService struct {
+	got   Filter
+	items []Movement
+}
+
+func (f *fakeService) List(_ context.Context, _ auth.Principal, filter Filter) (page.Page[Movement], error) {
+	f.got = filter
+	next := "next"
+	return page.Page[Movement]{Items: f.items, NextCursor: &next}, nil
+}
+
+// The handler passes every filter through and answers exactly the contract's keys (FT20).
+func TestListMovementsHandler(t *testing.T) {
+	t.Parallel()
+	name, fee := "Comprador", money.New(5, money.ARS)
+	svc := &fakeService{items: []Movement{
+		{
+			ID: ids.New(), Type: TypePayin, Status: StatusCompleted, Direction: DirectionIn, AccountID: ids.New(),
+			Amount: money.New(100, money.ARS), Fee: &fee, Counterparty: Counterparty{Name: &name}, RefID: ids.New(), CreatedAt: time.Unix(0, 0).UTC(),
+		},
+		{
+			ID: ids.New(), Type: TypeInternalTransfer, Status: StatusCompleted, Direction: DirectionOut, AccountID: ids.New(),
+			Amount: money.New(7, money.USD), RefID: ids.New(), CreatedAt: time.Unix(0, 0).UTC(),
+		},
+	}}
+	ctx := auth.WithPrincipal(t.Context(), auth.Principal{UserID: ids.New(), OrgID: ids.New()})
+	account, typ, status, currency, limit := ids.New(), api.MovementType("payout"), api.MovementStatus("failed"), api.Currency("USD"), 5
+	res, err := NewHandler(svc).ListMovements(ctx, api.ListMovementsRequestObject{Params: api.ListMovementsParams{
+		Account: &account, Type: &typ, Status: &status, Currency: &currency, Limit: &limit,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *svc.got.AccountID != account || *svc.got.Type != TypePayout || *svc.got.Status != StatusFailed ||
+		*svc.got.Currency != money.USD || svc.got.Page.Limit != 5 {
+		t.Fatalf("filter = %+v", svc.got)
+	}
+	body, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Items      []map[string]any `json:"items"`
+		NextCursor *string          `json:"nextCursor"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	full := []string{"accountId", "amount", "counterparty", "createdAt", "direction", "fee", "id", "refId", "status", "type"}
+	bare := []string{"accountId", "amount", "createdAt", "direction", "id", "refId", "status", "type"}
+	for i, want := range [][]string{full, bare} {
+		if got := slices.Sorted(maps.Keys(decoded.Items[i])); !slices.Equal(got, want) {
+			t.Fatalf("item %d keys = %v, want %v", i, got, want)
+		}
+	}
+	if decoded.NextCursor == nil || *decoded.NextCursor != "next" {
+		t.Fatalf("nextCursor = %v", decoded.NextCursor)
+	}
+}

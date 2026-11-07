@@ -39,6 +39,33 @@ func (q *Queries) ApprovePayout(ctx context.Context, arg ApprovePayoutParams) (i
 	return result.RowsAffected(), nil
 }
 
+const cancelPayout = `-- name: CancelPayout :execrows
+UPDATE payouts
+SET status = 'cancelled', updated_at = $1
+WHERE id = $2 AND org_id = $3 AND created_by = $4
+  AND status = 'pending_approval'
+`
+
+type CancelPayoutParams struct {
+	UpdatedAt time.Time
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	CreatedBy uuid.UUID
+}
+
+func (q *Queries) CancelPayout(ctx context.Context, arg CancelPayoutParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelPayout,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.OrgID,
+		arg.CreatedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const failPayout = `-- name: FailPayout :execrows
 UPDATE payouts
 SET status = 'failed', failure_code = $1, failed_at = $2,
@@ -151,17 +178,65 @@ func (q *Queries) GetPayoutForUpdate(ctx context.Context, id uuid.UUID) (Payout,
 	return i, err
 }
 
+const getPayoutForUpdateInOrg = `-- name: GetPayoutForUpdateInOrg :one
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts WHERE id = $1 AND org_id = $2 FOR UPDATE
+`
+
+type GetPayoutForUpdateInOrgParams struct {
+	ID    uuid.UUID
+	OrgID uuid.UUID
+}
+
+func (q *Queries) GetPayoutForUpdateInOrg(ctx context.Context, arg GetPayoutForUpdateInOrgParams) (Payout, error) {
+	row := q.db.QueryRow(ctx, getPayoutForUpdateInOrg, arg.ID, arg.OrgID)
+	var i Payout
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.AccountID,
+		&i.Currency,
+		&i.AmountMinor,
+		&i.FeeMinor,
+		&i.FeePlanID,
+		&i.DestinationType,
+		&i.DestinationValue,
+		&i.DestinationAccount,
+		&i.DestinationHolderName,
+		&i.DestinationHolderCuit,
+		&i.DestinationBankName,
+		&i.Concept,
+		&i.Status,
+		&i.CreatedBy,
+		&i.ApprovedBy,
+		&i.RejectedBy,
+		&i.RejectReason,
+		&i.HoldID,
+		&i.AttemptCount,
+		&i.ProviderAttemptID,
+		&i.ProviderTransferID,
+		&i.FailureCode,
+		&i.LedgerTransactionID,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ApprovedAt,
+		&i.SettledAt,
+		&i.FailedAt,
+	)
+	return i, err
+}
+
 const insertPayout = `-- name: InsertPayout :exec
 
 INSERT INTO payouts (id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id,
                      destination_type, destination_value, destination_account, destination_holder_name,
                      destination_holder_cuit, destination_bank_name, concept, status, created_by, hold_id,
-                     idempotency_key)
+                     idempotency_key, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9,
         $10, $11, $12,
         $13, $14, $15, $16,
-        $17, $18)
+        $17, $18, $19, $19)
 `
 
 type InsertPayoutParams struct {
@@ -183,9 +258,11 @@ type InsertPayoutParams struct {
 	CreatedBy             uuid.UUID
 	HoldID                *uuid.UUID
 	IdempotencyKey        string
+	CreatedAt             time.Time
 }
 
-// Payout queries. Status changes are conditional on the current status (checked row count, MO3).
+// Payout queries. Status changes are conditional on the current status (checked row count, MO3);
+// reads made for a user always filter by org (T2: another org's payout is not found).
 func (q *Queries) InsertPayout(ctx context.Context, arg InsertPayoutParams) error {
 	_, err := q.db.Exec(ctx, insertPayout,
 		arg.ID,
@@ -206,14 +283,15 @@ func (q *Queries) InsertPayout(ctx context.Context, arg InsertPayoutParams) erro
 		arg.CreatedBy,
 		arg.HoldID,
 		arg.IdempotencyKey,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertPayoutEvent = `-- name: InsertPayoutEvent :exec
-INSERT INTO payout_events (id, payout_id, org_id, from_status, to_status, actor_id, reason)
+INSERT INTO payout_events (id, payout_id, org_id, from_status, to_status, actor_id, reason, created_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7)
+        $6, $7, $8)
 `
 
 type InsertPayoutEventParams struct {
@@ -224,6 +302,7 @@ type InsertPayoutEventParams struct {
 	ToStatus   string
 	ActorID    *uuid.UUID
 	Reason     *string
+	CreatedAt  time.Time
 }
 
 func (q *Queries) InsertPayoutEvent(ctx context.Context, arg InsertPayoutEventParams) error {
@@ -235,6 +314,7 @@ func (q *Queries) InsertPayoutEvent(ctx context.Context, arg InsertPayoutEventPa
 		arg.ToStatus,
 		arg.ActorID,
 		arg.Reason,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -351,7 +431,8 @@ func (q *Queries) ListPendingApprovals(ctx context.Context, arg ListPendingAppro
 }
 
 const listSendingPayouts = `-- name: ListSendingPayouts :many
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts WHERE status = 'sending' AND updated_at < $1 ORDER BY updated_at LIMIT $2
+SELECT id FROM payouts WHERE status = 'sending' AND updated_at < $1
+ORDER BY updated_at, id LIMIT $2
 `
 
 type ListSendingPayoutsParams struct {
@@ -359,51 +440,19 @@ type ListSendingPayoutsParams struct {
 	PageLimit     int32
 }
 
-func (q *Queries) ListSendingPayouts(ctx context.Context, arg ListSendingPayoutsParams) ([]Payout, error) {
+func (q *Queries) ListSendingPayouts(ctx context.Context, arg ListSendingPayoutsParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listSendingPayouts, arg.UpdatedBefore, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Payout{}
+	items := []uuid.UUID{}
 	for rows.Next() {
-		var i Payout
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.AccountID,
-			&i.Currency,
-			&i.AmountMinor,
-			&i.FeeMinor,
-			&i.FeePlanID,
-			&i.DestinationType,
-			&i.DestinationValue,
-			&i.DestinationAccount,
-			&i.DestinationHolderName,
-			&i.DestinationHolderCuit,
-			&i.DestinationBankName,
-			&i.Concept,
-			&i.Status,
-			&i.CreatedBy,
-			&i.ApprovedBy,
-			&i.RejectedBy,
-			&i.RejectReason,
-			&i.HoldID,
-			&i.AttemptCount,
-			&i.ProviderAttemptID,
-			&i.ProviderTransferID,
-			&i.FailureCode,
-			&i.LedgerTransactionID,
-			&i.IdempotencyKey,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.ApprovedAt,
-			&i.SettledAt,
-			&i.FailedAt,
-		); err != nil {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -537,7 +586,7 @@ const startPayoutAttempt = `-- name: StartPayoutAttempt :execrows
 UPDATE payouts
 SET status = 'sending', attempt_count = attempt_count + 1, provider_attempt_id = $1,
     updated_at = $2
-WHERE id = $3 AND status IN ('approved', 'sending')
+WHERE id = $3 AND status = 'approved'
 `
 
 type StartPayoutAttemptParams struct {
@@ -548,32 +597,6 @@ type StartPayoutAttemptParams struct {
 
 func (q *Queries) StartPayoutAttempt(ctx context.Context, arg StartPayoutAttemptParams) (int64, error) {
 	result, err := q.db.Exec(ctx, startPayoutAttempt, arg.ProviderAttemptID, arg.UpdatedAt, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const transitionPayout = `-- name: TransitionPayout :execrows
-UPDATE payouts
-SET status = $1, updated_at = $2
-WHERE id = $3 AND status = $4
-`
-
-type TransitionPayoutParams struct {
-	ToStatus   string
-	UpdatedAt  time.Time
-	ID         uuid.UUID
-	FromStatus string
-}
-
-func (q *Queries) TransitionPayout(ctx context.Context, arg TransitionPayoutParams) (int64, error) {
-	result, err := q.db.Exec(ctx, transitionPayout,
-		arg.ToStatus,
-		arg.UpdatedAt,
-		arg.ID,
-		arg.FromStatus,
-	)
 	if err != nil {
 		return 0, err
 	}

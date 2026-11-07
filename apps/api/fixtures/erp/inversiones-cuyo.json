@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-006",
+  "legalName": "Inversiones Cuyo SA",
+  "cuit": "30706014859",
+  "users": [
+    {
+      "username": "tesoreria@inversionescuyo.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-006-prj-chc",
+      "name": "Chacras de Coria"
+    },
+    {
+      "ref": "erp-org-006-prj-sjp",
+      "name": "San Juan Plaza"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-006-buyer-001",
+      "projectRef": "erp-org-006-prj-chc",
+      "name": "Sofía Fernández",
+      "docType": "dni",
+      "docNumber": "42298738",
+      "email": "sofia.fernandez@example.com"
+    },
+    {
+      "ref": "erp-org-006-buyer-002",
+      "projectRef": "erp-org-006-prj-sjp",
+      "name": "Nicolás Ruiz",
+      "docType": "dni",
+      "docNumber": "43312317",
+      "email": "nicolas.ruiz@example.com"
+    },
+    {
+      "ref": "erp-org-006-buyer-003",
+      "projectRef": "erp-org-006-prj-chc",
+      "name": "Paula Giménez",
+      "docType": "dni",
+      "docNumber": "44325896",
+      "email": "paula.gimenez@example.com"
+    },
+    {
+      "ref": "erp-org-006-buyer-004",
+      "projectRef": "erp-org-006-prj-sjp",
+      "name": "Pérez Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700228254"
+    }
+  ]
+}

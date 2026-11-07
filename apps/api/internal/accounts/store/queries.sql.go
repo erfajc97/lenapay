@@ -38,6 +38,32 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account
 	return i, err
 }
 
+const getAccountByERPRef = `-- name: GetAccountByERPRef :one
+SELECT id, org_id, kind, system_code, name, erp_project_ref, archived_at, created_at, updated_at FROM accounts WHERE org_id = $1 AND erp_project_ref = $2
+`
+
+type GetAccountByERPRefParams struct {
+	OrgID         *uuid.UUID
+	ErpProjectRef *string
+}
+
+func (q *Queries) GetAccountByERPRef(ctx context.Context, arg GetAccountByERPRefParams) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByERPRef, arg.OrgID, arg.ErpProjectRef)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Kind,
+		&i.SystemCode,
+		&i.Name,
+		&i.ErpProjectRef,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAccountForUpdate = `-- name: GetAccountForUpdate :one
 SELECT id, org_id, kind, system_code, name, erp_project_ref, archived_at, created_at, updated_at FROM accounts WHERE id = $1 AND org_id = $2 FOR UPDATE
 `
@@ -87,8 +113,9 @@ func (q *Queries) GetMainAccount(ctx context.Context, orgID *uuid.UUID) (Account
 
 const insertAccount = `-- name: InsertAccount :exec
 
-INSERT INTO accounts (id, org_id, kind, name, erp_project_ref)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO accounts (id, org_id, kind, name, erp_project_ref, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $6)
 `
 
 type InsertAccountParams struct {
@@ -97,9 +124,11 @@ type InsertAccountParams struct {
 	Kind          string
 	Name          string
 	ErpProjectRef *string
+	CreatedAt     time.Time
 }
 
-// Account queries (org accounts only; system accounts belong to the ledger feature).
+// Account queries (org accounts only; system accounts belong to the ledger feature). Every
+// query filters by org_id (T1); lock order: account rows (by id) before ledger balance rows.
 func (q *Queries) InsertAccount(ctx context.Context, arg InsertAccountParams) error {
 	_, err := q.db.Exec(ctx, insertAccount,
 		arg.ID,
@@ -107,6 +136,7 @@ func (q *Queries) InsertAccount(ctx context.Context, arg InsertAccountParams) er
 		arg.Kind,
 		arg.Name,
 		arg.ErpProjectRef,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -153,7 +183,51 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]A
 	return items, nil
 }
 
-const renameAccount = `-- name: RenameAccount :exec
+const lockAccountsShared = `-- name: LockAccountsShared :many
+SELECT id, org_id, kind, system_code, name, erp_project_ref, archived_at, created_at, updated_at FROM accounts
+WHERE org_id = $1 AND id = ANY($2::uuid[])
+ORDER BY id
+FOR SHARE
+`
+
+type LockAccountsSharedParams struct {
+	OrgID *uuid.UUID
+	Ids   []uuid.UUID
+}
+
+// Transfers hold the account rows shared (in id order) so an archive cannot slip in between
+// the archived check and the posting.
+func (q *Queries) LockAccountsShared(ctx context.Context, arg LockAccountsSharedParams) ([]Account, error) {
+	rows, err := q.db.Query(ctx, lockAccountsShared, arg.OrgID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Account{}
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Kind,
+			&i.SystemCode,
+			&i.Name,
+			&i.ErpProjectRef,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const renameAccount = `-- name: RenameAccount :execrows
 UPDATE accounts SET name = $1, updated_at = $2
 WHERE id = $3 AND org_id = $4
 `
@@ -165,17 +239,20 @@ type RenameAccountParams struct {
 	OrgID     *uuid.UUID
 }
 
-func (q *Queries) RenameAccount(ctx context.Context, arg RenameAccountParams) error {
-	_, err := q.db.Exec(ctx, renameAccount,
+func (q *Queries) RenameAccount(ctx context.Context, arg RenameAccountParams) (int64, error) {
+	result, err := q.db.Exec(ctx, renameAccount,
 		arg.Name,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const setAccountArchived = `-- name: SetAccountArchived :exec
+const setAccountArchived = `-- name: SetAccountArchived :execrows
 UPDATE accounts SET archived_at = $1, updated_at = $2
 WHERE id = $3 AND org_id = $4
 `
@@ -187,12 +264,15 @@ type SetAccountArchivedParams struct {
 	OrgID      *uuid.UUID
 }
 
-func (q *Queries) SetAccountArchived(ctx context.Context, arg SetAccountArchivedParams) error {
-	_, err := q.db.Exec(ctx, setAccountArchived,
+func (q *Queries) SetAccountArchived(ctx context.Context, arg SetAccountArchivedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAccountArchived,
 		arg.ArchivedAt,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

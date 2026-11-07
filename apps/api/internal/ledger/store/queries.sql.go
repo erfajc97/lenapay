@@ -12,10 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
-const adjustHeld = `-- name: AdjustHeld :exec
+const adjustHeld = `-- name: AdjustHeld :execrows
 UPDATE ledger_balances
 SET held_minor = held_minor + $1, updated_at = $2
 WHERE ledger_account_id = $3
+  AND held_minor + $1 >= 0
+  AND (allow_negative OR posted_minor - (held_minor + $1) >= 0)
 `
 
 type AdjustHeldParams struct {
@@ -24,15 +26,20 @@ type AdjustHeldParams struct {
 	LedgerAccountID uuid.UUID
 }
 
-func (q *Queries) AdjustHeld(ctx context.Context, arg AdjustHeldParams) error {
-	_, err := q.db.Exec(ctx, adjustHeld, arg.DeltaMinor, arg.UpdatedAt, arg.LedgerAccountID)
-	return err
+// Conditional: 0 rows means the hold change would make held negative or exceed the balance.
+func (q *Queries) AdjustHeld(ctx context.Context, arg AdjustHeldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, adjustHeld, arg.DeltaMinor, arg.UpdatedAt, arg.LedgerAccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const applyPosting = `-- name: ApplyPosting :exec
+const applyPosting = `-- name: ApplyPosting :execrows
 UPDATE ledger_balances
 SET posted_minor = posted_minor + $1, updated_at = $2
 WHERE ledger_account_id = $3
+  AND (allow_negative OR posted_minor + $1 - held_minor >= 0)
 `
 
 type ApplyPostingParams struct {
@@ -41,12 +48,16 @@ type ApplyPostingParams struct {
 	LedgerAccountID uuid.UUID
 }
 
-func (q *Queries) ApplyPosting(ctx context.Context, arg ApplyPostingParams) error {
-	_, err := q.db.Exec(ctx, applyPosting, arg.AmountMinor, arg.UpdatedAt, arg.LedgerAccountID)
-	return err
+// Conditional: 0 rows means the posting would overdraw a non-system balance.
+func (q *Queries) ApplyPosting(ctx context.Context, arg ApplyPostingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, applyPosting, arg.AmountMinor, arg.UpdatedAt, arg.LedgerAccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const captureHold = `-- name: CaptureHold :exec
+const captureHold = `-- name: CaptureHold :execrows
 UPDATE holds SET status = 'captured', captured_at = $1
 WHERE id = $2 AND status = 'active'
 `
@@ -56,9 +67,73 @@ type CaptureHoldParams struct {
 	ID         uuid.UUID
 }
 
-func (q *Queries) CaptureHold(ctx context.Context, arg CaptureHoldParams) error {
-	_, err := q.db.Exec(ctx, captureHold, arg.CapturedAt, arg.ID)
-	return err
+func (q *Queries) CaptureHold(ctx context.Context, arg CaptureHoldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, captureHold, arg.CapturedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const ensureLedgerAccount = `-- name: EnsureLedgerAccount :one
+INSERT INTO ledger_accounts (id, account_id, currency, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (account_id, currency) DO UPDATE SET account_id = ledger_accounts.account_id
+RETURNING id
+`
+
+type EnsureLedgerAccountParams struct {
+	ID        uuid.UUID
+	AccountID uuid.UUID
+	Currency  string
+	CreatedAt time.Time
+}
+
+// Returns the ledger account of (account, currency), creating it when missing.
+func (q *Queries) EnsureLedgerAccount(ctx context.Context, arg EnsureLedgerAccountParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, ensureLedgerAccount,
+		arg.ID,
+		arg.AccountID,
+		arg.Currency,
+		arg.CreatedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findHoldByRef = `-- name: FindHoldByRef :one
+SELECT id FROM holds WHERE ref_type = $1 AND ref_id = $2
+`
+
+type FindHoldByRefParams struct {
+	RefType string
+	RefID   uuid.UUID
+}
+
+func (q *Queries) FindHoldByRef(ctx context.Context, arg FindHoldByRefParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findHoldByRef, arg.RefType, arg.RefID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findTransactionByRef = `-- name: FindTransactionByRef :one
+SELECT id FROM ledger_transactions
+WHERE ref_type = $1 AND ref_id = $2 AND kind = $3
+`
+
+type FindTransactionByRefParams struct {
+	RefType string
+	RefID   uuid.UUID
+	Kind    string
+}
+
+func (q *Queries) FindTransactionByRef(ctx context.Context, arg FindTransactionByRefParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findTransactionByRef, arg.RefType, arg.RefID, arg.Kind)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getHoldForUpdate = `-- name: GetHoldForUpdate :one
@@ -83,30 +158,21 @@ func (q *Queries) GetHoldForUpdate(ctx context.Context, id uuid.UUID) (Hold, err
 	return i, err
 }
 
-const getLedgerAccount = `-- name: GetLedgerAccount :one
-SELECT id, account_id, currency, created_at FROM ledger_accounts WHERE account_id = $1 AND currency = $2
+const getSystemAccountID = `-- name: GetSystemAccountID :one
+SELECT id FROM accounts WHERE system_code = $1
 `
 
-type GetLedgerAccountParams struct {
-	AccountID uuid.UUID
-	Currency  string
-}
-
-func (q *Queries) GetLedgerAccount(ctx context.Context, arg GetLedgerAccountParams) (LedgerAccount, error) {
-	row := q.db.QueryRow(ctx, getLedgerAccount, arg.AccountID, arg.Currency)
-	var i LedgerAccount
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Currency,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) GetSystemAccountID(ctx context.Context, systemCode *string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getSystemAccountID, systemCode)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertHold = `-- name: InsertHold :exec
-INSERT INTO holds (id, ledger_account_id, currency, amount_minor, ref_type, ref_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO holds (id, ledger_account_id, currency, amount_minor, ref_type, ref_id, created_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7)
 `
 
 type InsertHoldParams struct {
@@ -116,6 +182,7 @@ type InsertHoldParams struct {
 	AmountMinor     int64
 	RefType         string
 	RefID           uuid.UUID
+	CreatedAt       time.Time
 }
 
 func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) error {
@@ -126,46 +193,32 @@ func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) error {
 		arg.AmountMinor,
 		arg.RefType,
 		arg.RefID,
+		arg.CreatedAt,
 	)
 	return err
 }
 
-const insertLedgerAccount = `-- name: InsertLedgerAccount :exec
-INSERT INTO ledger_accounts (id, account_id, currency)
-VALUES ($1, $2, $3)
-ON CONFLICT (account_id, currency) DO NOTHING
-`
-
-type InsertLedgerAccountParams struct {
-	ID        uuid.UUID
-	AccountID uuid.UUID
-	Currency  string
-}
-
-func (q *Queries) InsertLedgerAccount(ctx context.Context, arg InsertLedgerAccountParams) error {
-	_, err := q.db.Exec(ctx, insertLedgerAccount, arg.ID, arg.AccountID, arg.Currency)
-	return err
-}
-
 const insertLedgerBalance = `-- name: InsertLedgerBalance :exec
-INSERT INTO ledger_balances (ledger_account_id, allow_negative)
-VALUES ($1, $2)
+INSERT INTO ledger_balances (ledger_account_id, allow_negative, updated_at)
+VALUES ($1, $2, $3)
 ON CONFLICT (ledger_account_id) DO NOTHING
 `
 
 type InsertLedgerBalanceParams struct {
 	LedgerAccountID uuid.UUID
 	AllowNegative   bool
+	UpdatedAt       time.Time
 }
 
 func (q *Queries) InsertLedgerBalance(ctx context.Context, arg InsertLedgerBalanceParams) error {
-	_, err := q.db.Exec(ctx, insertLedgerBalance, arg.LedgerAccountID, arg.AllowNegative)
+	_, err := q.db.Exec(ctx, insertLedgerBalance, arg.LedgerAccountID, arg.AllowNegative, arg.UpdatedAt)
 	return err
 }
 
 const insertLedgerPosting = `-- name: InsertLedgerPosting :exec
-INSERT INTO ledger_postings (id, transaction_id, ledger_account_id, currency, amount_minor)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO ledger_postings (id, transaction_id, ledger_account_id, currency, amount_minor, created_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6)
 `
 
 type InsertLedgerPostingParams struct {
@@ -174,6 +227,7 @@ type InsertLedgerPostingParams struct {
 	LedgerAccountID uuid.UUID
 	Currency        string
 	AmountMinor     int64
+	CreatedAt       time.Time
 }
 
 func (q *Queries) InsertLedgerPosting(ctx context.Context, arg InsertLedgerPostingParams) error {
@@ -183,14 +237,15 @@ func (q *Queries) InsertLedgerPosting(ctx context.Context, arg InsertLedgerPosti
 		arg.LedgerAccountID,
 		arg.Currency,
 		arg.AmountMinor,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertLedgerTransaction = `-- name: InsertLedgerTransaction :exec
-INSERT INTO ledger_transactions (id, kind, ref_type, ref_id, org_id, idempotency_key, memo, created_by)
+INSERT INTO ledger_transactions (id, kind, ref_type, ref_id, org_id, idempotency_key, memo, created_by, created_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8)
+        $6, $7, $8, $9)
 `
 
 type InsertLedgerTransactionParams struct {
@@ -202,6 +257,7 @@ type InsertLedgerTransactionParams struct {
 	IdempotencyKey *string
 	Memo           *string
 	CreatedBy      *uuid.UUID
+	CreatedAt      time.Time
 }
 
 func (q *Queries) InsertLedgerTransaction(ctx context.Context, arg InsertLedgerTransactionParams) error {
@@ -214,6 +270,7 @@ func (q *Queries) InsertLedgerTransaction(ctx context.Context, arg InsertLedgerT
 		arg.IdempotencyKey,
 		arg.Memo,
 		arg.CreatedBy,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -289,6 +346,47 @@ func (q *Queries) ListTransactionPostings(ctx context.Context, transactionID uui
 	return items, nil
 }
 
+const lockBalancesForAccounts = `-- name: LockBalancesForAccounts :many
+SELECT la.account_id, la.currency, b.posted_minor, b.held_minor
+FROM ledger_balances b
+JOIN ledger_accounts la ON la.id = b.ledger_account_id
+WHERE la.account_id = ANY($1::uuid[])
+ORDER BY b.ledger_account_id
+FOR UPDATE OF b
+`
+
+type LockBalancesForAccountsRow struct {
+	AccountID   uuid.UUID
+	Currency    string
+	PostedMinor int64
+	HeldMinor   int64
+}
+
+func (q *Queries) LockBalancesForAccounts(ctx context.Context, accountIds []uuid.UUID) ([]LockBalancesForAccountsRow, error) {
+	rows, err := q.db.Query(ctx, lockBalancesForAccounts, accountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockBalancesForAccountsRow{}
+	for rows.Next() {
+		var i LockBalancesForAccountsRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Currency,
+			&i.PostedMinor,
+			&i.HeldMinor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockLedgerBalances = `-- name: LockLedgerBalances :many
 SELECT ledger_account_id, posted_minor, held_minor, allow_negative, updated_at FROM ledger_balances
 WHERE ledger_account_id = ANY($1::uuid[])
@@ -322,7 +420,7 @@ func (q *Queries) LockLedgerBalances(ctx context.Context, ledgerAccountIds []uui
 	return items, nil
 }
 
-const releaseHold = `-- name: ReleaseHold :exec
+const releaseHold = `-- name: ReleaseHold :execrows
 UPDATE holds SET status = 'released', released_at = $1
 WHERE id = $2 AND status = 'active'
 `
@@ -332,15 +430,49 @@ type ReleaseHoldParams struct {
 	ID         uuid.UUID
 }
 
-func (q *Queries) ReleaseHold(ctx context.Context, arg ReleaseHoldParams) error {
-	_, err := q.db.Exec(ctx, releaseHold, arg.ReleasedAt, arg.ID)
-	return err
+func (q *Queries) ReleaseHold(ctx context.Context, arg ReleaseHoldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseHold, arg.ReleasedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const resolveLedgerAccounts = `-- name: ResolveLedgerAccounts :many
+SELECT id, account_id, currency FROM ledger_accounts
+WHERE account_id = ANY($1::uuid[])
+`
+
+type ResolveLedgerAccountsRow struct {
+	ID        uuid.UUID
+	AccountID uuid.UUID
+	Currency  string
+}
+
+func (q *Queries) ResolveLedgerAccounts(ctx context.Context, accountIds []uuid.UUID) ([]ResolveLedgerAccountsRow, error) {
+	rows, err := q.db.Query(ctx, resolveLedgerAccounts, accountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResolveLedgerAccountsRow{}
+	for rows.Next() {
+		var i ResolveLedgerAccountsRow
+		if err := rows.Scan(&i.ID, &i.AccountID, &i.Currency); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertSystemAccount = `-- name: UpsertSystemAccount :one
 
-INSERT INTO accounts (id, org_id, kind, system_code, name)
-VALUES ($1, NULL, 'system', $2, $3)
+INSERT INTO accounts (id, org_id, kind, system_code, name, created_at, updated_at)
+VALUES ($1, NULL, 'system', $2, $3, $4, $4)
 ON CONFLICT (system_code) DO UPDATE SET name = accounts.name
 RETURNING id
 `
@@ -349,12 +481,19 @@ type UpsertSystemAccountParams struct {
 	ID         uuid.UUID
 	SystemCode *string
 	Name       string
+	Now        time.Time
 }
 
 // Ledger queries. The ledger is the only writer of ledger_* tables and holds (P4).
-// Balance rows are locked with FOR UPDATE in ascending id order (one global lock order, MO3).
+// Balance rows are locked with FOR UPDATE in ascending id order (one global lock order, MO3);
+// a hold row is always locked before the balance rows it touches.
 func (q *Queries) UpsertSystemAccount(ctx context.Context, arg UpsertSystemAccountParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, upsertSystemAccount, arg.ID, arg.SystemCode, arg.Name)
+	row := q.db.QueryRow(ctx, upsertSystemAccount,
+		arg.ID,
+		arg.SystemCode,
+		arg.Name,
+		arg.Now,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err

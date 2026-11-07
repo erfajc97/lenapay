@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-008",
+  "legalName": "Norte Construcciones SA",
+  "cuit": "30713998067",
+  "users": [
+    {
+      "username": "admin@norteconstrucciones.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-008-prj-sac",
+      "name": "Salta Colonial"
+    },
+    {
+      "ref": "erp-org-008-prj-tyb",
+      "name": "Tucumán Yerba Buena"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-008-buyer-001",
+      "projectRef": "erp-org-008-prj-sac",
+      "name": "Juan González",
+      "docType": "dni",
+      "docNumber": "25407370",
+      "email": "juan.gonzalez@example.com"
+    },
+    {
+      "ref": "erp-org-008-buyer-002",
+      "projectRef": "erp-org-008-prj-tyb",
+      "name": "Federico Álvarez",
+      "docType": "dni",
+      "docNumber": "26420949",
+      "email": "federico.alvarez@example.com"
+    },
+    {
+      "ref": "erp-org-008-buyer-003",
+      "projectRef": "erp-org-008-prj-sac",
+      "name": "Carolina Pereyra",
+      "docType": "dni",
+      "docNumber": "27434528",
+      "email": "carolina.pereyra@example.com"
+    },
+    {
+      "ref": "erp-org-008-buyer-004",
+      "projectRef": "erp-org-008-prj-tyb",
+      "name": "López Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700301296"
+    }
+  ]
+}

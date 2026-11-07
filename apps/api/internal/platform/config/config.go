@@ -84,6 +84,27 @@ type Config struct {
 	KYCFakeRejectedDNIs []string `env:"KYC_FAKE_REJECTED_DNIS" envSeparator:","`
 	// DevInboxEnabled lets the fake notifier log emailed codes (R-ID-1, development only).
 	DevInboxEnabled bool `env:"DEV_INBOX_ENABLED" envDefault:"false"`
+
+	// DevFixedEmailCode makes every emailed verification code this 6-digit value (demo only;
+	// empty = random codes). Production refuses it.
+	DevFixedEmailCode string `env:"DEV_FIXED_EMAIL_CODE"`
+	// DevKYCAutoApproveSeconds auto-approves a submitted company KYC case after this many
+	// seconds through a River job (demo only; 0 = off). Ignored in production.
+	DevKYCAutoApproveSeconds int `env:"DEV_KYC_AUTO_APPROVE_SECONDS" envDefault:"8"`
+
+	// PSPMode picks the PSP adapter: "http" (BIND wire format: apps/bind-mock locally) or
+	// "fake" (in-process, tests and offline demos). Production refuses fake.
+	PSPMode string `env:"PSP_MODE" envDefault:"http"`
+	// CVUShareBaseURL prefixes the share link of a CVU (R-CVU-2).
+	CVUShareBaseURL string `env:"CVU_SHARE_BASE_URL" envDefault:"https://lenapay.app/pagar"`
+}
+
+// DevKYCAutoApproveDelay is the dev auto-approval delay; 0 (off) in production.
+func (c Config) DevKYCAutoApproveDelay() time.Duration {
+	if c.IsProduction() || c.DevKYCAutoApproveSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(c.DevKYCAutoApproveSeconds) * time.Second
 }
 
 // IsProduction reports whether the process runs in production.
@@ -166,6 +187,18 @@ func (c Config) validate() error {
 	if u, err := url.Parse(c.PSPBaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		fail("PSP_BASE_URL", "must be an absolute http(s) URL")
 	}
+	if c.DevFixedEmailCode != "" && !isSixDigits(c.DevFixedEmailCode) {
+		fail("DEV_FIXED_EMAIL_CODE", "must be empty or 6 digits")
+	}
+	if c.DevKYCAutoApproveSeconds < 0 {
+		fail("DEV_KYC_AUTO_APPROVE_SECONDS", "must be 0 or more")
+	}
+	if c.PSPMode != PSPModeHTTP && c.PSPMode != PSPModeFake {
+		fail("PSP_MODE", "must be http or fake")
+	}
+	if u, err := url.Parse(c.CVUShareBaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		fail("CVU_SHARE_BASE_URL", "must be an absolute http(s) URL")
+	}
 	if c.IsProduction() {
 		errs = append(errs, c.validateProduction()...)
 	}
@@ -187,6 +220,12 @@ func (c Config) validateProduction() []error {
 	}
 	if c.DevInboxEnabled {
 		fail("DEV_INBOX_ENABLED", "must be false in production")
+	}
+	if c.DevFixedEmailCode != "" {
+		fail("DEV_FIXED_EMAIL_CODE", "must be empty in production")
+	}
+	if c.PSPMode != PSPModeHTTP {
+		fail("PSP_MODE", "must be http in production")
 	}
 	if slices.Contains(c.CORSOrigins, "*") {
 		fail("CORS_ORIGINS", "must not contain * in production")
@@ -213,4 +252,22 @@ func decodeSeed(raw string) ([]byte, error) {
 		return nil, errors.New("seed must be 32 bytes")
 	}
 	return b, nil
+}
+
+// PSP adapters (PSP_MODE).
+const (
+	PSPModeHTTP = "http"
+	PSPModeFake = "fake"
+)
+
+func isSixDigits(s string) bool {
+	if len(s) != 6 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

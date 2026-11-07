@@ -3,6 +3,7 @@ package psp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
@@ -16,6 +17,8 @@ var (
 	ErrNotFound = errors.New("psp: not found")
 	// ErrRejected: the provider refused the request (invalid alias, closed account, ...).
 	ErrRejected = errors.New("psp: rejected")
+	// ErrAliasTaken: the alias belongs to another account. It is also ErrRejected.
+	ErrAliasTaken = fmt.Errorf("%w: alias taken", ErrRejected)
 )
 
 // Provider is the PSP port. Every call takes ctx (its deadline bounds the HTTP call) and our

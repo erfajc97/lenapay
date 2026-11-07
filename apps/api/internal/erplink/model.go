@@ -8,6 +8,12 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
 )
 
+// Caps of the ERP credentials (contract CreateErpLinkRequest).
+const (
+	maxUsername = 120
+	maxPassword = 128
+)
+
 // ImportStatus of a link's snapshot import.
 type ImportStatus string
 

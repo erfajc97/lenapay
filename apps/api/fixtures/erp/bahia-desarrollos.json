@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-009",
+  "legalName": "Bahía Desarrollos Inmobiliarios SA",
+  "cuit": "30715003771",
+  "users": [
+    {
+      "username": "cobranzas@bahiadesarrollos.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-009-prj-bbp",
+      "name": "Bahía Blanca Puerto"
+    },
+    {
+      "ref": "erp-org-009-prj-mhd",
+      "name": "Monte Hermoso Dunas"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-009-buyer-001",
+      "projectRef": "erp-org-009-prj-bbp",
+      "name": "Belén Ramírez",
+      "docType": "dni",
+      "docNumber": "29461686",
+      "email": "belen.ramirez@example.com"
+    },
+    {
+      "ref": "erp-org-009-buyer-002",
+      "projectRef": "erp-org-009-prj-mhd",
+      "name": "Diego Molina",
+      "docType": "dni",
+      "docNumber": "30475265",
+      "email": "diego.molina@example.com"
+    },
+    {
+      "ref": "erp-org-009-buyer-003",
+      "projectRef": "erp-org-009-prj-bbp",
+      "name": "Agustina Gómez",
+      "docType": "dni",
+      "docNumber": "31488844",
+      "email": "agustina.gomez@example.com"
+    },
+    {
+      "ref": "erp-org-009-buyer-004",
+      "projectRef": "erp-org-009-prj-mhd",
+      "name": "Benítez Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700337819"
+    }
+  ]
+}

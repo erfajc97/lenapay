@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
 // Handler implements the payins operations of api.StrictServerInterface (HTTP only: generated
-// request → domain input → Service → generated response, A1/AG1). Every method answers
-// 501 internal.not_implemented until its lane replaces the stub.
+// request → domain input → Service → generated response, A1/AG1).
 type Handler struct {
 	svc Service
 }
@@ -17,13 +17,25 @@ type Handler struct {
 // NewHandler returns the payins handler.
 func NewHandler(svc Service) *Handler { return &Handler{svc: svc} }
 
-// notImplemented is the E0 stub answer; each lane deletes it with its last stub.
-func (h *Handler) notImplemented() error {
-	_ = h.svc
-	return apperr.NotImplemented()
+// GetPayin implements api.StrictServerInterface.
+func (h *Handler) GetPayin(ctx context.Context, req api.GetPayinRequestObject) (api.GetPayinResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	payin, err := h.svc.Get(ctx, p, req.PayinId)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetPayin200JSONResponse{
+		Id: payin.ID, AccountId: payin.AccountID, PayerId: payin.PayerID, CvuId: payin.CVUID,
+		Gross: toMoney(payin.Gross), Fee: toMoney(payin.Fee), Net: toMoney(payin.Net),
+		Origin:             api.Counterparty{Name: payin.Origin.Name, Cuit: payin.Origin.CUIT, Cbu: payin.Origin.CBU},
+		ProviderTransferId: payin.ProviderTransferID, Status: api.PayinStatus(payin.Status),
+		CreatedAt: payin.CreatedAt, CreditedAt: payin.CreditedAt,
+	}, nil
 }
 
-// GetPayin implements api.StrictServerInterface.
-func (h *Handler) GetPayin(_ context.Context, _ api.GetPayinRequestObject) (api.GetPayinResponseObject, error) {
-	return nil, h.notImplemented()
+func toMoney(a money.Amount) api.Money {
+	return api.Money{Minor: a.Minor, Currency: api.Currency(a.Currency)}
 }

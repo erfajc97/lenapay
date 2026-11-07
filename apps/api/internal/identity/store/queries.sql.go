@@ -12,7 +12,24 @@ import (
 	"github.com/google/uuid"
 )
 
-const consumeEmailCode = `-- name: ConsumeEmailCode :exec
+const consumeActiveEmailCodes = `-- name: ConsumeActiveEmailCodes :exec
+UPDATE email_codes SET consumed_at = $1
+WHERE user_id = $2 AND purpose = $3 AND consumed_at IS NULL
+`
+
+type ConsumeActiveEmailCodesParams struct {
+	ConsumedAt *time.Time
+	UserID     uuid.UUID
+	Purpose    string
+}
+
+// A new code replaces the previous ones: only the latest code ever verifies.
+func (q *Queries) ConsumeActiveEmailCodes(ctx context.Context, arg ConsumeActiveEmailCodesParams) error {
+	_, err := q.db.Exec(ctx, consumeActiveEmailCodes, arg.ConsumedAt, arg.UserID, arg.Purpose)
+	return err
+}
+
+const consumeEmailCode = `-- name: ConsumeEmailCode :execrows
 UPDATE email_codes SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL
 `
 
@@ -21,9 +38,31 @@ type ConsumeEmailCodeParams struct {
 	ID         uuid.UUID
 }
 
-func (q *Queries) ConsumeEmailCode(ctx context.Context, arg ConsumeEmailCodeParams) error {
-	_, err := q.db.Exec(ctx, consumeEmailCode, arg.ConsumedAt, arg.ID)
-	return err
+func (q *Queries) ConsumeEmailCode(ctx context.Context, arg ConsumeEmailCodeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, consumeEmailCode, arg.ConsumedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const countEmailCodesSince = `-- name: CountEmailCodesSince :one
+SELECT count(*) FROM email_codes
+WHERE user_id = $1 AND purpose = $2 AND created_at >= $3
+`
+
+type CountEmailCodesSinceParams struct {
+	UserID  uuid.UUID
+	Purpose string
+	Since   time.Time
+}
+
+// Codes issued to a user since an instant: the issuance rate limit (R-ID-1).
+func (q *Queries) CountEmailCodesSince(ctx context.Context, arg CountEmailCodesSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEmailCodesSince, arg.UserID, arg.Purpose, arg.Since)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const getActiveEmailCodeForUpdate = `-- name: GetActiveEmailCodeForUpdate :one
@@ -101,12 +140,12 @@ func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash 
 	return i, err
 }
 
-const getSession = `-- name: GetSession :one
-SELECT id, user_id, device_id, created_at, last_seen_at, revoked_at FROM sessions WHERE id = $1
+const getSessionForUpdate = `-- name: GetSessionForUpdate :one
+SELECT id, user_id, device_id, created_at, last_seen_at, revoked_at FROM sessions WHERE id = $1 FOR UPDATE
 `
 
-func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (Session, error) {
-	row := q.db.QueryRow(ctx, getSession, id)
+func (q *Queries) GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionForUpdate, id)
 	var i Session
 	err := row.Scan(
 		&i.ID,
@@ -199,8 +238,8 @@ func (q *Queries) IncrementEmailCodeAttempts(ctx context.Context, id uuid.UUID) 
 }
 
 const insertDevice = `-- name: InsertDevice :exec
-INSERT INTO devices (id, user_id, public_key, name)
-VALUES ($1, $2, $3, $4)
+INSERT INTO devices (id, user_id, public_key, name, created_at)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertDeviceParams struct {
@@ -208,6 +247,7 @@ type InsertDeviceParams struct {
 	UserID    uuid.UUID
 	PublicKey []byte
 	Name      string
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) error {
@@ -216,13 +256,14 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) erro
 		arg.UserID,
 		arg.PublicKey,
 		arg.Name,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertEmailCode = `-- name: InsertEmailCode :exec
-INSERT INTO email_codes (id, user_id, purpose, code_hash, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO email_codes (id, user_id, purpose, code_hash, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertEmailCodeParams struct {
@@ -231,6 +272,7 @@ type InsertEmailCodeParams struct {
 	Purpose   string
 	CodeHash  []byte
 	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertEmailCode(ctx context.Context, arg InsertEmailCodeParams) error {
@@ -240,13 +282,14 @@ func (q *Queries) InsertEmailCode(ctx context.Context, arg InsertEmailCodeParams
 		arg.Purpose,
 		arg.CodeHash,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertRefreshToken = `-- name: InsertRefreshToken :exec
-INSERT INTO refresh_tokens (id, session_id, token_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO refresh_tokens (id, session_id, token_hash, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertRefreshTokenParams struct {
@@ -254,6 +297,7 @@ type InsertRefreshTokenParams struct {
 	SessionID uuid.UUID
 	TokenHash []byte
 	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) error {
@@ -262,28 +306,36 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 		arg.SessionID,
 		arg.TokenHash,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertSession = `-- name: InsertSession :exec
-INSERT INTO sessions (id, user_id, device_id) VALUES ($1, $2, $3)
+INSERT INTO sessions (id, user_id, device_id, created_at, last_seen_at)
+VALUES ($1, $2, $3, $4, $4)
 `
 
 type InsertSessionParams struct {
-	ID       uuid.UUID
-	UserID   uuid.UUID
-	DeviceID *uuid.UUID
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	DeviceID  *uuid.UUID
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) error {
-	_, err := q.db.Exec(ctx, insertSession, arg.ID, arg.UserID, arg.DeviceID)
+	_, err := q.db.Exec(ctx, insertSession,
+		arg.ID,
+		arg.UserID,
+		arg.DeviceID,
+		arg.CreatedAt,
+	)
 	return err
 }
 
 const insertStepUpChallenge = `-- name: InsertStepUpChallenge :exec
-INSERT INTO step_up_challenges (id, user_id, session_id, device_id, nonce, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO step_up_challenges (id, user_id, session_id, device_id, nonce, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertStepUpChallengeParams struct {
@@ -293,6 +345,7 @@ type InsertStepUpChallengeParams struct {
 	DeviceID  *uuid.UUID
 	Nonce     []byte
 	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertStepUpChallenge(ctx context.Context, arg InsertStepUpChallengeParams) error {
@@ -303,25 +356,32 @@ func (q *Queries) InsertStepUpChallenge(ctx context.Context, arg InsertStepUpCha
 		arg.DeviceID,
 		arg.Nonce,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertUser = `-- name: InsertUser :exec
 
-INSERT INTO users (id, email, password_hash)
-VALUES ($1, $2, $3)
+INSERT INTO users (id, email, password_hash, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $4)
 `
 
 type InsertUserParams struct {
 	ID           uuid.UUID
 	Email        string
 	PasswordHash string
+	CreatedAt    time.Time
 }
 
 // Identity queries (users, sessions, refresh tokens, devices, email codes, step-up challenges).
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
-	_, err := q.db.Exec(ctx, insertUser, arg.ID, arg.Email, arg.PasswordHash)
+	_, err := q.db.Exec(ctx, insertUser,
+		arg.ID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.CreatedAt,
+	)
 	return err
 }
 
@@ -340,7 +400,7 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedPa
 	return err
 }
 
-const markRefreshTokenUsed = `-- name: MarkRefreshTokenUsed :exec
+const markRefreshTokenUsed = `-- name: MarkRefreshTokenUsed :execrows
 UPDATE refresh_tokens SET used_at = $1, replaced_by = $2
 WHERE id = $3 AND used_at IS NULL
 `
@@ -351,12 +411,15 @@ type MarkRefreshTokenUsedParams struct {
 	ID         uuid.UUID
 }
 
-func (q *Queries) MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) error {
-	_, err := q.db.Exec(ctx, markRefreshTokenUsed, arg.UsedAt, arg.ReplacedBy, arg.ID)
-	return err
+func (q *Queries) MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markRefreshTokenUsed, arg.UsedAt, arg.ReplacedBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const markStepUpChallengeUsed = `-- name: MarkStepUpChallengeUsed :exec
+const markStepUpChallengeUsed = `-- name: MarkStepUpChallengeUsed :execrows
 UPDATE step_up_challenges SET used_at = $1 WHERE id = $2 AND used_at IS NULL
 `
 
@@ -365,9 +428,12 @@ type MarkStepUpChallengeUsedParams struct {
 	ID     uuid.UUID
 }
 
-func (q *Queries) MarkStepUpChallengeUsed(ctx context.Context, arg MarkStepUpChallengeUsedParams) error {
-	_, err := q.db.Exec(ctx, markStepUpChallengeUsed, arg.UsedAt, arg.ID)
-	return err
+func (q *Queries) MarkStepUpChallengeUsed(ctx context.Context, arg MarkStepUpChallengeUsedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markStepUpChallengeUsed, arg.UsedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const revokeSession = `-- name: RevokeSession :exec
@@ -381,5 +447,19 @@ type RevokeSessionParams struct {
 
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
 	_, err := q.db.Exec(ctx, revokeSession, arg.RevokedAt, arg.ID)
+	return err
+}
+
+const touchSession = `-- name: TouchSession :exec
+UPDATE sessions SET last_seen_at = $1 WHERE id = $2
+`
+
+type TouchSessionParams struct {
+	LastSeenAt time.Time
+	ID         uuid.UUID
+}
+
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
+	_, err := q.db.Exec(ctx, touchSession, arg.LastSeenAt, arg.ID)
 	return err
 }

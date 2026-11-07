@@ -1,0 +1,65 @@
+{
+  "erpOrgId": "erp-org-001",
+  "legalName": "Desarrollos Del Sur SA",
+  "cuit": "30712345678",
+  "users": [
+    {
+      "username": "admin@desarrollosdelsur.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-001-prj-pal",
+      "name": "Torre Palermo Soho"
+    },
+    {
+      "ref": "erp-org-001-prj-nor",
+      "name": "Altos de Nordelta"
+    },
+    {
+      "ref": "erp-org-001-prj-bel",
+      "name": "Residencias Belgrano R"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-001-buyer-001",
+      "projectRef": "erp-org-001-prj-pal",
+      "name": "Federico Álvarez",
+      "docType": "dni",
+      "docNumber": "21013579",
+      "email": "federico.alvarez@example.com"
+    },
+    {
+      "ref": "erp-org-001-buyer-002",
+      "projectRef": "erp-org-001-prj-nor",
+      "name": "Carolina Pereyra",
+      "docType": "dni",
+      "docNumber": "22027158",
+      "email": "carolina.pereyra@example.com"
+    },
+    {
+      "ref": "erp-org-001-buyer-003",
+      "projectRef": "erp-org-001-prj-bel",
+      "name": "Ezequiel López",
+      "docType": "dni",
+      "docNumber": "23040737",
+      "email": "ezequiel.lopez@example.com"
+    },
+    {
+      "ref": "erp-org-001-buyer-004",
+      "projectRef": "erp-org-001-prj-pal",
+      "name": "Ramírez Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700036525"
+    },
+    {
+      "ref": "erp-org-001-buyer-005",
+      "projectRef": "erp-org-001-prj-nor",
+      "name": "Diego Molina",
+      "docType": "dni",
+      "docNumber": "25067895",
+      "email": "diego.molina@example.com"
+    }
+  ]
+}

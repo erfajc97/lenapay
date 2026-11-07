@@ -1,13 +1,16 @@
 -- Fee plan queries. An org without a plan uses the default plan.
 
--- name: InsertFeePlan :exec
-INSERT INTO fee_plans (id, name, is_default) VALUES (sqlc.arg(id), sqlc.arg(name), sqlc.arg(is_default));
+-- name: InsertDefaultFeePlan :exec
+-- Concurrent boots race on the single-default index; the loser inserts nothing.
+INSERT INTO fee_plans (id, name, is_default)
+VALUES (sqlc.arg(id), sqlc.arg(name), true)
+ON CONFLICT DO NOTHING;
 
--- name: UpsertFeePlanRate :exec
+-- name: InsertFeePlanRateIfMissing :exec
+-- Never overwrites a rate an operator changed: boot only fills what is missing.
 INSERT INTO fee_plan_rates (fee_plan_id, currency, payin_bps, payout_fixed_minor, payout_bps)
 VALUES (sqlc.arg(fee_plan_id), sqlc.arg(currency), sqlc.arg(payin_bps), sqlc.arg(payout_fixed_minor), sqlc.arg(payout_bps))
-ON CONFLICT (fee_plan_id, currency) DO UPDATE
-SET payin_bps = EXCLUDED.payin_bps, payout_fixed_minor = EXCLUDED.payout_fixed_minor, payout_bps = EXCLUDED.payout_bps;
+ON CONFLICT (fee_plan_id, currency) DO NOTHING;
 
 -- name: GetEffectiveFeeRate :one
 SELECT r.*

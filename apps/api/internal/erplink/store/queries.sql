@@ -12,8 +12,9 @@ SET erp_org_id = EXCLUDED.erp_org_id, erp_client_id = EXCLUDED.erp_client_id,
     display_name = EXCLUDED.display_name, updated_at = EXCLUDED.updated_at;
 
 -- name: InsertErpLink :exec
-INSERT INTO erp_links (id, org_id, erp_org_id, display_name, linked_by)
-VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(erp_org_id), sqlc.arg(display_name), sqlc.arg(linked_by));
+INSERT INTO erp_links (id, org_id, erp_org_id, display_name, linked_by, linked_at)
+VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(erp_org_id), sqlc.arg(display_name), sqlc.arg(linked_by),
+        sqlc.arg(linked_at));
 
 -- name: GetErpLinkByOrg :one
 SELECT * FROM erp_links WHERE org_id = sqlc.arg(org_id);

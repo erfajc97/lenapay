@@ -1,0 +1,57 @@
+{
+  "erpOrgId": "erp-org-004",
+  "legalName": "Urbana Córdoba Desarrollos SA",
+  "cuit": "30714487201",
+  "users": [
+    {
+      "username": "finanzas@urbanacba.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-004-prj-ncl",
+      "name": "Nueva Córdoba Lofts"
+    },
+    {
+      "ref": "erp-org-004-prj-vag",
+      "name": "Villa Allende Golf"
+    },
+    {
+      "ref": "erp-org-004-prj-cdr",
+      "name": "Cerro de las Rosas"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-004-buyer-001",
+      "projectRef": "erp-org-004-prj-ncl",
+      "name": "Camila Martínez",
+      "docType": "dni",
+      "docNumber": "34190106",
+      "email": "camila.martinez@example.com"
+    },
+    {
+      "ref": "erp-org-004-buyer-002",
+      "projectRef": "erp-org-004-prj-vag",
+      "name": "Tomás Flores",
+      "docType": "dni",
+      "docNumber": "35203685",
+      "email": "tomas.flores@example.com"
+    },
+    {
+      "ref": "erp-org-004-buyer-003",
+      "projectRef": "erp-org-004-prj-cdr",
+      "name": "Rocío Silva",
+      "docType": "dni",
+      "docNumber": "36217264",
+      "email": "rocio.silva@example.com"
+    },
+    {
+      "ref": "erp-org-004-buyer-004",
+      "projectRef": "erp-org-004-prj-ncl",
+      "name": "Díaz Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700155214"
+    }
+  ]
+}

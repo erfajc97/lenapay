@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-002",
+  "legalName": "Constructora Andina SRL",
+  "cuit": "30715532014",
+  "users": [
+    {
+      "username": "obras@constructoraandina.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-002-prj-mdz",
+      "name": "Edificio Mendoza Centro"
+    },
+    {
+      "ref": "erp-org-002-prj-ala",
+      "name": "Barrio Los Álamos"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-002-buyer-001",
+      "projectRef": "erp-org-002-prj-mdz",
+      "name": "Agustina Gómez",
+      "docType": "dni",
+      "docNumber": "26081474",
+      "email": "agustina.gomez@example.com"
+    },
+    {
+      "ref": "erp-org-002-buyer-002",
+      "projectRef": "erp-org-002-prj-ala",
+      "name": "Gonzalo Benítez",
+      "docType": "dni",
+      "docNumber": "27095053",
+      "email": "gonzalo.benitez@example.com"
+    },
+    {
+      "ref": "erp-org-002-buyer-003",
+      "projectRef": "erp-org-002-prj-mdz",
+      "name": "Natalia Rojas",
+      "docType": "dni",
+      "docNumber": "28108632",
+      "email": "natalia.rojas@example.com"
+    },
+    {
+      "ref": "erp-org-002-buyer-004",
+      "projectRef": "erp-org-002-prj-ala",
+      "name": "Romero Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700082179"
+    }
+  ]
+}

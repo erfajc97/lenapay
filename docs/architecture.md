@@ -156,3 +156,12 @@ react-native-sse (EventSource), i18n es-AR, Vitest. Features: `auth`, `onboardin
 | `erp.Directory` | JSON fixtures / dump import | CDC (Debezium) read model or ERP API |
 | `idp` | local EdDSA IdP | Cognito user pool shared with the ERP |
 | `notify.Sender` | log + dev inbox endpoint | SES / Expo push service |
+
+### ERP identity index: loading it
+
+`erp_identity_index` is filled by the worker's periodic `erp_index_refresh` job (on start, then
+every 6 h), which upserts every entry the `erplink.Directory` port returns. Today the port is
+the fixture directory (`apps/api/fixtures/erp/*.json`, `ERP_FIXTURES_DIR`; any ERP user
+accepts the demo password `lebane123`). Loading the ERP dump needs no new command: a
+`Directory` adapter that reads the dump (or the CDC read model) replaces the fixture one in
+`app.FakePorts`, and the same job loads it. Until that adapter exists there is no dump loader.

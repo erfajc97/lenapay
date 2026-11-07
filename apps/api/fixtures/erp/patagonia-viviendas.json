@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-005",
+  "legalName": "Patagonia Viviendas SAS",
+  "cuit": "30717120937",
+  "users": [
+    {
+      "username": "pagos@patagoniaviviendas.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-005-prj-blv",
+      "name": "Bariloche Lake View"
+    },
+    {
+      "ref": "erp-org-005-prj-nqe",
+      "name": "Neuquén Este"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-005-buyer-001",
+      "projectRef": "erp-org-005-prj-blv",
+      "name": "Valentina Medina",
+      "docType": "dni",
+      "docNumber": "38244422",
+      "email": "valentina.medina@example.com"
+    },
+    {
+      "ref": "erp-org-005-buyer-002",
+      "projectRef": "erp-org-005-prj-nqe",
+      "name": "Pablo Ortiz",
+      "docType": "dni",
+      "docNumber": "39258001",
+      "email": "pablo.ortiz@example.com"
+    },
+    {
+      "ref": "erp-org-005-buyer-003",
+      "projectRef": "erp-org-005-prj-blv",
+      "name": "Victoria Sosa",
+      "docType": "dni",
+      "docNumber": "40271580",
+      "email": "victoria.sosa@example.com"
+    },
+    {
+      "ref": "erp-org-005-buyer-004",
+      "projectRef": "erp-org-005-prj-nqe",
+      "name": "Aguirre Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700191733"
+    }
+  ]
+}

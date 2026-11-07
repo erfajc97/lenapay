@@ -4,21 +4,25 @@
 INSERT INTO notifications (id, org_id, user_id, kind, data)
 VALUES (sqlc.arg(id), sqlc.narg(org_id), sqlc.arg(user_id), sqlc.arg(kind), sqlc.arg(data));
 
--- name: ClaimPendingNotifications :many
-SELECT * FROM notifications
-WHERE status = 'pending'
-ORDER BY created_at
-LIMIT sqlc.arg(page_limit)
-FOR UPDATE SKIP LOCKED;
+-- name: GetNotification :one
+SELECT * FROM notifications WHERE id = sqlc.arg(id);
 
--- name: MarkNotificationSent :exec
-UPDATE notifications SET status = 'sent', sent_at = sqlc.arg(sent_at), attempts = attempts + 1 WHERE id = sqlc.arg(id);
+-- name: ListStalePendingNotifications :many
+-- The sweep re-queues deliveries whose job was lost (oldest first, bounded).
+SELECT id FROM notifications
+WHERE status = 'pending' AND created_at < sqlc.arg(created_before)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_limit);
+
+-- name: MarkNotificationSent :execrows
+UPDATE notifications SET status = 'sent', sent_at = sqlc.arg(sent_at), attempts = attempts + 1
+WHERE id = sqlc.arg(id) AND status = 'pending';
 
 -- name: MarkNotificationAttemptFailed :exec
 UPDATE notifications
 SET attempts = attempts + 1,
     status = CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::integer THEN 'failed' ELSE 'pending' END
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id) AND status = 'pending';
 
 -- name: UpsertPushToken :exec
 INSERT INTO push_tokens (id, user_id, token, platform)

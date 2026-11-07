@@ -14,15 +14,14 @@ import (
 
 const finishRun = `-- name: FinishRun :exec
 UPDATE reconciliation_runs
-SET status = $1, matched_count = $2,
-    missing_in_ledger_count = $3, missing_at_psp_count = $4,
-    psp_total_minor = $5, ledger_total_minor = $6,
-    difference_minor = $7, finished_at = $8
-WHERE id = $9
+SET status = 'completed', matched_count = $1,
+    missing_in_ledger_count = $2, missing_at_psp_count = $3,
+    psp_total_minor = $4, ledger_total_minor = $5,
+    difference_minor = $6, finished_at = $7
+WHERE id = $8
 `
 
 type FinishRunParams struct {
-	Status               string
 	MatchedCount         int32
 	MissingInLedgerCount int32
 	MissingAtPspCount    int32
@@ -35,7 +34,6 @@ type FinishRunParams struct {
 
 func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 	_, err := q.db.Exec(ctx, finishRun,
-		arg.Status,
 		arg.MatchedCount,
 		arg.MissingInLedgerCount,
 		arg.MissingAtPspCount,
@@ -49,7 +47,7 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at FROM reconciliation_runs WHERE id = $1
+SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at, org_id FROM reconciliation_runs WHERE id = $1
 `
 
 func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (ReconciliationRun, error) {
@@ -70,15 +68,17 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (ReconciliationRun, 
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const insertItem = `-- name: InsertItem :exec
 INSERT INTO reconciliation_items (id, run_id, org_id, provider_transfer_id, direction, currency,
-                                  psp_amount_minor, ledger_amount_minor, status)
+                                  psp_amount_minor, ledger_amount_minor, status, created_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9)
+        $6, $7, $8, $9,
+        $10)
 `
 
 type InsertItemParams struct {
@@ -91,6 +91,7 @@ type InsertItemParams struct {
 	PspAmountMinor     *int64
 	LedgerAmountMinor  *int64
 	Status             string
+	CreatedAt          time.Time
 }
 
 func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
@@ -104,32 +105,66 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
 		arg.PspAmountMinor,
 		arg.LedgerAmountMinor,
 		arg.Status,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertRun = `-- name: InsertRun :exec
 
-INSERT INTO reconciliation_runs (id, currency, day, requested_by)
-VALUES ($1, $2, $3, $4)
+INSERT INTO reconciliation_runs (id, org_id, currency, day, requested_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertRunParams struct {
 	ID          uuid.UUID
+	OrgID       *uuid.UUID
 	Currency    string
 	Day         time.Time
 	RequestedBy string
+	CreatedAt   time.Time
 }
 
-// Reconciliation run and item queries.
+// Reconciliation run and item queries. A run with org_id is that org's view; without org it is
+// the internal ops run over the whole master account (never listed to an org).
 func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 	_, err := q.db.Exec(ctx, insertRun,
 		arg.ID,
+		arg.OrgID,
 		arg.Currency,
 		arg.Day,
 		arg.RequestedBy,
+		arg.CreatedAt,
 	)
 	return err
+}
+
+const insertScheduledRun = `-- name: InsertScheduledRun :execrows
+INSERT INTO reconciliation_runs (id, org_id, currency, day, requested_by, created_at)
+VALUES ($1, $2, $3, $4, 'schedule', $5)
+ON CONFLICT DO NOTHING
+`
+
+type InsertScheduledRunParams struct {
+	ID        uuid.UUID
+	OrgID     *uuid.UUID
+	Currency  string
+	Day       time.Time
+	CreatedAt time.Time
+}
+
+func (q *Queries) InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertScheduledRun,
+		arg.ID,
+		arg.OrgID,
+		arg.Currency,
+		arg.Day,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listItems = `-- name: ListItems :many
@@ -167,24 +202,27 @@ func (q *Queries) ListItems(ctx context.Context, runID uuid.UUID) ([]Reconciliat
 	return items, nil
 }
 
-const listRuns = `-- name: ListRuns :many
-SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at FROM reconciliation_runs
-WHERE ($1::char(3) IS NULL OR currency = $1::char(3))
-  AND ($2::timestamptz IS NULL
-       OR (created_at, id) < ($2::timestamptz, $3::uuid))
+const listOrgRuns = `-- name: ListOrgRuns :many
+SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at, org_id FROM reconciliation_runs
+WHERE org_id = $1
+  AND ($2::char(3) IS NULL OR currency = $2::char(3))
+  AND ($3::timestamptz IS NULL
+       OR (created_at, id) < ($3::timestamptz, $4::uuid))
 ORDER BY created_at DESC, id DESC
-LIMIT $4
+LIMIT $5
 `
 
-type ListRunsParams struct {
+type ListOrgRunsParams struct {
+	OrgID           *uuid.UUID
 	Currency        *string
 	CursorCreatedAt *time.Time
 	CursorID        *uuid.UUID
 	PageLimit       int32
 }
 
-func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ReconciliationRun, error) {
-	rows, err := q.db.Query(ctx, listRuns,
+func (q *Queries) ListOrgRuns(ctx context.Context, arg ListOrgRunsParams) ([]ReconciliationRun, error) {
+	rows, err := q.db.Query(ctx, listOrgRuns,
+		arg.OrgID,
 		arg.Currency,
 		arg.CursorCreatedAt,
 		arg.CursorID,
@@ -212,6 +250,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Reconcili
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}

@@ -3,13 +3,16 @@ package orgs
 import (
 	"context"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"github.com/erfajc97/lenapay/apps/api/internal/identity"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 )
 
 // Handler implements the orgs operations of api.StrictServerInterface (HTTP only: generated
-// request → domain input → Service → generated response, A1/AG1). Every method answers
-// 501 internal.not_implemented until its lane replaces the stub.
+// request → domain input → Service → generated response, A1/AG1). The org of /orgs/{orgId}
+// routes comes from the guard's principal (T3), never from the path value itself.
 type Handler struct {
 	svc Service
 }
@@ -17,43 +20,114 @@ type Handler struct {
 // NewHandler returns the orgs handler.
 func NewHandler(svc Service) *Handler { return &Handler{svc: svc} }
 
-// notImplemented is the E0 stub answer; each lane deletes it with its last stub.
-func (h *Handler) notImplemented() error {
-	_ = h.svc
-	return apperr.NotImplemented()
-}
-
 // ListOrgs implements api.StrictServerInterface.
-func (h *Handler) ListOrgs(_ context.Context, _ api.ListOrgsRequestObject) (api.ListOrgsResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) ListOrgs(ctx context.Context, _ api.ListOrgsRequestObject) (api.ListOrgsResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgs, err := h.svc.List(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := api.OrganizationList{Items: make([]api.Organization, 0, len(orgs))}
+	for _, o := range orgs {
+		out.Items = append(out.Items, organizationToAPI(o))
+	}
+	return api.ListOrgs200JSONResponse(out), nil
 }
 
 // CreateOrg implements api.StrictServerInterface.
-func (h *Handler) CreateOrg(_ context.Context, _ api.CreateOrgRequestObject) (api.CreateOrgResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) CreateOrg(ctx context.Context, req api.CreateOrgRequestObject) (api.CreateOrgResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o, err := h.svc.Create(ctx, p, CreateInput{Kind: Kind(req.Body.Kind), LegalName: req.Body.LegalName, CUIT: req.Body.Cuit})
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateOrg201JSONResponse(organizationToAPI(o)), nil
 }
 
 // GetOrg implements api.StrictServerInterface.
-func (h *Handler) GetOrg(_ context.Context, _ api.GetOrgRequestObject) (api.GetOrgResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) GetOrg(ctx context.Context, _ api.GetOrgRequestObject) (api.GetOrgResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o, err := h.svc.Get(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetOrg200JSONResponse(organizationToAPI(o)), nil
+}
+
+func organizationToAPI(o Organization) api.Organization {
+	return api.Organization{
+		Id: o.ID, Kind: api.OrgKind(o.Kind), LegalName: o.LegalName, Cuit: o.CUIT,
+		KycStatus: api.KycStatus(o.KYCStatus), Role: api.Role(o.Role), CreatedAt: o.CreatedAt,
+	}
 }
 
 // ListMembers implements api.StrictServerInterface.
-func (h *Handler) ListMembers(_ context.Context, _ api.ListMembersRequestObject) (api.ListMembersResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) ListMembers(ctx context.Context, _ api.ListMembersRequestObject) (api.ListMembersResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	members, err := h.svc.ListMembers(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := api.MemberList{Items: make([]api.Member, 0, len(members))}
+	for _, m := range members {
+		out.Items = append(out.Items, memberToAPI(m))
+	}
+	return api.ListMembers200JSONResponse(out), nil
 }
 
 // AddMember implements api.StrictServerInterface.
-func (h *Handler) AddMember(_ context.Context, _ api.AddMemberRequestObject) (api.AddMemberResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) AddMember(ctx context.Context, req api.AddMemberRequestObject) (api.AddMemberResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := h.svc.AddMember(ctx, p, MemberInput{Email: string(req.Body.Email), Role: auth.Role(req.Body.Role)})
+	if err != nil {
+		return nil, err
+	}
+	return api.AddMember201JSONResponse(memberToAPI(m)), nil
+}
+
+func memberToAPI(m Member) api.Member {
+	return api.Member{UserId: m.UserID, Email: openapi_types.Email(m.Email), Role: api.Role(m.Role), JoinedAt: m.JoinedAt}
 }
 
 // CreateInvite implements api.StrictServerInterface.
-func (h *Handler) CreateInvite(_ context.Context, _ api.CreateInviteRequestObject) (api.CreateInviteResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) CreateInvite(ctx context.Context, req api.CreateInviteRequestObject) (api.CreateInviteResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := h.svc.CreateInvite(ctx, p, MemberInput{Email: string(req.Body.Email), Role: auth.Role(req.Body.Role)})
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateInvite201JSONResponse{
+		Id: inv.ID, Email: openapi_types.Email(inv.Email), Role: api.Role(inv.Role), ExpiresAt: inv.ExpiresAt, CreatedAt: inv.CreatedAt,
+	}, nil
 }
 
 // AcceptInvite implements api.StrictServerInterface.
-func (h *Handler) AcceptInvite(_ context.Context, _ api.AcceptInviteRequestObject) (api.AcceptInviteResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestObject) (api.AcceptInviteResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := h.svc.AcceptInvite(ctx, p, req.Token)
+	if err != nil {
+		return nil, err
+	}
+	return api.AcceptInvite200JSONResponse(identity.MembershipToAPI(m)), nil
 }

@@ -149,6 +149,18 @@ func (h *Hub) Subscribe(orgID uuid.UUID) (events <-chan Event, release func()) {
 // with a comment heartbeat so proxies keep the connection open. It lifts the server's write
 // deadline for this response only.
 func (h *Hub) Stream(ctx context.Context, w http.ResponseWriter, events <-chan Event) error {
+	return h.StreamFrames(ctx, w, events, namedFrame)
+}
+
+// Frame renders one event as an SSE frame: its name ("" = an unnamed frame, which an
+// EventSource delivers as "message") and its data line. ok=false skips the event.
+type Frame func(ev Event) (name string, data []byte, ok bool)
+
+// namedFrame is the default frame: "event: <type>" and the event's data.
+func namedFrame(ev Event) (string, []byte, bool) { return ev.Type, ev.Data, true }
+
+// StreamFrames is Stream with a custom frame (the org stream adds the envelope clients read).
+func (h *Hub) StreamFrames(ctx context.Context, w http.ResponseWriter, events <-chan Event, frame Frame) error {
 	rc := http.NewResponseController(w)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		return fmt.Errorf("realtime: lift write deadline: %w", err)
@@ -175,7 +187,16 @@ func (h *Hub) Stream(ctx context.Context, w http.ResponseWriter, events <-chan E
 				return nil // client gone
 			}
 		case ev := <-events:
-			if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Type, ev.Data); err != nil {
+			name, data, ok := frame(ev)
+			if !ok {
+				continue
+			}
+			if name != "" {
+				if _, err := fmt.Fprintf(w, "event: %s\n", name); err != nil {
+					return nil // client gone
+				}
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
 				return nil // client gone
 			}
 		}

@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
 // Handler implements the accounts operations of api.StrictServerInterface (HTTP only: generated
-// request → domain input → Service → generated response, A1/AG1). Every method answers
-// 501 internal.not_implemented until its lane replaces the stub.
+// request → domain input → Service → generated response, A1/AG1). The org comes from the
+// principal the guard resolved for /orgs/{orgId} (T3), never from the body.
 type Handler struct {
 	svc Service
 }
@@ -17,33 +18,114 @@ type Handler struct {
 // NewHandler returns the accounts handler.
 func NewHandler(svc Service) *Handler { return &Handler{svc: svc} }
 
-// notImplemented is the E0 stub answer; each lane deletes it with its last stub.
-func (h *Handler) notImplemented() error {
-	_ = h.svc
-	return apperr.NotImplemented()
-}
-
 // ListAccounts implements api.StrictServerInterface.
-func (h *Handler) ListAccounts(_ context.Context, _ api.ListAccountsRequestObject) (api.ListAccountsResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) ListAccounts(ctx context.Context, req api.ListAccountsRequestObject) (api.ListAccountsResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := h.svc.List(ctx, p, req.Params.IncludeArchived != nil && *req.Params.IncludeArchived)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]api.Account, 0, len(accounts))
+	for _, a := range accounts {
+		items = append(items, toAPIAccount(a))
+	}
+	return api.ListAccounts200JSONResponse{Items: items}, nil
 }
 
 // CreateAccount implements api.StrictServerInterface.
-func (h *Handler) CreateAccount(_ context.Context, _ api.CreateAccountRequestObject) (api.CreateAccountResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) CreateAccount(ctx context.Context, req api.CreateAccountRequestObject) (api.CreateAccountResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	acc, err := h.svc.Create(ctx, p, CreateInput{Name: req.Body.Name})
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateAccount201JSONResponse(toAPIAccount(acc)), nil
 }
 
 // UpdateAccount implements api.StrictServerInterface.
-func (h *Handler) UpdateAccount(_ context.Context, _ api.UpdateAccountRequestObject) (api.UpdateAccountResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) UpdateAccount(ctx context.Context, req api.UpdateAccountRequestObject) (api.UpdateAccountResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	acc, err := h.svc.Update(ctx, p, req.AccountId, UpdateInput{Name: req.Body.Name, Archived: req.Body.Archived})
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateAccount200JSONResponse(toAPIAccount(acc)), nil
 }
 
 // GetBalances implements api.StrictServerInterface.
-func (h *Handler) GetBalances(_ context.Context, _ api.GetBalancesRequestObject) (api.GetBalancesResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) GetBalances(ctx context.Context, _ api.GetBalancesRequestObject) (api.GetBalancesResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sum, err := h.svc.Summary(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := api.GetBalances200JSONResponse{
+		Totals:   toAPIBalances(sum.Totals),
+		Accounts: make([]api.AccountBalances, 0, len(sum.Accounts)),
+	}
+	for _, a := range sum.Accounts {
+		out.Accounts = append(out.Accounts, api.AccountBalances{
+			AccountId: a.ID, Kind: api.AccountKind(a.Kind), Name: a.Name, Balances: toAPIBalances(a.Balances),
+		})
+	}
+	return out, nil
 }
 
 // CreateInternalTransfer implements api.StrictServerInterface.
-func (h *Handler) CreateInternalTransfer(_ context.Context, _ api.CreateInternalTransferRequestObject) (api.CreateInternalTransferResponseObject, error) {
-	return nil, h.notImplemented()
+func (h *Handler) CreateInternalTransfer(ctx context.Context, req api.CreateInternalTransferRequestObject) (api.CreateInternalTransferResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := TransferInput{
+		FromAccountID:  req.Body.FromAccountId,
+		ToAccountID:    req.Body.ToAccountId,
+		Amount:         money.New(req.Body.Amount.Minor, money.Currency(req.Body.Amount.Currency)),
+		IdempotencyKey: req.Params.IdempotencyKey,
+	}
+	if req.Body.Concept != nil {
+		in.Concept = *req.Body.Concept
+	}
+	t, err := h.svc.Transfer(ctx, p, in)
+	if err != nil {
+		return nil, err
+	}
+	return api.CreateInternalTransfer201JSONResponse{
+		Id: t.ID, FromAccountId: t.FromAccountID, ToAccountId: t.ToAccountID,
+		Amount: toAPIMoney(t.Amount), Concept: t.Concept, CreatedAt: t.CreatedAt,
+	}, nil
+}
+
+func toAPIAccount(a Account) api.Account {
+	return api.Account{
+		Id: a.ID, Kind: api.AccountKind(a.Kind), Name: a.Name, Archived: a.Archived,
+		ErpProjectRef: a.ERPProjectRef, Balances: toAPIBalances(a.Balances), CreatedAt: a.CreatedAt,
+	}
+}
+
+func toAPIBalances(in []CurrencyBalance) []api.CurrencyBalance {
+	out := make([]api.CurrencyBalance, 0, len(in))
+	for _, b := range in {
+		out = append(out, api.CurrencyBalance{
+			Currency: api.Currency(b.Posted.Currency),
+			Posted:   toAPIMoney(b.Posted), Held: toAPIMoney(b.Held), Available: toAPIMoney(b.Available),
+		})
+	}
+	return out
+}
+
+func toAPIMoney(m money.Amount) api.Money {
+	return api.Money{Minor: m.Minor, Currency: api.Currency(m.Currency)}
 }

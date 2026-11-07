@@ -1,0 +1,57 @@
+{
+  "erpOrgId": "erp-org-010",
+  "legalName": "Costa Atlántica Obras SRL",
+  "cuit": "30718221486",
+  "users": [
+    {
+      "username": "obras@costaatlantica.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-010-prj-mdg",
+      "name": "Mar del Plata Güemes"
+    },
+    {
+      "ref": "erp-org-010-prj-pib",
+      "name": "Pinamar Bosque"
+    },
+    {
+      "ref": "erp-org-010-prj-can",
+      "name": "Cariló Norte"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-010-buyer-001",
+      "projectRef": "erp-org-010-prj-mdg",
+      "name": "Natalia Rojas",
+      "docType": "dni",
+      "docNumber": "33516002",
+      "email": "natalia.rojas@example.com"
+    },
+    {
+      "ref": "erp-org-010-buyer-002",
+      "projectRef": "erp-org-010-prj-pib",
+      "name": "Martín Romero",
+      "docType": "dni",
+      "docNumber": "34529581",
+      "email": "martin.romero@example.com"
+    },
+    {
+      "ref": "erp-org-010-buyer-003",
+      "projectRef": "erp-org-010-prj-can",
+      "name": "Florencia Suárez",
+      "docType": "dni",
+      "docNumber": "35543160",
+      "email": "florencia.suarez@example.com"
+    },
+    {
+      "ref": "erp-org-010-buyer-004",
+      "projectRef": "erp-org-010-prj-mdg",
+      "name": "Rodríguez Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700374331"
+    }
+  ]
+}

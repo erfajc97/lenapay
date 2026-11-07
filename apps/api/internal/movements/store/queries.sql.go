@@ -12,79 +12,170 @@ import (
 	"github.com/google/uuid"
 )
 
-const listAccountEntries = `-- name: ListAccountEntries :many
+const listMovements = `-- name: ListMovements :many
 
-SELECT p.id, t.kind, t.ref_type, t.ref_id, t.memo, la.account_id, p.currency, p.amount_minor, p.created_at
-FROM ledger_postings p
-JOIN ledger_transactions t ON t.id = p.transaction_id
-JOIN ledger_accounts la ON la.id = p.ledger_account_id
-JOIN accounts a ON a.id = la.account_id
-WHERE a.org_id = $1
-  AND ($2::uuid IS NULL OR la.account_id = $2::uuid)
-  AND ($3::text IS NULL OR t.kind = $3::text)
-  AND ($4::char(3) IS NULL OR p.currency = $4::char(3))
-  AND ($5::timestamptz IS NULL OR p.created_at >= $5::timestamptz)
-  AND ($6::timestamptz IS NULL OR p.created_at < $6::timestamptz)
-  AND ($7::timestamptz IS NULL
-       OR (p.created_at, p.id) < ($7::timestamptz, $8::uuid))
-ORDER BY p.created_at DESC, p.id DESC
-LIMIT $9
+SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+FROM (
+    SELECT p.id,
+           'internal_transfer'::text AS type,
+           'completed'::text AS status,
+           CASE WHEN p.amount_minor < 0 THEN 'out' ELSE 'in' END::text AS direction,
+           la.account_id,
+           p.currency::text AS currency,
+           abs(p.amount_minor)::bigint AS amount_minor,
+           NULL::bigint AS fee_minor,
+           (SELECT oa.name FROM ledger_postings op
+              JOIN ledger_accounts ola ON ola.id = op.ledger_account_id
+              JOIN accounts oa ON oa.id = ola.account_id
+            WHERE op.transaction_id = t.id AND op.id <> p.id
+            ORDER BY op.id LIMIT 1)::text AS counterparty_name,
+           NULL::text AS counterparty_cuit,
+           NULL::text AS counterparty_cbu,
+           t.memo AS concept,
+           t.ref_id,
+           t.created_at
+    FROM ledger_transactions t
+    JOIN ledger_postings p ON p.transaction_id = t.id
+    JOIN ledger_accounts la ON la.id = p.ledger_account_id
+    WHERE t.org_id = $1
+      AND t.kind = 'internal_transfer'
+      AND ($2::text IS NULL OR $2::text = 'internal_transfer')
+      AND ($3::uuid IS NULL OR la.account_id = $3::uuid)
+      AND ($4::text IS NULL OR p.currency = $4::text)
+      AND ($5::timestamptz IS NULL OR t.created_at >= $5::timestamptz)
+      AND ($6::timestamptz IS NULL OR t.created_at < $6::timestamptz)
+      AND ($7::timestamptz IS NULL
+           OR (t.created_at, p.id) < ($7::timestamptz, $8::uuid))
+
+    UNION ALL
+
+    SELECT pi.id,
+           'payin',
+           CASE pi.status WHEN 'credited' THEN 'completed' WHEN 'failed' THEN 'failed' ELSE 'pending' END,
+           'in',
+           pi.account_id,
+           pi.currency::text,
+           pi.gross_minor,
+           pi.fee_minor,
+           COALESCE(pi.origin_name, ''),
+           pi.origin_cuit,
+           pi.origin_cbu,
+           NULL,
+           pi.id,
+           pi.created_at
+    FROM payins pi
+    WHERE pi.org_id = $1
+      AND ($2::text IS NULL OR $2::text = 'payin')
+      AND ($3::uuid IS NULL OR pi.account_id = $3::uuid)
+      AND ($4::text IS NULL OR pi.currency = $4::text)
+      AND ($5::timestamptz IS NULL OR pi.created_at >= $5::timestamptz)
+      AND ($6::timestamptz IS NULL OR pi.created_at < $6::timestamptz)
+      AND ($7::timestamptz IS NULL
+           OR (pi.created_at, pi.id) < ($7::timestamptz, $8::uuid))
+
+    UNION ALL
+
+    SELECT po.id,
+           'payout',
+           CASE po.status WHEN 'settled' THEN 'completed' WHEN 'failed' THEN 'failed'
+                          WHEN 'rejected' THEN 'cancelled' WHEN 'cancelled' THEN 'cancelled' ELSE 'pending' END,
+           'out',
+           po.account_id,
+           po.currency::text,
+           po.amount_minor,
+           po.fee_minor,
+           po.destination_holder_name,
+           po.destination_holder_cuit,
+           po.destination_account::text,
+           po.concept,
+           po.id,
+           po.created_at
+    FROM payouts po
+    WHERE po.org_id = $1
+      AND ($2::text IS NULL OR $2::text = 'payout')
+      AND ($3::uuid IS NULL OR po.account_id = $3::uuid)
+      AND ($4::text IS NULL OR po.currency = $4::text)
+      AND ($5::timestamptz IS NULL OR po.created_at >= $5::timestamptz)
+      AND ($6::timestamptz IS NULL OR po.created_at < $6::timestamptz)
+      AND ($7::timestamptz IS NULL
+           OR (po.created_at, po.id) < ($7::timestamptz, $8::uuid))
+) m
+WHERE ($9::text IS NULL OR m.status = $9::text)
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT $10
 `
 
-type ListAccountEntriesParams struct {
+type ListMovementsParams struct {
 	OrgID           *uuid.UUID
+	Type            *string
 	AccountID       *uuid.UUID
-	Kind            *string
 	Currency        *string
 	FromTime        *time.Time
 	ToTime          *time.Time
 	CursorCreatedAt *time.Time
 	CursorID        *uuid.UUID
+	Status          *string
 	PageLimit       int32
 }
 
-type ListAccountEntriesRow struct {
-	ID          uuid.UUID
-	Kind        string
-	RefType     string
-	RefID       uuid.UUID
-	Memo        *string
-	AccountID   uuid.UUID
-	Currency    string
-	AmountMinor int64
-	CreatedAt   time.Time
+type ListMovementsRow struct {
+	ID               uuid.UUID
+	Type             string
+	Status           string
+	Direction        string
+	AccountID        uuid.UUID
+	Currency         string
+	AmountMinor      int64
+	FeeMinor         *int64
+	CounterpartyName string
+	CounterpartyCuit *string
+	CounterpartyCbu  *string
+	Concept          *string
+	RefID            uuid.UUID
+	CreatedAt        time.Time
 }
 
-// Movements read model: one row per ledger posting on an org account, newest first.
-// Pending payouts (not yet posted) come from the payouts service, not from this query.
-func (q *Queries) ListAccountEntries(ctx context.Context, arg ListAccountEntriesParams) ([]ListAccountEntriesRow, error) {
-	rows, err := q.db.Query(ctx, listAccountEntries,
+// Movements read model (R-MOV-1): read-only, one row per payin, payout and internal-transfer
+// leg of an org, newest first, keyset-paginated on (created_at, id). It reads the payins and
+// payouts tables of other features without writing them: a read model, never a writer (P4).
+// Every branch filters by org first and uses that table's (org_id, created_at DESC) index;
+// the internal-transfer branch comes first so sqlc types the nullable columns as nullable;
+// counterparty_name is ” when unknown (the service maps it to null).
+func (q *Queries) ListMovements(ctx context.Context, arg ListMovementsParams) ([]ListMovementsRow, error) {
+	rows, err := q.db.Query(ctx, listMovements,
 		arg.OrgID,
+		arg.Type,
 		arg.AccountID,
-		arg.Kind,
 		arg.Currency,
 		arg.FromTime,
 		arg.ToTime,
 		arg.CursorCreatedAt,
 		arg.CursorID,
+		arg.Status,
 		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAccountEntriesRow{}
+	items := []ListMovementsRow{}
 	for rows.Next() {
-		var i ListAccountEntriesRow
+		var i ListMovementsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Kind,
-			&i.RefType,
-			&i.RefID,
-			&i.Memo,
+			&i.Type,
+			&i.Status,
+			&i.Direction,
 			&i.AccountID,
 			&i.Currency,
 			&i.AmountMinor,
+			&i.FeeMinor,
+			&i.CounterpartyName,
+			&i.CounterpartyCuit,
+			&i.CounterpartyCbu,
+			&i.Concept,
+			&i.RefID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const disableCVU = `-- name: DisableCVU :exec
+const disableCVU = `-- name: DisableCVU :execrows
 UPDATE cvus SET status = 'disabled', disabled_at = $1, updated_at = $1
 WHERE id = $2 AND org_id = $3 AND status = 'active'
 `
@@ -23,9 +23,43 @@ type DisableCVUParams struct {
 	OrgID      uuid.UUID
 }
 
-func (q *Queries) DisableCVU(ctx context.Context, arg DisableCVUParams) error {
-	_, err := q.db.Exec(ctx, disableCVU, arg.DisabledAt, arg.ID, arg.OrgID)
-	return err
+func (q *Queries) DisableCVU(ctx context.Context, arg DisableCVUParams) (int64, error) {
+	result, err := q.db.Exec(ctx, disableCVU, arg.DisabledAt, arg.ID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getActiveCVUForPayer = `-- name: GetActiveCVUForPayer :one
+SELECT id, org_id, account_id, payer_id, currency, cvu, alias, psp_ref, status, created_at, updated_at, disabled_at FROM cvus
+WHERE org_id = $1 AND payer_id = $2 AND currency = $3 AND status = 'active'
+`
+
+type GetActiveCVUForPayerParams struct {
+	OrgID    uuid.UUID
+	PayerID  *uuid.UUID
+	Currency string
+}
+
+func (q *Queries) GetActiveCVUForPayer(ctx context.Context, arg GetActiveCVUForPayerParams) (Cvu, error) {
+	row := q.db.QueryRow(ctx, getActiveCVUForPayer, arg.OrgID, arg.PayerID, arg.Currency)
+	var i Cvu
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.AccountID,
+		&i.PayerID,
+		&i.Currency,
+		&i.Cvu,
+		&i.Alias,
+		&i.PspRef,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
 }
 
 const getCVU = `-- name: GetCVU :one
@@ -61,6 +95,7 @@ const getCVUByNumber = `-- name: GetCVUByNumber :one
 SELECT id, org_id, account_id, payer_id, currency, cvu, alias, psp_ref, status, created_at, updated_at, disabled_at FROM cvus WHERE cvu = $1
 `
 
+// System lookup for payins: the receiving CVU decides the org (no tenant filter by design).
 func (q *Queries) GetCVUByNumber(ctx context.Context, cvu string) (Cvu, error) {
 	row := q.db.QueryRow(ctx, getCVUByNumber, cvu)
 	var i Cvu
@@ -92,6 +127,33 @@ type GetPayerParams struct {
 
 func (q *Queries) GetPayer(ctx context.Context, arg GetPayerParams) (Payer, error) {
 	row := q.db.QueryRow(ctx, getPayer, arg.ID, arg.OrgID)
+	var i Payer
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.AccountID,
+		&i.Name,
+		&i.DocType,
+		&i.DocNumber,
+		&i.Email,
+		&i.ErpRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPayerByERPRef = `-- name: GetPayerByERPRef :one
+SELECT id, org_id, account_id, name, doc_type, doc_number, email, erp_ref, created_at, updated_at FROM payers WHERE org_id = $1 AND erp_ref = $2
+`
+
+type GetPayerByERPRefParams struct {
+	OrgID  uuid.UUID
+	ErpRef *string
+}
+
+func (q *Queries) GetPayerByERPRef(ctx context.Context, arg GetPayerByERPRefParams) (Payer, error) {
+	row := q.db.QueryRow(ctx, getPayerByERPRef, arg.OrgID, arg.ErpRef)
 	var i Payer
 	err := row.Scan(
 		&i.ID,
@@ -318,9 +380,9 @@ func (q *Queries) ListPayers(ctx context.Context, arg ListPayersParams) ([]Payer
 	return items, nil
 }
 
-const updateCVUAlias = `-- name: UpdateCVUAlias :exec
+const updateCVUAlias = `-- name: UpdateCVUAlias :execrows
 UPDATE cvus SET alias = $1, updated_at = $2
-WHERE id = $3 AND org_id = $4
+WHERE id = $3 AND org_id = $4 AND status = 'active'
 `
 
 type UpdateCVUAliasParams struct {
@@ -330,17 +392,20 @@ type UpdateCVUAliasParams struct {
 	OrgID     uuid.UUID
 }
 
-func (q *Queries) UpdateCVUAlias(ctx context.Context, arg UpdateCVUAliasParams) error {
-	_, err := q.db.Exec(ctx, updateCVUAlias,
+func (q *Queries) UpdateCVUAlias(ctx context.Context, arg UpdateCVUAliasParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateCVUAlias,
 		arg.Alias,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const updatePayer = `-- name: UpdatePayer :exec
+const updatePayer = `-- name: UpdatePayer :execrows
 UPDATE payers SET name = $1, email = $2, updated_at = $3
 WHERE id = $4 AND org_id = $5
 `
@@ -353,13 +418,16 @@ type UpdatePayerParams struct {
 	OrgID     uuid.UUID
 }
 
-func (q *Queries) UpdatePayer(ctx context.Context, arg UpdatePayerParams) error {
-	_, err := q.db.Exec(ctx, updatePayer,
+func (q *Queries) UpdatePayer(ctx context.Context, arg UpdatePayerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePayer,
 		arg.Name,
 		arg.Email,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

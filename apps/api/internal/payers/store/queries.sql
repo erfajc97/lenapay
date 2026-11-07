@@ -20,7 +20,10 @@ WHERE org_id = sqlc.arg(org_id)
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(page_limit);
 
--- name: UpdatePayer :exec
+-- name: GetPayerByERPRef :one
+SELECT * FROM payers WHERE org_id = sqlc.arg(org_id) AND erp_ref = sqlc.arg(erp_ref);
+
+-- name: UpdatePayer :execrows
 UPDATE payers SET name = sqlc.arg(name), email = sqlc.narg(email), updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
 
@@ -33,7 +36,12 @@ VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(account_id), sqlc.narg(payer_id
 SELECT * FROM cvus WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
 
 -- name: GetCVUByNumber :one
+-- System lookup for payins: the receiving CVU decides the org (no tenant filter by design).
 SELECT * FROM cvus WHERE cvu = sqlc.arg(cvu);
+
+-- name: GetActiveCVUForPayer :one
+SELECT * FROM cvus
+WHERE org_id = sqlc.arg(org_id) AND payer_id = sqlc.arg(payer_id) AND currency = sqlc.arg(currency) AND status = 'active';
 
 -- name: ListCVUsForPayers :many
 SELECT * FROM cvus
@@ -43,10 +51,10 @@ ORDER BY created_at, id;
 -- name: ListCVUsForAccount :many
 SELECT * FROM cvus WHERE org_id = sqlc.arg(org_id) AND account_id = sqlc.arg(account_id) ORDER BY created_at, id;
 
--- name: UpdateCVUAlias :exec
+-- name: UpdateCVUAlias :execrows
 UPDATE cvus SET alias = sqlc.arg(alias), updated_at = sqlc.arg(updated_at)
-WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
+WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id) AND status = 'active';
 
--- name: DisableCVU :exec
+-- name: DisableCVU :execrows
 UPDATE cvus SET status = 'disabled', disabled_at = sqlc.arg(disabled_at), updated_at = sqlc.arg(disabled_at)
 WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id) AND status = 'active';

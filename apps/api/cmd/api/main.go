@@ -69,6 +69,12 @@ func run() error {
 		return err
 	}
 	services := app.NewServices(app.Platform{Pool: pool, Clock: clk, Jobs: jobs, Issuer: issuer, Config: cfg}, app.FakePorts(cfg))
+	if err := services.Ledger.EnsureSystemAccounts(ctx); err != nil {
+		return err
+	}
+	if err := services.Fees.EnsureDefaultPlan(ctx); err != nil {
+		return err
+	}
 	hub := platformrealtime.NewHub(pool)
 
 	handler, err := app.NewRouter(app.Deps{

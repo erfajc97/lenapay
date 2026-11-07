@@ -36,6 +36,18 @@ import (
 
 type pinger struct{ err error }
 
+// handlerReached stands in for the accounts service: the router cases only prove a request
+// got through the middleware to the handler, so the service answers 501 (no database here).
+type handlerReached struct{ accounts.Service }
+
+func (handlerReached) Create(context.Context, auth.Principal, accounts.CreateInput) (accounts.Account, error) {
+	return accounts.Account{}, apperr.NotImplemented()
+}
+
+func (handlerReached) Transfer(context.Context, auth.Principal, accounts.TransferInput) (accounts.Transfer, error) {
+	return accounts.Transfer{}, apperr.NotImplemented()
+}
+
 func (p pinger) Ping(context.Context) error { return p.err }
 
 // directory: one active session, member of org as admin with approved KYC.
@@ -83,7 +95,7 @@ func newFixture(t *testing.T, health error) fixture {
 		IdentityHandler:       identity.NewHandler(identity.NewService(identity.Deps{}), issuer.JWKS),
 		OrgsHandler:           orgs.NewHandler(orgs.NewService(orgs.Deps{})),
 		KYCHandler:            kyc.NewHandler(kyc.NewService(kyc.Deps{})),
-		AccountsHandler:       accounts.NewHandler(accounts.NewService(accounts.Deps{})),
+		AccountsHandler:       accounts.NewHandler(handlerReached{}),
 		PayersHandler:         payers.NewHandler(payers.NewService(payers.Deps{})),
 		PayinsHandler:         payins.NewHandler(payins.NewService(payins.Deps{})),
 		PayoutsHandler:        payouts.NewHandler(payouts.NewService(payouts.Deps{})),
@@ -96,7 +108,7 @@ func newFixture(t *testing.T, health error) fixture {
 	h, err := app.NewRouter(app.Deps{
 		Server:             server,
 		Guard:              auth.NewGuard(app.AccessRules(), issuer, dir, internalKey),
-		Webhook:            payins.NewWebhookHandler(nil),
+		Webhook:            payins.NewWebhookHandler(payins.NewService(payins.Deps{Clock: clock.Real{}})),
 		Events:             realtime.NewStreamHandler(nil),
 		CORSOrigins:        []string{"http://localhost:8081"},
 		RateLimitPerMinute: 1000,
@@ -182,8 +194,9 @@ func TestRouterErrors(t *testing.T) {
 		{"money route reaches the stub", request{http.MethodPost, orgPath + "/internal-transfers", transfer, moneyHeaders}, http.StatusNotImplemented, apperr.CodeNotImplemented},
 		{"amount as a float is rejected", request{http.MethodPost, orgPath + "/internal-transfers", strings.Replace(transfer, "1000", "10.5", 1), moneyHeaders}, http.StatusUnprocessableEntity, apperr.CodeValidation},
 		{"internal route without key", request{http.MethodPost, "/internal/reconciliation/run", `{"currency":"ARS","day":"2026-11-07"}`, nil}, http.StatusUnauthorized, apperr.CodeUnauthenticated},
-		{"internal route with key", request{http.MethodPost, "/internal/reconciliation/run", `{"currency":"ARS","day":"2026-11-07"}`, map[string]string{"X-Internal-Api-Key": f.internalKey}}, http.StatusNotImplemented, apperr.CodeNotImplemented},
-		{"signed webhook reaches its handler", request{http.MethodPost, "/webhooks/psp/transfers", `{}`, nil}, http.StatusNotImplemented, apperr.CodeNotImplemented},
+		// With the key the guard lets the request through to the validator (the run itself is lane D's integration test).
+		{"internal route with key", request{http.MethodPost, "/internal/reconciliation/run", `{"currency":"ARS","day":"2026-11-07","extra":1}`, map[string]string{"X-Internal-Api-Key": f.internalKey}}, http.StatusUnprocessableEntity, apperr.CodeValidation},
+		{"unsigned webhook reaches its handler and is refused", request{http.MethodPost, "/webhooks/psp/transfers", `{}`, nil}, http.StatusUnauthorized, apperr.CodeWebhookSignature},
 		{"event stream is guarded", request{http.MethodGet, orgPath + "/events", "", nil}, http.StatusUnauthorized, apperr.CodeUnauthenticated},
 	}
 	for _, tt := range tests {

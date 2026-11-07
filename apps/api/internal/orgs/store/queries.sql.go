@@ -25,6 +25,18 @@ func (q *Queries) CountAdminsForUpdate(ctx context.Context, orgID uuid.UUID) (in
 	return count, err
 }
 
+const countPersonalOrgsCreatedBy = `-- name: CountPersonalOrgsCreatedBy :one
+SELECT count(*) FROM organizations WHERE created_by = $1 AND kind = 'personal'
+`
+
+// A person has one personal wallet (R-ACC-1, R-CVU-3).
+func (q *Queries) CountPersonalOrgsCreatedBy(ctx context.Context, createdBy uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPersonalOrgsCreatedBy, createdBy)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getInviteByTokenHashForUpdate = `-- name: GetInviteByTokenHashForUpdate :one
 SELECT id, org_id, email, role, token_hash, invited_by, expires_at, accepted_at, accepted_by, created_at FROM invites WHERE token_hash = $1 FOR UPDATE
 `
@@ -42,6 +54,37 @@ func (q *Queries) GetInviteByTokenHashForUpdate(ctx context.Context, tokenHash [
 		&i.ExpiresAt,
 		&i.AcceptedAt,
 		&i.AcceptedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getMember = `-- name: GetMember :one
+SELECT m.user_id, u.email, m.role, m.created_at
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.org_id = $1 AND m.user_id = $2
+`
+
+type GetMemberParams struct {
+	OrgID  uuid.UUID
+	UserID uuid.UUID
+}
+
+type GetMemberRow struct {
+	UserID    uuid.UUID
+	Email     string
+	Role      string
+	CreatedAt time.Time
+}
+
+func (q *Queries) GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error) {
+	row := q.db.QueryRow(ctx, getMember, arg.OrgID, arg.UserID)
+	var i GetMemberRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Email,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -134,8 +177,9 @@ func (q *Queries) GetOrganizationForUser(ctx context.Context, arg GetOrganizatio
 }
 
 const insertInvite = `-- name: InsertInvite :exec
-INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8)
 `
 
 type InsertInviteParams struct {
@@ -146,6 +190,7 @@ type InsertInviteParams struct {
 	TokenHash []byte
 	InvitedBy uuid.UUID
 	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) error {
@@ -157,29 +202,38 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) erro
 		arg.TokenHash,
 		arg.InvitedBy,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertMembership = `-- name: InsertMembership :exec
-INSERT INTO memberships (org_id, user_id, role) VALUES ($1, $2, $3)
+INSERT INTO memberships (org_id, user_id, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $4)
 `
 
 type InsertMembershipParams struct {
-	OrgID  uuid.UUID
-	UserID uuid.UUID
-	Role   string
+	OrgID     uuid.UUID
+	UserID    uuid.UUID
+	Role      string
+	CreatedAt time.Time
 }
 
 func (q *Queries) InsertMembership(ctx context.Context, arg InsertMembershipParams) error {
-	_, err := q.db.Exec(ctx, insertMembership, arg.OrgID, arg.UserID, arg.Role)
+	_, err := q.db.Exec(ctx, insertMembership,
+		arg.OrgID,
+		arg.UserID,
+		arg.Role,
+		arg.CreatedAt,
+	)
 	return err
 }
 
 const insertOrganization = `-- name: InsertOrganization :exec
 
-INSERT INTO organizations (id, kind, legal_name, cuit, fee_plan_id, created_by)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO organizations (id, kind, legal_name, cuit, fee_plan_id, created_by, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $7)
 `
 
 type InsertOrganizationParams struct {
@@ -189,6 +243,7 @@ type InsertOrganizationParams struct {
 	Cuit      *string
 	FeePlanID *uuid.UUID
 	CreatedBy uuid.UUID
+	CreatedAt time.Time
 }
 
 // Organization, membership and invite queries. Every org-owned read filters by org_id (T1).
@@ -200,6 +255,7 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		arg.Cuit,
 		arg.FeePlanID,
 		arg.CreatedBy,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -296,7 +352,7 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID uuid.UUID
 	return items, nil
 }
 
-const markInviteAccepted = `-- name: MarkInviteAccepted :exec
+const markInviteAccepted = `-- name: MarkInviteAccepted :execrows
 UPDATE invites SET accepted_at = $1, accepted_by = $2
 WHERE id = $3 AND accepted_at IS NULL
 `
@@ -307,12 +363,15 @@ type MarkInviteAcceptedParams struct {
 	ID         uuid.UUID
 }
 
-func (q *Queries) MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) error {
-	_, err := q.db.Exec(ctx, markInviteAccepted, arg.AcceptedAt, arg.AcceptedBy, arg.ID)
-	return err
+func (q *Queries) MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markInviteAccepted, arg.AcceptedAt, arg.AcceptedBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const setOrganizationKYCStatus = `-- name: SetOrganizationKYCStatus :exec
+const setOrganizationKYCStatus = `-- name: SetOrganizationKYCStatus :execrows
 UPDATE organizations SET kyc_status = $1, updated_at = $2
 WHERE id = $3
 `
@@ -323,9 +382,12 @@ type SetOrganizationKYCStatusParams struct {
 	ID        uuid.UUID
 }
 
-func (q *Queries) SetOrganizationKYCStatus(ctx context.Context, arg SetOrganizationKYCStatusParams) error {
-	_, err := q.db.Exec(ctx, setOrganizationKYCStatus, arg.KycStatus, arg.UpdatedAt, arg.ID)
-	return err
+func (q *Queries) SetOrganizationKYCStatus(ctx context.Context, arg SetOrganizationKYCStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOrganizationKYCStatus, arg.KycStatus, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateMembershipRole = `-- name: UpdateMembershipRole :exec

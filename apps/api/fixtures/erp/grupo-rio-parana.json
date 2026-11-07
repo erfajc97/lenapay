@@ -1,0 +1,53 @@
+{
+  "erpOrgId": "erp-org-003",
+  "legalName": "Grupo Río Paraná SA",
+  "cuit": "30709834122",
+  "users": [
+    {
+      "username": "administracion@grupoparana.com.ar"
+    }
+  ],
+  "projects": [
+    {
+      "ref": "erp-org-003-prj-pnr",
+      "name": "Puerto Norte Rosario"
+    },
+    {
+      "ref": "erp-org-003-prj-lit",
+      "name": "Torres del Litoral"
+    }
+  ],
+  "buyers": [
+    {
+      "ref": "erp-org-003-buyer-001",
+      "projectRef": "erp-org-003-prj-pnr",
+      "name": "Florencia Suárez",
+      "docType": "dni",
+      "docNumber": "30135790",
+      "email": "florencia.suarez@example.com"
+    },
+    {
+      "ref": "erp-org-003-buyer-002",
+      "projectRef": "erp-org-003-prj-lit",
+      "name": "Matías Rodríguez",
+      "docType": "dni",
+      "docNumber": "31149369",
+      "email": "matias.rodriguez@example.com"
+    },
+    {
+      "ref": "erp-org-003-buyer-003",
+      "projectRef": "erp-org-003-prj-pnr",
+      "name": "Micaela Torres",
+      "docType": "dni",
+      "docNumber": "32162948",
+      "email": "micaela.torres@example.com"
+    },
+    {
+      "ref": "erp-org-003-buyer-004",
+      "projectRef": "erp-org-003-prj-lit",
+      "name": "Gutiérrez Inversiones SRL",
+      "docType": "cuit",
+      "docNumber": "30700118696"
+    }
+  ]
+}

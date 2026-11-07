@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
+	"github.com/erfajc97/lenapay/apps/api/internal/payers"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
 )
 
@@ -49,4 +51,16 @@ type Buyer struct {
 // Orgs answers the org's CUIT (implemented by orgs.Service).
 type Orgs interface {
 	OrgCUIT(ctx context.Context, orgID uuid.UUID) (string, error)
+}
+
+// ProjectImporter creates the project account of an ERP project (implemented by accounts.Service;
+// idempotent by the ERP project ref).
+type ProjectImporter interface {
+	ImportProject(ctx context.Context, orgID uuid.UUID, name, erpProjectRef string) (accounts.Account, error)
+}
+
+// PayerImporter creates the payer of an ERP buyer (implemented by payers.Service; idempotent by
+// the ERP buyer ref).
+type PayerImporter interface {
+	ImportPayer(ctx context.Context, orgID uuid.UUID, in payers.ImportInput) (payers.Payer, error)
 }
