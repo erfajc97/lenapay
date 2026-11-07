@@ -12,8 +12,12 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
  && go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
 
 FROM alpine:3.22
-RUN adduser -D -u 10001 lenapay
+RUN adduser -D -u 10001 lenapay && mkdir -p /data/documents && chown -R lenapay /data
 COPY --from=build /out/ /app/
+# The ERP fixture directory (erplink fake, R-ERP-*): read by the worker's index refresh job.
+COPY fixtures/erp /app/fixtures/erp
+WORKDIR /app
+ENV ERP_FIXTURES_DIR=/app/fixtures/erp DOCUMENTS_DIR=/data/documents
 USER lenapay
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]

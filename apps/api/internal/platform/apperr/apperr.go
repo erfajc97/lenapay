@@ -71,14 +71,16 @@ const (
 
 // Money, accounts and ledger.
 const (
-	CodeInvalidAmount       Code = "money.invalid_amount"
-	CodeCurrencyMismatch    Code = "money.currency_mismatch"
-	CodeAccountNotFound     Code = "account.not_found"
-	CodeAccountArchived     Code = "account.archived"
-	CodeAccountNotEmpty     Code = "account.not_empty"
-	CodeInsufficientFunds   Code = "ledger.insufficient_funds"
-	CodeTransferSameAccount Code = "transfer.same_account"
-	CodeHoldNotActive       Code = "ledger.hold_not_active"
+	CodeInvalidAmount        Code = "money.invalid_amount"
+	CodeCurrencyMismatch     Code = "money.currency_mismatch"
+	CodeAccountNotFound      Code = "account.not_found"
+	CodeAccountArchived      Code = "account.archived"
+	CodeAccountNotEmpty      Code = "account.not_empty"
+	CodeInsufficientFunds    Code = "ledger.insufficient_funds"
+	CodeTransferSameAccount  Code = "transfer.same_account"
+	CodeHoldNotActive        Code = "ledger.hold_not_active"
+	CodeAccountNotArchivable Code = "account.not_archivable"
+	CodeMovementNotFound     Code = "movement.not_found"
 )
 
 // Payers, CVUs, payins and the PSP.
@@ -97,10 +99,11 @@ const (
 
 // Payouts.
 const (
-	CodePayoutNotFound         Code = "payout.not_found"
-	CodePayoutInvalidState     Code = "payout.invalid_state"
-	CodePayoutSelfApproval     Code = "payout.self_approval_forbidden"
-	CodePayoutProofUnavailable Code = "payout.proof_unavailable"
+	CodePayoutNotFound          Code = "payout.not_found"
+	CodePayoutInvalidState      Code = "payout.invalid_state"
+	CodePayoutSelfApproval      Code = "payout.self_approval_forbidden"
+	CodePayoutProofUnavailable  Code = "payout.proof_unavailable"
+	CodePayoutAttachmentInvalid Code = "payout.attachment_invalid"
 )
 
 // Reconciliation and ERP link.
@@ -160,14 +163,16 @@ func catalog() map[Code]entry {
 		CodeKYCIncomplete:      {http.StatusUnprocessableEntity, "The KYC case is incomplete."},
 		CodeKYCDocumentInvalid: {http.StatusUnprocessableEntity, "The document type or content is not accepted."},
 
-		CodeInvalidAmount:       {http.StatusUnprocessableEntity, "The amount is invalid."},
-		CodeCurrencyMismatch:    {http.StatusUnprocessableEntity, "The currencies do not match."},
-		CodeAccountNotFound:     {http.StatusNotFound, "Account not found."},
-		CodeAccountArchived:     {http.StatusConflict, "The account is archived."},
-		CodeAccountNotEmpty:     {http.StatusConflict, "The account still has a balance."},
-		CodeInsufficientFunds:   {http.StatusUnprocessableEntity, "Insufficient available balance."},
-		CodeTransferSameAccount: {http.StatusUnprocessableEntity, "Origin and destination accounts are the same."},
-		CodeHoldNotActive:       {http.StatusConflict, "The hold is no longer active."},
+		CodeInvalidAmount:        {http.StatusUnprocessableEntity, "The amount is invalid."},
+		CodeCurrencyMismatch:     {http.StatusUnprocessableEntity, "The currencies do not match."},
+		CodeAccountNotFound:      {http.StatusNotFound, "Account not found."},
+		CodeAccountArchived:      {http.StatusConflict, "The account is archived."},
+		CodeAccountNotEmpty:      {http.StatusConflict, "The account still has a balance."},
+		CodeInsufficientFunds:    {http.StatusUnprocessableEntity, "Insufficient available balance."},
+		CodeTransferSameAccount:  {http.StatusUnprocessableEntity, "Origin and destination accounts are the same."},
+		CodeHoldNotActive:        {http.StatusConflict, "The hold is no longer active."},
+		CodeAccountNotArchivable: {http.StatusConflict, "Only project accounts can be archived."},
+		CodeMovementNotFound:     {http.StatusNotFound, "Movement not found."},
 
 		CodePayerNotFound:       {http.StatusNotFound, "Payer not found."},
 		CodeCVUNotFound:         {http.StatusNotFound, "CVU not found."},
@@ -180,10 +185,11 @@ func catalog() map[Code]entry {
 		CodeDestinationNotFound: {http.StatusNotFound, "Destination not found at the provider."},
 		CodeDestinationInvalid:  {http.StatusUnprocessableEntity, "The destination is not a valid CBU, CVU or alias."},
 
-		CodePayoutNotFound:         {http.StatusNotFound, "Payout not found."},
-		CodePayoutInvalidState:     {http.StatusConflict, "The payout cannot change in its current state."},
-		CodePayoutSelfApproval:     {http.StatusForbidden, "The creator of a payout cannot approve it."},
-		CodePayoutProofUnavailable: {http.StatusConflict, "The proof exists only for settled payouts."},
+		CodePayoutNotFound:          {http.StatusNotFound, "Payout not found."},
+		CodePayoutInvalidState:      {http.StatusConflict, "The payout cannot change in its current state."},
+		CodePayoutSelfApproval:      {http.StatusForbidden, "The creator of a payout cannot approve it."},
+		CodePayoutProofUnavailable:  {http.StatusConflict, "The proof exists only for settled payouts."},
+		CodePayoutAttachmentInvalid: {http.StatusUnprocessableEntity, "The attachment type is not accepted or the payout has too many."},
 
 		CodeReconciliationRunNotFound: {http.StatusNotFound, "Reconciliation run not found."},
 		CodeERPLinkNotFound:           {http.StatusNotFound, "ERP link not found."},

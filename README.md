@@ -19,21 +19,49 @@ or run the commands of the Makefile by hand).
 
 ```sh
 make up        # copies .env.example → .env, builds and boots postgres, api, worker, bind-mock; waits until healthy
-curl http://localhost:8080/healthz          # {"status":"ok"}
+curl http://localhost:18080/healthz         # {"status":"ok"}  (the API's host port is 18080)
 curl http://localhost:8090/healthz          # bind-mock
+make seed      # demo dataset (idempotent); see "Demo" below
+node scripts/smoke.mjs                      # end-to-end smoke of the running stack (PASS/FAIL table)
 make down      # stop (keeps the database volume); `make reset` wipes it
 ```
 
-Without `make`: `cp .env.example .env` then `docker compose up -d --build --wait`. Host ports
-come from `.env` (`API_PORT`, `POSTGRES_PORT`, `BINDMOCK_PORT`); if 8080 is taken:
-`API_PORT=18080 docker compose up -d --build --wait`.
+Without `make` (PowerShell or any shell): `docker compose up -d --build --wait` works with or
+without a `.env` (every variable has a development default), then `./scripts/seed.ps1`.
+The API listens on host port **18080** by default (8080 is often taken; the container still
+listens on 8080 inside the compose network). Host ports come from `API_PORT`, `POSTGRES_PORT`
+and `BINDMOCK_PORT`. In Git Bash, prefix `docker compose run ... /app/seed` with
+`MSYS_NO_PATHCONV=1` (otherwise the path is rewritten to a Windows path).
 
 The API applies migrations at boot in compose (`MIGRATE_ON_START=true`); production runs
 `cmd/migrate` as a deploy step. Without `JWT_PRIVATE_KEY` the local identity provider uses an
 ephemeral key in development (tokens die on restart): set one with `openssl rand -base64 32`.
 
 Run a process on the host against the compose database: `make api`, `make worker`,
-`make bindmock`, `make migrate`, `make seed`.
+`make bindmock`, `make migrate` (the host API also listens on :18080, see `.env.example`).
+
+## Demo
+
+`make seed` (or `./scripts/seed.ps1`; `./scripts/seed.ps1 -OnHost` runs `go run ./cmd/seed` on
+the host) loads, through the real services and the bind-mock's signed webhooks, a demo dataset
+into the running stack (it needs the worker: payins are credited by its jobs). Running it again
+changes nothing.
+
+| User (password `Lenapay2026!`, **demo only**) | Role |
+|---|---|
+| `demo@lenapay.app` | admin of **Desarrollos Del Sur SA** (CUIT 30-71234567-8, KYC approved, found in the ERP fixture index) |
+| `approver@lenapay.app` | approver of the same org; created the two payouts waiting for `demo@` to approve |
+| `persona@lenapay.app` | personal wallet "Lucía Fernández" (personal mode on), with ARS and USD CVUs |
+
+Dataset: project accounts "Torre Palermo" and "Barrio Nordelta Lote 12"; 8 payers with ARS CVUs
+(3 also USD); 15 payins credited through the ledger; 3 payouts (2 pending approval, 1 settled
+with its proof PDF); an internal transfer; a reconciliation run. Email codes are always `123456`
+(`DEV_FIXED_EMAIL_CODE`) and a submitted company KYC is auto-approved after 8 s
+(`DEV_KYC_AUTO_APPROVE_SECONDS`); both are development-only and refused/ignored in production.
+
+`node scripts/smoke.mjs` walks the whole path with fresh users (signup → KYC → CVU → payin →
+SSE → payout → second approver → settle → attachment + proof → reconciliation) and exits 1 on
+any failure; `node scripts/p95.mjs` times the hot reads (R-NF-1) on the seeded stack.
 
 ## Testing
 

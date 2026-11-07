@@ -97,6 +97,9 @@ type Config struct {
 	PSPMode string `env:"PSP_MODE" envDefault:"http"`
 	// CVUShareBaseURL prefixes the share link of a CVU (R-CVU-2).
 	CVUShareBaseURL string `env:"CVU_SHARE_BASE_URL" envDefault:"https://lenapay.app/pagar"`
+	// DocumentsDir is the root of the local-disk document store (payout attachments) used
+	// until an object-storage adapter exists ("" = <os temp>/lenapay-documents).
+	DocumentsDir string `env:"DOCUMENTS_DIR"`
 }
 
 // DevKYCAutoApproveDelay is the dev auto-approval delay; 0 (off) in production.

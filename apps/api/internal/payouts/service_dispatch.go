@@ -98,7 +98,7 @@ func (s *service) startAttempt(ctx context.Context, payoutID uuid.UUID) (attempt
 		if err := s.event(ctx, q, payoutID, row.OrgID, &from, StatusSending, nil, nil); err != nil {
 			return err
 		}
-		if err := publish(ctx, tx, row.OrgID, eventPayoutStatusChanged, payoutID, StatusSending); err != nil {
+		if err := publishPayout(ctx, tx, eventPayoutUpdated, payoutID, row.OrgID); err != nil {
 			return err
 		}
 		c := money.Currency(row.Currency)
@@ -268,7 +268,7 @@ func (s *service) finish(ctx context.Context, tx pgx.Tx, q *store.Queries, po Pa
 	if err := publishBalance(ctx, tx, po.OrgID, po.AccountID); err != nil {
 		return err
 	}
-	return publish(ctx, tx, po.OrgID, eventPayoutStatusChanged, po.ID, to)
+	return publishPayout(ctx, tx, eventPayoutUpdated, po.ID, po.OrgID)
 }
 
 // enqueueDispatch queues the dispatch job in the transaction of the approval (outbox, AG13).

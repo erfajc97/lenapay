@@ -293,3 +293,56 @@ func TestRequestRunRejectsFutureDays(t *testing.T) {
 		t.Fatalf("today must be accepted: %v", err)
 	}
 }
+
+// An org admin queues a run of its own movements and pages through its items; another org's
+// run is not found, a non-admin is forbidden, the run is marked as user-requested.
+func TestOrgRequestedRunAndItems(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	day := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	r, err := e.svc.RequestOrgRun(ctx, admin(e.orgA), money.ARS, day)
+	if err != nil || r.Status != reconciliation.StatusQueued || r.OrgID == nil || *r.OrgID != e.orgA {
+		t.Fatalf("run %+v (%v)", r, err)
+	}
+	var requestedBy string
+	if err := e.pool.QueryRow(ctx, `SELECT requested_by FROM reconciliation_runs WHERE id = $1`, r.ID).Scan(&requestedBy); err != nil || requestedBy != "user" {
+		t.Fatalf("requested_by %q (%v)", requestedBy, err)
+	}
+	if err := e.svc.Reconcile(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	first, err := e.svc.ListItems(ctx, admin(e.orgA), r.ID, page.Request{Limit: 1})
+	if err != nil || len(first.Items) != 1 || first.NextCursor == nil {
+		t.Fatalf("page 1 %+v (%v)", first, err)
+	}
+	after, err := page.Decode(*first.NextCursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.svc.ListItems(ctx, admin(e.orgA), r.ID, page.Request{Limit: 10, After: &after})
+	if err != nil || len(second.Items) != 1 || second.NextCursor != nil || second.Items[0].ID == first.Items[0].ID {
+		t.Fatalf("page 2 %+v (%v)", second, err)
+	}
+	statuses := map[reconciliation.ItemStatus]string{}
+	for _, it := range append(first.Items, second.Items...) {
+		statuses[it.Status] = it.ProviderTransferID
+	}
+	if statuses[reconciliation.ItemMatched] != "in-a1" || statuses[reconciliation.ItemMissingInLedger] != "in-orphan" {
+		t.Fatalf("items %+v", statuses)
+	}
+	_, err = e.svc.ListItems(ctx, admin(e.orgB), r.ID, page.Request{Limit: 10})
+	if !apperr.IsCode(err, apperr.CodeReconciliationRunNotFound) {
+		t.Fatalf("foreign run err = %v", err)
+	}
+	approver := admin(e.orgA)
+	approver.Role = auth.RoleApprover
+	if _, err := e.svc.RequestOrgRun(ctx, approver, money.ARS, day); !apperr.IsCode(err, apperr.CodeForbidden) {
+		t.Fatalf("non-admin run err = %v", err)
+	}
+	if _, err := e.svc.ListItems(ctx, approver, r.ID, page.Request{Limit: 10}); !apperr.IsCode(err, apperr.CodeForbidden) {
+		t.Fatalf("non-admin items err = %v", err)
+	}
+	if _, err := e.svc.RequestOrgRun(ctx, admin(e.orgA), money.ARS, day.AddDate(0, 0, 2)); !apperr.IsCode(err, apperr.CodeValidation) {
+		t.Fatalf("future day err = %v", err)
+	}
+}

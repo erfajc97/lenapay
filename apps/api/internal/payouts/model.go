@@ -1,6 +1,7 @@
 package payouts
 
 import (
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,7 +69,24 @@ type Event struct {
 	CreatedAt  time.Time
 }
 
-// Payout is a payout with its history (Events is filled by Get; lists leave it empty).
+// AttachmentUpload is one uploaded supporting document; the service sniffs the real type.
+type AttachmentUpload struct {
+	FileName string
+	Content  io.Reader
+}
+
+// Attachment is a stored supporting document (the storage key never leaves the API).
+type Attachment struct {
+	ID          uuid.UUID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	UploadedBy  uuid.UUID
+	CreatedAt   time.Time
+}
+
+// Payout is a payout with its history (Events and Attachments are filled by Get; lists leave
+// them empty).
 type Payout struct {
 	ID           uuid.UUID
 	OrgID        uuid.UUID
@@ -83,6 +101,7 @@ type Payout struct {
 	RejectReason *string
 	FailureCode  *string
 	Events       []Event
+	Attachments  []Attachment
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	SettledAt    *time.Time

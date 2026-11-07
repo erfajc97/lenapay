@@ -12,6 +12,102 @@ import (
 	"github.com/google/uuid"
 )
 
+const getMovement = `-- name: GetMovement :one
+SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+FROM (
+    SELECT p.id,
+           'internal_transfer'::text AS type,
+           'completed'::text AS status,
+           CASE WHEN p.amount_minor < 0 THEN 'out' ELSE 'in' END::text AS direction,
+           la.account_id,
+           p.currency::text AS currency,
+           abs(p.amount_minor)::bigint AS amount_minor,
+           NULL::bigint AS fee_minor,
+           (SELECT oa.name FROM ledger_postings op
+              JOIN ledger_accounts ola ON ola.id = op.ledger_account_id
+              JOIN accounts oa ON oa.id = ola.account_id
+            WHERE op.transaction_id = t.id AND op.id <> p.id
+            ORDER BY op.id LIMIT 1)::text AS counterparty_name,
+           NULL::text AS counterparty_cuit,
+           NULL::text AS counterparty_cbu,
+           t.memo AS concept,
+           t.ref_id,
+           t.created_at
+    FROM ledger_postings p
+    JOIN ledger_transactions t ON t.id = p.transaction_id
+    JOIN ledger_accounts la ON la.id = p.ledger_account_id
+    WHERE p.id = $1 AND t.org_id = $2 AND t.kind = 'internal_transfer'
+
+    UNION ALL
+
+    SELECT pi.id, 'payin',
+           CASE pi.status WHEN 'credited' THEN 'completed' WHEN 'failed' THEN 'failed' ELSE 'pending' END,
+           'in', pi.account_id, pi.currency::text, pi.gross_minor, pi.fee_minor,
+           COALESCE(pi.origin_name, ''), pi.origin_cuit, pi.origin_cbu, NULL, pi.id, pi.created_at
+    FROM payins pi
+    WHERE pi.id = $1 AND pi.org_id = $2
+
+    UNION ALL
+
+    SELECT po.id, 'payout',
+           CASE po.status WHEN 'settled' THEN 'completed' WHEN 'failed' THEN 'failed'
+                          WHEN 'rejected' THEN 'cancelled' WHEN 'cancelled' THEN 'cancelled' ELSE 'pending' END,
+           'out', po.account_id, po.currency::text, po.amount_minor, po.fee_minor,
+           po.destination_holder_name, po.destination_holder_cuit, po.destination_account::text,
+           po.concept, po.id, po.created_at
+    FROM payouts po
+    WHERE po.id = $1 AND po.org_id = $2
+) m
+LIMIT 1
+`
+
+type GetMovementParams struct {
+	ID    uuid.UUID
+	OrgID *uuid.UUID
+}
+
+type GetMovementRow struct {
+	ID               uuid.UUID
+	Type             string
+	Status           string
+	Direction        string
+	AccountID        uuid.UUID
+	Currency         string
+	AmountMinor      int64
+	FeeMinor         *int64
+	CounterpartyName string
+	CounterpartyCuit *string
+	CounterpartyCbu  *string
+	Concept          *string
+	RefID            uuid.UUID
+	CreatedAt        time.Time
+}
+
+// One movement by its id (the posting id of an internal-transfer leg, the payin id or the
+// payout id), same columns and mapping as ListMovements; each branch is a primary-key probe.
+func (q *Queries) GetMovement(ctx context.Context, arg GetMovementParams) (GetMovementRow, error) {
+	row := q.db.QueryRow(ctx, getMovement, arg.ID, arg.OrgID)
+	var i GetMovementRow
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Status,
+		&i.Direction,
+		&i.AccountID,
+		&i.Currency,
+		&i.AmountMinor,
+		&i.FeeMinor,
+		&i.CounterpartyName,
+		&i.CounterpartyCuit,
+		&i.CounterpartyCbu,
+		&i.Concept,
+		&i.RefID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listMovements = `-- name: ListMovements :many
 
 SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,

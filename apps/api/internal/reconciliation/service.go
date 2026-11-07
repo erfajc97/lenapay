@@ -30,6 +30,10 @@ type Service interface {
 	ListRuns(ctx context.Context, p auth.Principal, currency *money.Currency, req page.Request) (page.Page[Run], error)
 	// RequestRun queues an on-demand run (the internal endpoint: OrgID nil = whole master account).
 	RequestRun(ctx context.Context, in RunInput) (Run, error)
+	// RequestOrgRun queues an on-demand run of p.OrgID's movements (admins).
+	RequestOrgRun(ctx context.Context, p auth.Principal, currency money.Currency, day time.Time) (Run, error)
+	// ListItems lists the items of one of p.OrgID's runs in processing order (admins).
+	ListItems(ctx context.Context, p auth.Principal, runID uuid.UUID, req page.Request) (page.Page[StoredItem], error)
 	// ScheduleDaily queues yesterday's runs (ops run + one per org with activity), at most once
 	// per currency, day and org: the periodic job may fire any number of times.
 	ScheduleDaily(ctx context.Context) error
@@ -61,6 +65,7 @@ func NewService(deps Deps) Service { return &service{deps: deps} }
 const (
 	requestedBySchedule = "schedule"
 	requestedByInternal = "internal"
+	requestedByUser     = "user"
 )
 
 func (s *service) loc() *time.Location {
@@ -81,12 +86,20 @@ func (s *service) window(day time.Time) (time.Time, time.Time) {
 	return start, start.AddDate(0, 0, 1)
 }
 
-func (s *service) ListRuns(ctx context.Context, p auth.Principal, currency *money.Currency, req page.Request) (page.Page[Run], error) {
+// requireAdmin is the service-side copy of the route rule (org runs are admin-only).
+func requireAdmin(p auth.Principal) error {
 	if !p.HasOrg() {
-		return page.Page[Run]{}, apperr.New(apperr.CodeOrgNotFound, nil)
+		return apperr.New(apperr.CodeOrgNotFound, nil)
 	}
 	if !p.Role.AtLeast(auth.RoleAdmin) {
-		return page.Page[Run]{}, apperr.New(apperr.CodeForbidden, nil)
+		return apperr.New(apperr.CodeForbidden, nil)
+	}
+	return nil
+}
+
+func (s *service) ListRuns(ctx context.Context, p auth.Principal, currency *money.Currency, req page.Request) (page.Page[Run], error) {
+	if err := requireAdmin(p); err != nil {
+		return page.Page[Run]{}, err
 	}
 	params := store.ListOrgRunsParams{OrgID: &p.OrgID, PageLimit: req.FetchLimit()}
 	if currency != nil {
@@ -110,6 +123,61 @@ func (s *service) ListRuns(ctx context.Context, p auth.Principal, currency *mone
 }
 
 func (s *service) RequestRun(ctx context.Context, in RunInput) (Run, error) {
+	return s.requestRun(ctx, in, requestedByInternal)
+}
+
+func (s *service) RequestOrgRun(ctx context.Context, p auth.Principal, currency money.Currency, day time.Time) (Run, error) {
+	if err := requireAdmin(p); err != nil {
+		return Run{}, err
+	}
+	return s.requestRun(ctx, RunInput{OrgID: &p.OrgID, Currency: currency, Day: day}, requestedByUser)
+}
+
+func (s *service) ListItems(ctx context.Context, p auth.Principal, runID uuid.UUID, req page.Request) (page.Page[StoredItem], error) {
+	if err := requireAdmin(p); err != nil {
+		return page.Page[StoredItem]{}, err
+	}
+	q := store.New(s.deps.Pool)
+	if _, err := q.GetOrgRun(ctx, store.GetOrgRunParams{ID: runID, OrgID: &p.OrgID}); db.IsNoRows(err) {
+		return page.Page[StoredItem]{}, apperr.New(apperr.CodeReconciliationRunNotFound, map[string]any{"runId": runID.String()})
+	} else if err != nil {
+		return page.Page[StoredItem]{}, fmt.Errorf("reconciliation: get run: %w", err)
+	}
+	params := store.ListRunItemsPageParams{RunID: runID, PageLimit: req.FetchLimit()}
+	if req.After != nil {
+		params.CursorCreatedAt, params.CursorID = &req.After.CreatedAt, &req.After.ID
+	}
+	rows, err := q.ListRunItemsPage(ctx, params)
+	if err != nil {
+		return page.Page[StoredItem]{}, fmt.Errorf("reconciliation: list items: %w", err)
+	}
+	items := make([]StoredItem, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, itemFromRow(r))
+	}
+	return page.Build(items, req.Limit, func(it StoredItem) page.Position {
+		return page.Position{CreatedAt: it.CreatedAt, ID: it.ID}
+	}), nil
+}
+
+func itemFromRow(r store.ReconciliationItem) StoredItem {
+	c := money.Currency(r.Currency)
+	it := StoredItem{ID: r.ID, CreatedAt: r.CreatedAt, Item: Item{
+		ProviderTransferID: r.ProviderTransferID, Direction: psp.Direction(r.Direction), Currency: c,
+		Status: ItemStatus(r.Status), OrgID: r.OrgID,
+	}}
+	if r.PspAmountMinor != nil {
+		a := money.New(*r.PspAmountMinor, c)
+		it.PSPAmount = &a
+	}
+	if r.LedgerAmountMinor != nil {
+		a := money.New(*r.LedgerAmountMinor, c)
+		it.LedgerAmount = &a
+	}
+	return it
+}
+
+func (s *service) requestRun(ctx context.Context, in RunInput, requestedBy string) (Run, error) {
 	if _, err := money.ParseCurrency(string(in.Currency)); err != nil {
 		return Run{}, apperr.Wrap(apperr.CodeValidation, err, map[string]any{"field": "currency"})
 	}
@@ -122,7 +190,7 @@ func (s *service) RequestRun(ctx context.Context, in RunInput) (Run, error) {
 		id := ids.New()
 		if err := q.InsertRun(ctx, store.InsertRunParams{
 			ID: id, OrgID: in.OrgID, Currency: string(in.Currency), Day: dayDate(in.Day),
-			RequestedBy: requestedByInternal, CreatedAt: s.deps.Clock.Now(),
+			RequestedBy: requestedBy, CreatedAt: s.deps.Clock.Now(),
 		}); err != nil {
 			return fmt.Errorf("reconciliation: insert run: %w", err)
 		}

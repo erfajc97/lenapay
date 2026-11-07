@@ -182,7 +182,10 @@ func (s *service) Update(ctx context.Context, p auth.Principal, payerID uuid.UUI
 			return Payer{}, err
 		}
 	}
-	if in.Email != nil {
+	switch {
+	case in.ClearEmail:
+		email = nil
+	case in.Email != nil:
 		email = trimmedEmail(in.Email)
 	}
 	err = db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {

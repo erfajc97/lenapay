@@ -24,6 +24,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
 	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
 	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
+	payoutfake "github.com/erfajc97/lenapay/apps/api/internal/payouts/provider/fake"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
@@ -56,6 +57,7 @@ type env struct {
 	svc       payouts.Service
 	psp       *fakePSP
 	notifier  *recordingNotifier
+	docs      *payoutfake.DiskDocumentStore
 	org       uuid.UUID
 	otherOrg  uuid.UUID
 	creator   uuid.UUID
@@ -80,7 +82,7 @@ func setup(t *testing.T) *env {
 	if err := feeSvc.EnsureDefaultPlan(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{pool: pool, clock: clk, ledger: led, psp: newFakePSP(), notifier: &recordingNotifier{}}
+	e := &env{pool: pool, clock: clk, ledger: led, psp: newFakePSP(), notifier: &recordingNotifier{}, docs: payoutfake.NewDiskDocumentStore(t.TempDir())}
 	e.creator, e.approver = e.user(t), e.user(t)
 	e.org, e.otherOrg, e.personOrg = e.newOrg(t, "company"), e.newOrg(t, "company"), e.newOrg(t, "personal")
 	e.account = e.newAccount(t, e.org, "project")
@@ -98,7 +100,7 @@ func setup(t *testing.T) *env {
 	}
 	e.svc = payouts.NewService(payouts.Deps{
 		Pool: pool, Clock: clk, Audit: audit.NewLogger(clk), Idempotency: idempotency.NewStore(clk, idempotency.DefaultTTL),
-		Jobs: inserter, PSP: e.psp, Ledger: led, Fees: feeSvc, Notifications: e.notifier,
+		Jobs: inserter, PSP: e.psp, Ledger: led, Fees: feeSvc, Notifications: e.notifier, Documents: e.docs,
 		Accounts: fakeAccounts{byID: map[uuid.UUID]accounts.Account{
 			e.account:  {ID: e.account, OrgID: e.org, Kind: accounts.KindProject},
 			e.personal: {ID: e.personal, OrgID: e.personOrg, Kind: accounts.KindPersonal},

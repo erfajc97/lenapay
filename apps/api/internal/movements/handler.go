@@ -58,18 +58,29 @@ func (h *Handler) ListMovements(ctx context.Context, req api.ListMovementsReques
 	return api.ListMovements200JSONResponse{Items: items, NextCursor: result.NextCursor}, nil
 }
 
+// GetMovement implements api.StrictServerInterface.
+func (h *Handler) GetMovement(ctx context.Context, req api.GetMovementRequestObject) (api.GetMovementResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := h.svc.Get(ctx, p, req.MovementId)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetMovement200JSONResponse(toAPIMovement(m)), nil
+}
+
 func toAPIMovement(m Movement) api.Movement {
 	out := api.Movement{
 		Id: m.ID, Type: api.MovementType(m.Type), Status: api.MovementStatus(m.Status),
 		Direction: api.MovementDirection(m.Direction), AccountId: m.AccountID,
 		Amount:  api.Money{Minor: m.Amount.Minor, Currency: api.Currency(m.Amount.Currency)},
 		Concept: m.Concept, RefId: m.RefID, CreatedAt: m.CreatedAt,
+		Counterparty: api.Counterparty{Name: m.Counterparty.Name, Cuit: m.Counterparty.CUIT, Cbu: m.Counterparty.CBU},
 	}
 	if m.Fee != nil {
 		out.Fee = &api.Money{Minor: m.Fee.Minor, Currency: api.Currency(m.Fee.Currency)}
-	}
-	if c := m.Counterparty; c.Name != nil || c.CUIT != nil || c.CBU != nil {
-		out.Counterparty = &api.Counterparty{Name: c.Name, Cuit: c.CUIT, Cbu: c.CBU}
 	}
 	return out
 }

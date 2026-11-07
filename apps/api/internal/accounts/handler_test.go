@@ -60,7 +60,7 @@ func TestHandlerMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 	acc := list.(api.ListAccounts200JSONResponse).Items[0]
-	if got, want := keys(t, acc), []string{"archived", "balances", "createdAt", "id", "kind", "name"}; !slices.Equal(got, want) {
+	if got, want := keys(t, acc), []string{"archived", "balances", "createdAt", "erpProjectRef", "id", "kind", "name"}; !slices.Equal(got, want) {
 		t.Fatalf("account keys = %v, want %v", got, want)
 	}
 	if got, want := keys(t, acc.Balances[0]), []string{"available", "currency", "held", "posted"}; !slices.Equal(got, want) {
@@ -94,7 +94,7 @@ func TestHandlerMapping(t *testing.T) {
 	if svc.transfer != want {
 		t.Fatalf("service got %+v, want %+v", svc.transfer, want)
 	}
-	if got, want := keys(t, res), []string{"amount", "createdAt", "fromAccountId", "id", "toAccountId"}; !slices.Equal(got, want) {
+	if got, want := keys(t, res), []string{"amount", "concept", "createdAt", "fromAccountId", "id", "toAccountId"}; !slices.Equal(got, want) {
 		t.Fatalf("transfer keys = %v, want %v", got, want)
 	}
 }

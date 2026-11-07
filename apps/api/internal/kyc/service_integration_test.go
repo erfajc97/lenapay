@@ -30,6 +30,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
 )
 
 var pg *dbtest.Postgres
@@ -209,6 +210,9 @@ func TestPersonApprovedByVendor(t *testing.T) {
 	if got := e.orgStatus(t, p.OrgID); got != "approved" {
 		t.Fatalf("org status %s", got)
 	}
+	if n := e.count(t, "SELECT count(*) FROM organizations WHERE id = $1 AND legal_name = 'Ana Pérez' AND doc_type = 'dni' AND doc_number = '25111222' AND cuit IS NULL", p.OrgID); n != 1 {
+		t.Fatal("verified person identity not applied")
+	}
 	if len(e.hook.calls) != 1 || e.hook.calls[0] != p.OrgID.String()+":personal" {
 		t.Fatalf("hook calls %v", e.hook.calls)
 	}
@@ -311,6 +315,13 @@ func TestCompanyDecidedByOps(t *testing.T) {
 	if len(e.hook.calls) != 1 || e.hook.calls[0] != p.OrgID.String()+":company" {
 		t.Fatalf("hooks %v", e.hook.calls)
 	}
+	// The verified CUIT and legal name are now the org's (the ERP link looks it up by CUIT).
+	if cuit, err := e.orgs.OrgCUIT(ctx, p.OrgID); err != nil || cuit != "30712345678" {
+		t.Fatalf("org cuit %q %v", cuit, err)
+	}
+	if n := e.count(t, "SELECT count(*) FROM organizations WHERE id = $1 AND legal_name = 'Constructora Sur SA' AND doc_type = 'cuit'", p.OrgID); n != 1 {
+		t.Fatal("verified identity not applied")
+	}
 	_, err = e.kyc.Decide(ctx, c.ID, kyc.Decision{Approved: false})
 	wantCode(t, err, apperr.CodeKYCInvalidState)
 	_, err = e.kyc.Decide(ctx, ids.New(), kyc.Decision{Approved: true})
@@ -392,7 +403,7 @@ func TestUploadRules(t *testing.T) {
 
 	full := append([]byte("%PDF-1.7 "), bytes.Repeat([]byte{'a'}, kyc.MaxDocumentBytes-9)...)
 	d, err := e.kyc.UploadDocument(ctx, p, kyc.DocumentUpload{Kind: kyc.DocOther, FileName: "../x.pdf", Content: bytes.NewReader(full)})
-	if err != nil || d.SizeBytes != kyc.MaxDocumentBytes || d.ContentType != kyc.TypePDF || d.FileName != "x.pdf" {
+	if err != nil || d.SizeBytes != kyc.MaxDocumentBytes || d.ContentType != upload.TypePDF || d.FileName != "x.pdf" {
 		t.Fatalf("10 MB upload %+v %v", d, err)
 	}
 	if b, ok := e.docs.Object("org/" + p.OrgID.String() + "/kyc/" + d.ID.String()); !ok || len(b) != kyc.MaxDocumentBytes {

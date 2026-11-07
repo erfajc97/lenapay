@@ -2,6 +2,7 @@ package payouts
 
 import (
 	"context"
+	"io"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,12 @@ type Fees interface {
 // Members lists the org's members, to tell its approvers a payout waits for them (orgs.Service).
 type Members interface {
 	ListMembers(ctx context.Context, p auth.Principal) ([]orgs.Member, error)
+}
+
+// DocumentStore keeps payout attachments in private storage (A13); keys are built by the
+// service as org/<orgId>/payouts/<payoutId>/<uuid>. provider/fake keeps them on local disk.
+type DocumentStore interface {
+	Put(ctx context.Context, key, contentType string, content io.Reader) error
 }
 
 // Notifier writes the notification outbox inside the payout transaction (notifications.Service).

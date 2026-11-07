@@ -76,6 +76,13 @@ type Item struct {
 	OrgID              *uuid.UUID
 }
 
+// StoredItem is an item as recorded by a run.
+type StoredItem struct {
+	Item
+	ID        uuid.UUID
+	CreatedAt time.Time
+}
+
 // Totals summarize items: signed sums (in +, out −) on each side and their difference.
 type Totals struct {
 	Matched, MissingInLedger, MissingAtPSP int32

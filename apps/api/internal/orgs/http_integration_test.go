@@ -221,9 +221,9 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	}}, http.StatusOK, "stepUpToken", "expiresAt")
 
 	org := a.must(t, call{method: http.MethodPost, path: "/orgs", token: tok, body: map[string]any{"kind": "company", "legalName": "Constructora Sur"}},
-		http.StatusCreated, "id", "kind", "legalName", "kycStatus", "role", "createdAt")
+		http.StatusCreated, "id", "kind", "legalName", "cuit", "kycStatus", "role", "createdAt")
 	orgPath := "/orgs/" + org["id"].(string)
-	a.must(t, call{method: http.MethodGet, path: orgPath, token: tok}, http.StatusOK, "id", "kind", "legalName", "kycStatus", "role", "createdAt")
+	a.must(t, call{method: http.MethodGet, path: orgPath, token: tok}, http.StatusOK, "id", "kind", "legalName", "cuit", "kycStatus", "role", "createdAt")
 	a.must(t, call{method: http.MethodGet, path: "/orgs", token: tok}, http.StatusOK, "items")
 
 	a.must(t, call{method: http.MethodPost, path: orgPath + "/invites", token: tok, body: map[string]any{"email": "bea@example.com", "role": "viewer"}},
@@ -239,11 +239,27 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	carlos := a.login(t, "carlos@example.com")["accessToken"].(string)
 	a.fail(t, call{method: http.MethodGet, path: orgPath, token: carlos}, http.StatusNotFound, "org.not_found")
 	a.fail(t, call{method: http.MethodGet, path: orgPath + "/kyc", token: carlos}, http.StatusNotFound, "org.not_found")
-	a.must(t, call{method: http.MethodGet, path: orgPath + "/kyc", token: bea}, http.StatusOK, "id", "orgId", "kind", "status", "documents", "updatedAt")
+	a.must(t, call{method: http.MethodGet, path: orgPath + "/kyc", token: bea}, http.StatusOK,
+		"id", "orgId", "kind", "status", "documents", "decisionReason", "submittedAt", "decidedAt", "updatedAt")
 	a.fail(t, call{method: http.MethodPost, path: orgPath + "/members", token: bea, body: map[string]any{"email": "carlos@example.com", "role": "viewer"}},
 		http.StatusForbidden, "auth.forbidden")
+	added := a.must(t, call{method: http.MethodPost, path: orgPath + "/members", token: tok, body: map[string]any{"email": "carlos@example.com", "role": "operator"}},
+		http.StatusCreated, "userId", "email", "role", "joinedAt")
+	carlosPath := orgPath + "/members/" + added["userId"].(string)
+	a.fail(t, call{method: http.MethodPatch, path: carlosPath, token: bea, body: map[string]any{"role": "viewer"}}, http.StatusForbidden, "auth.forbidden")
+	a.fail(t, call{method: http.MethodPatch, path: carlosPath, token: tok, body: map[string]any{"role": "owner"}}, http.StatusUnprocessableEntity, "validation.failed")
+	changed := a.must(t, call{method: http.MethodPatch, path: carlosPath, token: tok, body: map[string]any{"role": "approver"}},
+		http.StatusOK, "userId", "email", "role", "joinedAt")
+	if changed["role"] != "approver" {
+		t.Fatalf("role change %v", changed)
+	}
+	a.fail(t, call{method: http.MethodPatch, path: orgPath + "/members/" + me0(t, a, tok), token: tok, body: map[string]any{"role": "viewer"}},
+		http.StatusConflict, "org.last_admin")
+	a.must(t, call{method: http.MethodDelete, path: carlosPath, token: tok}, http.StatusNoContent)
+	a.fail(t, call{method: http.MethodDelete, path: carlosPath, token: tok}, http.StatusNotFound, "member.not_found")
 	a.must(t, call{method: http.MethodPost, path: orgPath + "/members", token: tok, body: map[string]any{"email": "carlos@example.com", "role": "operator"}},
 		http.StatusCreated, "userId", "email", "role", "joinedAt")
+	a.must(t, call{method: http.MethodPost, path: "/auth/resend-code", body: map[string]any{"email": "nobody@example.com"}}, http.StatusAccepted)
 
 	kycCase := completeCompanyKYC(t, a, tok, orgPath)
 	a.fail(t, call{method: http.MethodPost, path: "/internal/kyc/" + kycCase + "/decision", body: map[string]any{"decision": "approved"}},
@@ -252,7 +268,7 @@ func TestHTTPLaneAFlow(t *testing.T) {
 		method: http.MethodPost, path: "/internal/kyc/" + kycCase + "/decision", body: map[string]any{"decision": "approved"},
 		headers: map[string]string{auth.HeaderInternalKey: internalKey},
 	}, http.StatusOK,
-		"id", "orgId", "kind", "status", "company", "documents", "submittedAt", "decidedAt", "updatedAt")
+		"id", "orgId", "kind", "status", "company", "documents", "decisionReason", "submittedAt", "decidedAt", "updatedAt")
 	if decided["status"] != "approved" {
 		t.Fatalf("decision %v", decided)
 	}
@@ -272,6 +288,13 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	a.fail(t, call{method: http.MethodGet, path: "/me", token: bea}, http.StatusUnauthorized, "auth.unauthenticated")
 }
 
+// me0 is the caller's user id (GET /me).
+func me0(t *testing.T, a api, tok string) string {
+	t.Helper()
+	me := a.must(t, call{method: http.MethodGet, path: "/me", token: tok}, http.StatusOK, "user", "memberships")
+	return me["user"].(map[string]any)["id"].(string)
+}
+
 // completeCompanyKYC fills, documents and submits the company case; it returns the case id.
 func completeCompanyKYC(t *testing.T, a api, tok, orgPath string) string {
 	t.Helper()
@@ -281,7 +304,7 @@ func completeCompanyKYC(t *testing.T, a api, tok, orgPath string) string {
 		"representatives": []any{map[string]any{"fullName": "Carla Díaz", "dni": "20111222", "position": "Director"}},
 	}}
 	updated := a.must(t, call{method: http.MethodPut, path: orgPath + "/kyc", token: tok, body: data}, http.StatusOK,
-		"id", "orgId", "kind", "status", "company", "documents", "updatedAt")
+		"id", "orgId", "kind", "status", "company", "documents", "decisionReason", "submittedAt", "decidedAt", "updatedAt")
 	a.fail(t, call{method: http.MethodPost, path: orgPath + "/kyc/submit", token: tok}, http.StatusUnprocessableEntity, "kyc.incomplete")
 
 	svg, svgType := upload(t, map[string]string{"kind": "bylaws"}, "bylaws.pdf", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`))

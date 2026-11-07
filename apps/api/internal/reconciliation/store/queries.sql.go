@@ -46,6 +46,38 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 	return err
 }
 
+const getOrgRun = `-- name: GetOrgRun :one
+SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at, org_id FROM reconciliation_runs WHERE id = $1 AND org_id = $2
+`
+
+type GetOrgRunParams struct {
+	ID    uuid.UUID
+	OrgID *uuid.UUID
+}
+
+func (q *Queries) GetOrgRun(ctx context.Context, arg GetOrgRunParams) (ReconciliationRun, error) {
+	row := q.db.QueryRow(ctx, getOrgRun, arg.ID, arg.OrgID)
+	var i ReconciliationRun
+	err := row.Scan(
+		&i.ID,
+		&i.Currency,
+		&i.Day,
+		&i.Status,
+		&i.MatchedCount,
+		&i.MissingInLedgerCount,
+		&i.MissingAtPspCount,
+		&i.PspTotalMinor,
+		&i.LedgerTotalMinor,
+		&i.DifferenceMinor,
+		&i.RequestedBy,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.OrgID,
+	)
+	return i, err
+}
+
 const getRun = `-- name: GetRun :one
 SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at, org_id FROM reconciliation_runs WHERE id = $1
 `
@@ -167,41 +199,6 @@ func (q *Queries) InsertScheduledRun(ctx context.Context, arg InsertScheduledRun
 	return result.RowsAffected(), nil
 }
 
-const listItems = `-- name: ListItems :many
-SELECT id, run_id, org_id, provider_transfer_id, direction, currency, psp_amount_minor, ledger_amount_minor, status, created_at FROM reconciliation_items WHERE run_id = $1 ORDER BY created_at, id
-`
-
-func (q *Queries) ListItems(ctx context.Context, runID uuid.UUID) ([]ReconciliationItem, error) {
-	rows, err := q.db.Query(ctx, listItems, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ReconciliationItem{}
-	for rows.Next() {
-		var i ReconciliationItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.RunID,
-			&i.OrgID,
-			&i.ProviderTransferID,
-			&i.Direction,
-			&i.Currency,
-			&i.PspAmountMinor,
-			&i.LedgerAmountMinor,
-			&i.Status,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listOrgRuns = `-- name: ListOrgRuns :many
 SELECT id, currency, day, status, matched_count, missing_in_ledger_count, missing_at_psp_count, psp_total_minor, ledger_total_minor, difference_minor, requested_by, created_at, started_at, finished_at, org_id FROM reconciliation_runs
 WHERE org_id = $1
@@ -251,6 +248,59 @@ func (q *Queries) ListOrgRuns(ctx context.Context, arg ListOrgRunsParams) ([]Rec
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunItemsPage = `-- name: ListRunItemsPage :many
+SELECT id, run_id, org_id, provider_transfer_id, direction, currency, psp_amount_minor, ledger_amount_minor, status, created_at FROM reconciliation_items
+WHERE run_id = $1
+  AND ($2::timestamptz IS NULL
+       OR (created_at, id) > ($2::timestamptz, $3::uuid))
+ORDER BY created_at, id
+LIMIT $4
+`
+
+type ListRunItemsPageParams struct {
+	RunID           uuid.UUID
+	CursorCreatedAt *time.Time
+	CursorID        *uuid.UUID
+	PageLimit       int32
+}
+
+// Items of one run in processing order, keyset-paginated on (created_at, id) ascending.
+func (q *Queries) ListRunItemsPage(ctx context.Context, arg ListRunItemsPageParams) ([]ReconciliationItem, error) {
+	rows, err := q.db.Query(ctx, listRunItemsPage,
+		arg.RunID,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReconciliationItem{}
+	for rows.Next() {
+		var i ReconciliationItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.OrgID,
+			&i.ProviderTransferID,
+			&i.Direction,
+			&i.Currency,
+			&i.PspAmountMinor,
+			&i.LedgerAmountMinor,
+			&i.Status,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

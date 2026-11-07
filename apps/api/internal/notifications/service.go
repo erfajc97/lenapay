@@ -69,7 +69,9 @@ func (s *service) RegisterPushToken(ctx context.Context, p auth.Principal, token
 	if token == "" || len(token) > tokenMax {
 		return apperr.New(apperr.CodeValidation, map[string]any{"field": "token"})
 	}
-	if platform != PlatformIOS && platform != PlatformAndroid {
+	switch platform {
+	case PlatformIOS, PlatformAndroid, PlatformWeb, PlatformUnknown:
+	default:
 		return apperr.New(apperr.CodeValidation, map[string]any{"field": "platform"})
 	}
 	err := store.New(s.deps.Pool).UpsertPushToken(ctx, store.UpsertPushTokenParams{

@@ -83,3 +83,18 @@ SELECT * FROM payouts
 WHERE currency = sqlc.arg(currency) AND status = 'settled'
   AND settled_at >= sqlc.arg(from_time) AND settled_at < sqlc.arg(to_time)
 ORDER BY settled_at, id;
+
+-- name: InsertPayoutAttachment :exec
+INSERT INTO payout_attachments (id, org_id, payout_id, file_name, content_type, size_bytes, sha256, storage_key,
+                                uploaded_by, created_at)
+VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(payout_id), sqlc.arg(file_name), sqlc.arg(content_type),
+        sqlc.arg(size_bytes), sqlc.arg(sha256), sqlc.arg(storage_key), sqlc.arg(uploaded_by), sqlc.arg(created_at));
+
+-- name: CountPayoutAttachments :one
+SELECT count(*) FROM payout_attachments WHERE payout_id = sqlc.arg(payout_id) AND org_id = sqlc.arg(org_id);
+
+-- name: ListPayoutAttachments :many
+SELECT id, file_name, content_type, size_bytes, uploaded_by, created_at
+FROM payout_attachments
+WHERE payout_id = sqlc.arg(payout_id) AND org_id = sqlc.arg(org_id)
+ORDER BY created_at, id;

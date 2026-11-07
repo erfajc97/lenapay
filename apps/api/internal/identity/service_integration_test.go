@@ -301,6 +301,41 @@ func TestSignupResendAndRateLimit(t *testing.T) {
 	wantCode(t, err, apperr.CodeEmailTaken)
 }
 
+// ResendEmailCode re-issues the code of an unverified user (the old one dies), shares the
+// 5-per-hour limit with signup, and is a silent no-op for unknown or verified emails.
+func TestResendEmailCode(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, config.Config{})
+	ctx := t.Context()
+	if err := e.svc.ResendEmailCode(ctx, "ghost@example.com"); err != nil {
+		t.Fatalf("unknown email: %v", err)
+	}
+	if _, ok := e.inbox.codes["ghost@example.com"]; ok {
+		t.Fatal("a code was sent to an unknown email")
+	}
+	in := identity.SignupInput{Email: "r@example.com", Password: password}
+	if _, err := e.svc.Signup(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	for range 4 { // codes 2..5 within the hour
+		if err := e.svc.ResendEmailCode(ctx, " R@example.com "); err != nil {
+			t.Fatalf("resend: %v", err)
+		}
+	}
+	wantCode(t, e.svc.ResendEmailCode(ctx, "r@example.com"), apperr.CodeRateLimited)
+	if err := e.svc.VerifyEmail(ctx, "r@example.com", e.inbox.code(t, "r@example.com")); err != nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(time.Hour + time.Second)
+	delete(e.inbox.codes, "r@example.com")
+	if err := e.svc.ResendEmailCode(ctx, "r@example.com"); err != nil {
+		t.Fatalf("verified email: %v", err)
+	}
+	if _, ok := e.inbox.codes["r@example.com"]; ok {
+		t.Fatal("a code was sent to a verified email")
+	}
+}
+
 // A failed delivery does not undo the signup (it is logged; the user re-sends).
 func TestSignupSurvivesDeliveryFailure(t *testing.T) {
 	t.Parallel()

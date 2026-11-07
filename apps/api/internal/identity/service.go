@@ -25,6 +25,10 @@ type Service interface {
 	// Signup creates an unverified user and emails a 6-digit code (R-ID-1). Signing up again
 	// with the same email and password while unverified re-sends a code (rate limited).
 	Signup(ctx context.Context, in SignupInput) (uuid.UUID, error)
+	// ResendEmailCode issues and emails a fresh code to an UNVERIFIED user (the previous one
+	// stops working; rate limited). An unknown or verified email is a silent no-op, so the
+	// answer never reveals whether an email is registered.
+	ResendEmailCode(ctx context.Context, email string) error
 	// VerifyEmail consumes the code (attempts are capped).
 	VerifyEmail(ctx context.Context, email, code string) error
 	// Login opens a session and returns tokens (R-ID-2; TOTP when enabled).
@@ -188,6 +192,31 @@ func (s *service) sendCode(ctx context.Context, email, code string) {
 	if err := s.deps.Codes.SendEmailCode(ctx, email, code); err != nil {
 		slog.ErrorContext(ctx, "email code delivery failed", "code", string(apperr.CodeOf(err)), "err", err.Error())
 	}
+}
+
+func (s *service) ResendEmailCode(ctx context.Context, email string) error {
+	email = normalizeEmail(email)
+	var code string
+	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		user, err := q.GetUserByEmail(ctx, email)
+		if db.IsNoRows(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if user.EmailVerifiedAt != nil {
+			return nil
+		}
+		code, err = s.issueEmailCode(ctx, q, user.ID)
+		return err
+	})
+	if err != nil || code == "" {
+		return err
+	}
+	s.sendCode(ctx, email, code)
+	return nil
 }
 
 func (s *service) VerifyEmail(ctx context.Context, email, code string) error {

@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/erfajc97/lenapay/apps/api/internal/api"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
@@ -18,6 +21,15 @@ import (
 type fakeService struct {
 	got   Filter
 	items []Movement
+}
+
+func (f *fakeService) Get(_ context.Context, _ auth.Principal, id uuid.UUID) (Movement, error) {
+	for _, m := range f.items {
+		if m.ID == id {
+			return m, nil
+		}
+	}
+	return Movement{}, apperr.New(apperr.CodeMovementNotFound, nil)
 }
 
 func (f *fakeService) List(_ context.Context, _ auth.Principal, filter Filter) (page.Page[Movement], error) {
@@ -63,14 +75,42 @@ func TestListMovementsHandler(t *testing.T) {
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	full := []string{"accountId", "amount", "counterparty", "createdAt", "direction", "fee", "id", "refId", "status", "type"}
-	bare := []string{"accountId", "amount", "createdAt", "direction", "id", "refId", "status", "type"}
-	for i, want := range [][]string{full, bare} {
-		if got := slices.Sorted(maps.Keys(decoded.Items[i])); !slices.Equal(got, want) {
-			t.Fatalf("item %d keys = %v, want %v", i, got, want)
+	// Nullable members are always present (null), never omitted.
+	full := []string{"accountId", "amount", "concept", "counterparty", "createdAt", "direction", "fee", "id", "refId", "status", "type"}
+	for i := range decoded.Items {
+		if got := slices.Sorted(maps.Keys(decoded.Items[i])); !slices.Equal(got, full) {
+			t.Fatalf("item %d keys = %v, want %v", i, got, full)
 		}
+	}
+	if decoded.Items[1]["fee"] != nil || decoded.Items[1]["concept"] != nil {
+		t.Fatalf("bare item = %v", decoded.Items[1])
+	}
+	if cp, ok := decoded.Items[1]["counterparty"].(map[string]any); !ok || len(cp) != 3 || cp["name"] != nil {
+		t.Fatalf("bare counterparty = %v", decoded.Items[1]["counterparty"])
 	}
 	if decoded.NextCursor == nil || *decoded.NextCursor != "next" {
 		t.Fatalf("nextCursor = %v", decoded.NextCursor)
+	}
+}
+
+// GetMovement returns the one movement, and the service's not-found code passes through.
+func TestGetMovementHandler(t *testing.T) {
+	t.Parallel()
+	m := Movement{
+		ID: ids.New(), Type: TypePayout, Status: StatusPending, Direction: DirectionOut, AccountID: ids.New(),
+		Amount: money.New(100, money.ARS), RefID: ids.New(), CreatedAt: time.Unix(0, 0).UTC(),
+	}
+	h := NewHandler(&fakeService{items: []Movement{m}})
+	ctx := auth.WithPrincipal(t.Context(), auth.Principal{UserID: ids.New(), OrgID: ids.New()})
+	res, err := h.GetMovement(ctx, api.GetMovementRequestObject{MovementId: m.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.(api.GetMovement200JSONResponse); got.Id != m.ID || got.RefId != m.RefID || got.Type != api.MovementType("payout") {
+		t.Fatalf("movement = %+v", got)
+	}
+	_, err = h.GetMovement(ctx, api.GetMovementRequestObject{MovementId: ids.New()})
+	if !apperr.IsCode(err, apperr.CodeMovementNotFound) {
+		t.Fatalf("err = %v", err)
 	}
 }

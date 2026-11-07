@@ -41,6 +41,9 @@ type Service interface {
 	// Cancel lets the creator cancel while pending approval (releases the hold).
 	Cancel(ctx context.Context, p auth.Principal, payoutID uuid.UUID) (Payout, error)
 	ListApprovals(ctx context.Context, p auth.Principal, req page.Request) (page.Page[Payout], error)
+	// UploadAttachment stores a supporting document of a payout (PDF/JPEG/PNG by magic bytes,
+	// at most MaxAttachments per payout).
+	UploadAttachment(ctx context.Context, p auth.Principal, payoutID uuid.UUID, in AttachmentUpload) (Attachment, error)
 	// Proof renders the PDF proof of a settled payout (R-OUT-6).
 	Proof(ctx context.Context, p auth.Principal, payoutID uuid.UUID) ([]byte, error)
 
@@ -65,6 +68,7 @@ type Deps struct {
 	Fees          Fees
 	Notifications Notifier
 	Orgs          Members
+	Documents     DocumentStore
 	// Location is the business time zone of the proof's dates (UTC when nil).
 	Location *time.Location
 }
@@ -285,14 +289,14 @@ func (s *service) afterCreate(ctx context.Context, tx pgx.Tx, p auth.Principal, 
 		if err := s.notify(ctx, tx, p.OrgID, approvers, "approval.requested", id, status); err != nil {
 			return err
 		}
-		if err := publish(ctx, tx, p.OrgID, eventApprovalRequested, id, status); err != nil {
+		if err := publishPayout(ctx, tx, eventApprovalRequested, id, p.OrgID); err != nil {
 			return err
 		}
 	}
 	if err := publishBalance(ctx, tx, p.OrgID, in.AccountID); err != nil {
 		return err
 	}
-	return publish(ctx, tx, p.OrgID, eventPayoutStatusChanged, id, status)
+	return publishPayout(ctx, tx, eventPayoutUpdated, id, p.OrgID)
 }
 
 // approvers are the members who can approve, except the caller (4-eyes).
@@ -357,7 +361,7 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 		if err := s.audit(ctx, tx, p.OrgID, &p.UserID, "payout.approve", payoutID, idempotencyKey); err != nil {
 			return err
 		}
-		if err := publish(ctx, tx, p.OrgID, eventPayoutStatusChanged, payoutID, StatusApproved); err != nil {
+		if err := publishPayout(ctx, tx, eventPayoutUpdated, payoutID, p.OrgID); err != nil {
 			return err
 		}
 		if out, err = load(ctx, q, payoutID, p.OrgID); err != nil {
@@ -431,7 +435,7 @@ func (s *service) endPending(ctx context.Context, p auth.Principal, payoutID uui
 		if err := publishBalance(ctx, tx, p.OrgID, row.AccountID); err != nil {
 			return err
 		}
-		if err := publish(ctx, tx, p.OrgID, eventPayoutStatusChanged, payoutID, to); err != nil {
+		if err := publishPayout(ctx, tx, eventPayoutUpdated, payoutID, p.OrgID); err != nil {
 			return err
 		}
 		out, err = load(ctx, q, payoutID, p.OrgID)
@@ -564,7 +568,13 @@ func load(ctx context.Context, q *store.Queries, id, orgID uuid.UUID) (Payout, e
 	if err != nil {
 		return Payout{}, fmt.Errorf("payouts: events: %w", err)
 	}
-	return fromRow(row, events), nil
+	attachments, err := q.ListPayoutAttachments(ctx, store.ListPayoutAttachmentsParams{PayoutID: id, OrgID: orgID})
+	if err != nil {
+		return Payout{}, fmt.Errorf("payouts: attachments: %w", err)
+	}
+	out := fromRow(row, events)
+	out.Attachments = attachmentsFromRows(attachments)
+	return out, nil
 }
 
 func fromRow(r store.Payout, events []store.PayoutEvent) Payout {
@@ -579,7 +589,7 @@ func fromRow(r store.Payout, events []store.PayoutEvent) Payout {
 	out := Payout{
 		ID: r.ID, OrgID: r.OrgID, AccountID: r.AccountID, Amount: money.New(r.AmountMinor, c), Fee: money.New(r.FeeMinor, c),
 		Destination: dest, Concept: r.Concept, Status: Status(r.Status), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
-		RejectReason: r.RejectReason, FailureCode: r.FailureCode, Events: make([]Event, 0, len(events)),
+		RejectReason: r.RejectReason, FailureCode: r.FailureCode, Events: make([]Event, 0, len(events)), Attachments: []Attachment{},
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, SettledAt: r.SettledAt,
 		ProviderAttemptID: r.ProviderAttemptID, ProviderTransferID: r.ProviderTransferID,
 	}

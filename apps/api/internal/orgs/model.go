@@ -44,6 +44,20 @@ type Member struct {
 	JoinedAt time.Time
 }
 
+// Document types of a verified identity (DB CHECK organizations.doc_type).
+const (
+	DocTypeCUIT = "cuit"
+	DocTypeDNI  = "dni"
+)
+
+// VerifiedIdentity is what an approved KYC case proved: a company's legal name and CUIT, or a
+// person's full name and DNI.
+type VerifiedIdentity struct {
+	LegalName string
+	DocType   string
+	DocNumber string
+}
+
 // MemberInput adds a member or invites one.
 type MemberInput struct {
 	Email string

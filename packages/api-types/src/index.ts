@@ -52,6 +52,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/resend-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Re-sends the 6-digit verification code of an unverified user (the previous code stops
+         *     working). The answer is the same whether or not the email is registered or already
+         *     verified (no user enumeration); at most 5 codes per hour per user (`request.rate_limited`).
+         */
+        post: operations["resendEmailCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -231,6 +252,30 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/orgs/{orgId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Removes a member (admins only). Removing the last admin is `org.last_admin`. */
+        delete: operations["removeMember"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Changes a member's role (admins only, never above the caller's role). Demoting the last
+         *     admin is `org.last_admin`.
+         */
+        patch: operations["updateMember"];
         trace?: never;
     };
     "/orgs/{orgId}/invites": {
@@ -660,6 +705,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{orgId}/payouts/{payoutId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                payoutId: components["parameters"]["PayoutId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Attaches a supporting document (invoice, receipt) to a payout: PDF, JPEG or PNG decided by
+         *     the file's magic bytes (`payout.attachment_invalid` otherwise, or past 10 attachments),
+         *     at most 10 MB. Listed in `Payout.attachments`.
+         */
+        post: operations["uploadPayoutAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{orgId}/payouts/{payoutId}/proof.pdf": {
         parameters: {
             query?: never;
@@ -715,6 +784,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{orgId}/movements/{movementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                /** @description A `Movement.id` from the list (payin, payout or internal-transfer leg). */
+                movementId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getMovement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{orgId}/reconciliation/runs": {
         parameters: {
             query?: never;
@@ -725,6 +814,26 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listReconciliationRuns"];
+        put?: never;
+        /** @description Queues an on-demand run of the organization's movements for a business day (admins). */
+        post: operations["createReconciliationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{orgId}/reconciliation/runs/{runId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listReconciliationItems"];
         put?: never;
         post?: never;
         delete?: never;
@@ -795,7 +904,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Server-sent events (`event:` is a `RealtimeEvent.type`, `data:` a `RealtimeEvent` JSON).
+         * @description Server-sent events. Every frame is UNNAMED (no `event:` line, so an EventSource delivers
+         *     it as `message`); its `data:` line is one JSON object: the `RealtimeEvent` envelope
+         *     `{type, orgId, occurredAt, data}` with every member of `data` ALSO copied to the top level
+         *     (e.g. `event.payin`, `event.payout`). Comment lines (`: ping`) are heartbeats every 15 s.
+         *     Delivery is best effort: clients refetch on reconnect. Event types and their `data`:
+         *     `payin.credited` → `{payinId, accountId, cvuId, payerId, payin}`;
+         *     `payout.updated` → `{payoutId, status, payout}` (`payout` is a `Payout`, any status change);
+         *     `approval.requested` → `{payoutId, status, payout}`;
+         *     `balance.changed` → `{accountId}`.
          *     Hand-mounted (excluded from code generation).
          */
         get: operations["streamOrgEvents"];
@@ -886,6 +1003,10 @@ export interface components {
             /** Format: email */
             email: string;
             code: string;
+        };
+        ResendCodeRequest: {
+            /** Format: email */
+            email: string;
         };
         LoginRequest: {
             /** Format: email */
@@ -998,7 +1119,7 @@ export interface components {
             id: string;
             kind: components["schemas"]["OrgKind"];
             legalName: string;
-            cuit?: string | null;
+            cuit: string | null;
             kycStatus: components["schemas"]["KycStatus"];
             role: components["schemas"]["Role"];
             /** Format: date-time */
@@ -1027,6 +1148,9 @@ export interface components {
         AddMemberRequest: {
             /** Format: email */
             email: string;
+            role: components["schemas"]["Role"];
+        };
+        UpdateMemberRequest: {
             role: components["schemas"]["Role"];
         };
         CreateInviteRequest: {
@@ -1086,7 +1210,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["KycDocumentKind"];
-            representativeDni?: string | null;
+            representativeDni: string | null;
             fileName: string;
             contentType: string;
             /** Format: int64 */
@@ -1104,11 +1228,11 @@ export interface components {
             company?: components["schemas"]["KycCompanyData"];
             person?: components["schemas"]["KycPersonData"];
             documents: components["schemas"]["KycDocument"][];
-            decisionReason?: string | null;
+            decisionReason: string | null;
             /** Format: date-time */
-            submittedAt?: string | null;
+            submittedAt: string | null;
             /** Format: date-time */
-            decidedAt?: string | null;
+            decidedAt: string | null;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1131,7 +1255,7 @@ export interface components {
             kind: components["schemas"]["AccountKind"];
             name: string;
             archived: boolean;
-            erpProjectRef?: string | null;
+            erpProjectRef: string | null;
             balances: components["schemas"]["CurrencyBalance"][];
             /** Format: date-time */
             createdAt: string;
@@ -1173,7 +1297,7 @@ export interface components {
             /** Format: uuid */
             toAccountId: string;
             amount: components["schemas"]["Money"];
-            concept?: string | null;
+            concept: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1187,12 +1311,12 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            payerId?: string | null;
+            payerId: string | null;
             /** Format: uuid */
             accountId: string;
             currency: components["schemas"]["Currency"];
             cvu: string;
-            alias?: string | null;
+            alias: string | null;
             status: components["schemas"]["CvuStatus"];
             share: components["schemas"]["CvuShare"];
             /** Format: date-time */
@@ -1207,8 +1331,8 @@ export interface components {
             docType: components["schemas"]["DocType"];
             docNumber: string;
             /** Format: email */
-            email?: string | null;
-            erpRef?: string | null;
+            email: string | null;
+            erpRef: string | null;
             cvus: components["schemas"]["Cvu"][];
             /** Format: date-time */
             createdAt: string;
@@ -1228,7 +1352,10 @@ export interface components {
         };
         UpdatePayerRequest: {
             name?: string;
-            /** Format: email */
+            /**
+             * Format: email
+             * @description `null` clears the email; absent keeps it.
+             */
             email?: string | null;
         };
         CreateCvuRequest: {
@@ -1249,9 +1376,9 @@ export interface components {
         /** @enum {string} */
         PayinStatus: "received" | "credited" | "failed";
         Counterparty: {
-            name?: string | null;
-            cuit?: string | null;
-            cbu?: string | null;
+            name: string | null;
+            cuit: string | null;
+            cbu: string | null;
         };
         Payin: {
             /** Format: uuid */
@@ -1259,7 +1386,7 @@ export interface components {
             /** Format: uuid */
             accountId: string;
             /** Format: uuid */
-            payerId?: string | null;
+            payerId: string | null;
             /** Format: uuid */
             cvuId: string;
             gross: components["schemas"]["Money"];
@@ -1271,7 +1398,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            creditedAt?: string | null;
+            creditedAt: string | null;
         };
         /** @enum {string} */
         DestinationType: "cbu" | "cvu" | "alias";
@@ -1283,7 +1410,7 @@ export interface components {
             accountNumber: string;
             holderName: string;
             holderCuit: string;
-            bankName?: string | null;
+            bankName: string | null;
         };
         PayoutQuoteRequest: {
             /** Format: uuid */
@@ -1308,11 +1435,11 @@ export interface components {
         /** @enum {string} */
         PayoutStatus: "pending_approval" | "approved" | "sending" | "settled" | "failed" | "rejected" | "cancelled";
         PayoutEvent: {
-            fromStatus?: components["schemas"]["PayoutStatus"] | null;
+            fromStatus: components["schemas"]["PayoutStatus"] | null;
             toStatus: components["schemas"]["PayoutStatus"];
             /** Format: uuid */
-            actorId?: string | null;
-            reason?: string | null;
+            actorId: string | null;
+            reason: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1330,16 +1457,37 @@ export interface components {
             /** Format: uuid */
             createdBy: string;
             /** Format: uuid */
-            approvedBy?: string | null;
-            rejectReason?: string | null;
-            failureCode?: string | null;
+            approvedBy: string | null;
+            rejectReason: string | null;
+            failureCode: string | null;
             events: components["schemas"]["PayoutEvent"][];
+            attachments: components["schemas"]["PayoutAttachment"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
             /** Format: date-time */
-            settledAt?: string | null;
+            settledAt: string | null;
+        };
+        PayoutAttachmentUpload: {
+            /**
+             * Format: binary
+             * @description PDF, JPEG or PNG, at most 10 MB (the upload body limit).
+             */
+            file: string;
+        };
+        PayoutAttachment: {
+            /** Format: uuid */
+            id: string;
+            fileName: string;
+            /** @enum {string} */
+            contentType: "application/pdf" | "image/jpeg" | "image/png";
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: uuid */
+            uploadedBy: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         PayoutList: {
             items: components["schemas"]["Payout"][];
@@ -1363,9 +1511,9 @@ export interface components {
             /** Format: uuid */
             accountId: string;
             amount: components["schemas"]["Money"];
-            fee?: components["schemas"]["Money"] | null;
-            counterparty?: components["schemas"]["Counterparty"];
-            concept?: string | null;
+            fee: components["schemas"]["Money"] | null;
+            counterparty: components["schemas"]["Counterparty"];
+            concept: string | null;
             /**
              * Format: uuid
              * @description Id of the payin, payout or internal transfer.
@@ -1399,10 +1547,29 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            finishedAt?: string | null;
+            finishedAt: string | null;
         };
         ReconciliationRunList: {
             items: components["schemas"]["ReconciliationRun"][];
+            nextCursor: string | null;
+        };
+        /** @enum {string} */
+        ReconciliationItemStatus: "matched" | "missing_in_ledger" | "missing_at_psp";
+        ReconciliationItem: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["ReconciliationItemStatus"];
+            providerTransferId: string;
+            direction: components["schemas"]["MovementDirection"];
+            /** @description The PSP statement amount (null when missing at the PSP). */
+            pspAmount: components["schemas"]["Money"] | null;
+            /** @description Our recorded amount (null when missing in the ledger). */
+            ledgerAmount: components["schemas"]["Money"] | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReconciliationItemList: {
+            items: components["schemas"]["ReconciliationItem"][];
             nextCursor: string | null;
         };
         RunReconciliationRequest: {
@@ -1412,8 +1579,8 @@ export interface components {
         };
         ErpLinkCandidate: {
             found: boolean;
-            erpOrgId?: string | null;
-            displayName?: string | null;
+            erpOrgId: string | null;
+            displayName: string | null;
         };
         CreateErpLinkRequest: {
             username: string;
@@ -1432,25 +1599,31 @@ export interface components {
             linkedAt: string;
             importStatus: components["schemas"]["ErpImportStatus"];
             /** Format: date-time */
-            importedAt?: string | null;
+            importedAt: string | null;
         };
         /** @enum {string} */
-        RealtimeEventType: "payin.credited" | "payout.status_changed" | "approval.requested" | "balance.changed";
+        RealtimeEventType: "payin.credited" | "payout.updated" | "approval.requested" | "balance.changed";
         RealtimeEvent: {
             type: components["schemas"]["RealtimeEventType"];
             /** Format: uuid */
             orgId: string;
             /** Format: date-time */
             occurredAt: string;
-            /** @description Ids only; clients refetch through the authorized endpoints. */
+            /**
+             * @description Per type (see `streamOrgEvents`); every member is also copied to the top level of the
+             *     frame. Clients may refetch through the authorized endpoints.
+             */
             data: {
                 [key: string]: unknown;
             };
         };
         RegisterPushTokenRequest: {
             token: string;
-            /** @enum {string} */
-            platform: "ios" | "android";
+            /**
+             * @default unknown
+             * @enum {string}
+             */
+            platform: "ios" | "android" | "web" | "unknown";
         };
     };
     responses: {
@@ -1470,6 +1643,7 @@ export interface components {
         PayerId: string;
         CvuId: string;
         PayoutId: string;
+        UserId: string;
         /** @description Client-generated (UUID recommended), persisted by the client until the action is confirmed. */
         IdempotencyKeyHeader: string;
         /** @description Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes. */
@@ -1545,6 +1719,29 @@ export interface operations {
         responses: {
             /** @description Email verified. */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resendEmailCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; a code was sent if the email belongs to an unverified user. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1858,6 +2055,56 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Role changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     createInvite: {
         parameters: {
             query?: never;
@@ -2104,7 +2351,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Account renamed or archived (archive only with zero balance). */
+            /**
+             * @description Account renamed or archived. Only project accounts can be archived
+             *     (`account.not_archivable` otherwise), and only with zero balance (`account.not_empty`).
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2607,6 +2857,34 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    uploadPayoutAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                payoutId: components["parameters"]["PayoutId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["PayoutAttachmentUpload"];
+            };
+        };
+        responses: {
+            /** @description Attachment stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutAttachment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getPayoutProof: {
         parameters: {
             query?: never;
@@ -2693,6 +2971,31 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getMovement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                /** @description A `Movement.id` from the list (payin, payout or internal-transfer leg). */
+                movementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One movement; `refId` leads to the payin, payout or internal transfer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Movement"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listReconciliationRuns: {
         parameters: {
             query?: {
@@ -2716,6 +3019,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationRunList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createReconciliationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunReconciliationRequest"];
+            };
+        };
+        responses: {
+            /** @description Run queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listReconciliationItems: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Items of one of the organization's runs, in processing order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationItemList"];
                 };
             };
             default: components["responses"]["Error"];

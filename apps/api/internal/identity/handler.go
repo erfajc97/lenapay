@@ -41,6 +41,14 @@ func (h *Handler) VerifyEmail(ctx context.Context, req api.VerifyEmailRequestObj
 	return api.VerifyEmail204Response{}, nil
 }
 
+// ResendEmailCode implements api.StrictServerInterface.
+func (h *Handler) ResendEmailCode(ctx context.Context, req api.ResendEmailCodeRequestObject) (api.ResendEmailCodeResponseObject, error) {
+	if err := h.svc.ResendEmailCode(ctx, string(req.Body.Email)); err != nil {
+		return nil, err
+	}
+	return api.ResendEmailCode202Response{}, nil
+}
+
 // Login implements api.StrictServerInterface.
 func (h *Handler) Login(ctx context.Context, req api.LoginRequestObject) (api.LoginResponseObject, error) {
 	t, err := h.svc.Login(ctx, LoginInput{

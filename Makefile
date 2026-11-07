@@ -12,7 +12,7 @@ include .env
 export
 endif
 
-.PHONY: gen test test-integration cover lint up down reset seed migrate api worker bindmock env
+.PHONY: gen test test-integration cover lint up down reset seed smoke migrate api worker bindmock env
 
 ## gen: regenerate everything from the contract and the migrations (P1)
 gen:
@@ -56,9 +56,13 @@ reset: env
 	docker compose down -v
 	docker compose up -d --build --wait
 
-## seed: demo data (E9) against the compose database
+## seed: demo data (E9, idempotent) through the running stack (worker + bind-mock must be up: `make up`)
 seed: env
-	docker compose run --rm --entrypoint /app/seed api
+	MSYS_NO_PATHCONV=1 docker compose run --rm --entrypoint /app/seed api
+
+## smoke: end-to-end smoke of the running stack (PASS/FAIL table)
+smoke:
+	node scripts/smoke.mjs
 
 ## migrate: apply migrations against DATABASE_URL from .env (host run)
 migrate: env

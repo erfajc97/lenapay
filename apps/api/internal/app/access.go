@@ -15,6 +15,7 @@ func AccessRules() auth.Rules {
 		// identity
 		"signup":                auth.Public(),
 		"verifyEmail":           auth.Public(),
+		"resendEmailCode":       auth.Public(),
 		"login":                 auth.Public(),
 		"refreshToken":          auth.Public(),
 		"getJwks":               auth.Public(),
@@ -31,6 +32,8 @@ func AccessRules() auth.Rules {
 		"getOrg":       auth.OrgRole(viewer),
 		"listMembers":  auth.OrgRole(viewer),
 		"addMember":    auth.OrgRole(admin),
+		"updateMember": auth.OrgRole(admin),
+		"removeMember": auth.OrgRole(admin),
 		"createInvite": auth.OrgRole(admin),
 
 		// kyc
@@ -61,22 +64,26 @@ func AccessRules() auth.Rules {
 		"getPayin":                  auth.OrgRole(viewer),
 
 		// payouts
-		"resolveDestination": auth.OrgRole(operator).WithKYC(),
-		"quotePayout":        auth.OrgRole(operator).WithKYC(),
-		"createPayout":       auth.OrgRole(operator).WithKYC().WithStepUp(),
-		"getPayout":          auth.OrgRole(viewer),
-		"getPayoutProof":     auth.OrgRole(viewer),
-		"cancelPayout":       auth.OrgRole(operator).WithKYC(),
-		"listApprovals":      auth.OrgRole(approver),
-		"approvePayout":      auth.OrgRole(approver).WithKYC().WithStepUp(),
-		"rejectPayout":       auth.OrgRole(approver).WithKYC().WithStepUp(),
+		"resolveDestination":     auth.OrgRole(operator).WithKYC(),
+		"quotePayout":            auth.OrgRole(operator).WithKYC(),
+		"createPayout":           auth.OrgRole(operator).WithKYC().WithStepUp(),
+		"getPayout":              auth.OrgRole(viewer),
+		"getPayoutProof":         auth.OrgRole(viewer),
+		"uploadPayoutAttachment": auth.OrgRole(operator).WithKYC(),
+		"cancelPayout":           auth.OrgRole(operator).WithKYC(),
+		"listApprovals":          auth.OrgRole(approver),
+		"approvePayout":          auth.OrgRole(approver).WithKYC().WithStepUp(),
+		"rejectPayout":           auth.OrgRole(approver).WithKYC().WithStepUp(),
 
 		// movements
 		"listMovements": auth.OrgRole(viewer),
+		"getMovement":   auth.OrgRole(viewer),
 
 		// reconciliation
-		"listReconciliationRuns": auth.OrgRole(admin),
-		"runReconciliation":      auth.Internal(),
+		"listReconciliationRuns":  auth.OrgRole(admin),
+		"createReconciliationRun": auth.OrgRole(admin).WithKYC(),
+		"listReconciliationItems": auth.OrgRole(admin),
+		"runReconciliation":       auth.Internal(),
 
 		// erp link
 		"getErpLink":          auth.OrgRole(viewer),

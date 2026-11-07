@@ -66,6 +66,22 @@ func (q *Queries) CancelPayout(ctx context.Context, arg CancelPayoutParams) (int
 	return result.RowsAffected(), nil
 }
 
+const countPayoutAttachments = `-- name: CountPayoutAttachments :one
+SELECT count(*) FROM payout_attachments WHERE payout_id = $1 AND org_id = $2
+`
+
+type CountPayoutAttachmentsParams struct {
+	PayoutID uuid.UUID
+	OrgID    uuid.UUID
+}
+
+func (q *Queries) CountPayoutAttachments(ctx context.Context, arg CountPayoutAttachmentsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPayoutAttachments, arg.PayoutID, arg.OrgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const failPayout = `-- name: FailPayout :execrows
 UPDATE payouts
 SET status = 'failed', failure_code = $1, failed_at = $2,
@@ -288,6 +304,42 @@ func (q *Queries) InsertPayout(ctx context.Context, arg InsertPayoutParams) erro
 	return err
 }
 
+const insertPayoutAttachment = `-- name: InsertPayoutAttachment :exec
+INSERT INTO payout_attachments (id, org_id, payout_id, file_name, content_type, size_bytes, sha256, storage_key,
+                                uploaded_by, created_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10)
+`
+
+type InsertPayoutAttachmentParams struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	PayoutID    uuid.UUID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	Sha256      []byte
+	StorageKey  string
+	UploadedBy  uuid.UUID
+	CreatedAt   time.Time
+}
+
+func (q *Queries) InsertPayoutAttachment(ctx context.Context, arg InsertPayoutAttachmentParams) error {
+	_, err := q.db.Exec(ctx, insertPayoutAttachment,
+		arg.ID,
+		arg.OrgID,
+		arg.PayoutID,
+		arg.FileName,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.Sha256,
+		arg.StorageKey,
+		arg.UploadedBy,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const insertPayoutEvent = `-- name: InsertPayoutEvent :exec
 INSERT INTO payout_events (id, payout_id, org_id, from_status, to_status, actor_id, reason, created_at)
 VALUES ($1, $2, $3, $4, $5,
@@ -317,6 +369,54 @@ func (q *Queries) InsertPayoutEvent(ctx context.Context, arg InsertPayoutEventPa
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const listPayoutAttachments = `-- name: ListPayoutAttachments :many
+SELECT id, file_name, content_type, size_bytes, uploaded_by, created_at
+FROM payout_attachments
+WHERE payout_id = $1 AND org_id = $2
+ORDER BY created_at, id
+`
+
+type ListPayoutAttachmentsParams struct {
+	PayoutID uuid.UUID
+	OrgID    uuid.UUID
+}
+
+type ListPayoutAttachmentsRow struct {
+	ID          uuid.UUID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	UploadedBy  uuid.UUID
+	CreatedAt   time.Time
+}
+
+func (q *Queries) ListPayoutAttachments(ctx context.Context, arg ListPayoutAttachmentsParams) ([]ListPayoutAttachmentsRow, error) {
+	rows, err := q.db.Query(ctx, listPayoutAttachments, arg.PayoutID, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPayoutAttachmentsRow{}
+	for rows.Next() {
+		var i ListPayoutAttachmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FileName,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.UploadedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPayoutEvents = `-- name: ListPayoutEvents :many

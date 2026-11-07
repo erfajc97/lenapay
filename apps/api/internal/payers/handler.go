@@ -76,7 +76,16 @@ func (h *Handler) UpdatePayer(ctx context.Context, req api.UpdatePayerRequestObj
 	if err != nil {
 		return nil, err
 	}
-	payer, err := h.svc.Update(ctx, p, req.PayerId, UpdateInput{Name: req.Body.Name, Email: (*string)(req.Body.Email)})
+	in := UpdateInput{Name: req.Body.Name}
+	if req.Body.Email.IsSpecified() {
+		if req.Body.Email.IsNull() {
+			in.ClearEmail = true
+		} else {
+			email := req.Body.Email.MustGet()
+			in.Email = &email
+		}
+	}
+	payer, err := h.svc.Update(ctx, p, req.PayerId, in)
 	if err != nil {
 		return nil, err
 	}

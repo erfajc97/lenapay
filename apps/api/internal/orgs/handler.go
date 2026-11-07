@@ -100,6 +100,31 @@ func (h *Handler) AddMember(ctx context.Context, req api.AddMemberRequestObject)
 	return api.AddMember201JSONResponse(memberToAPI(m)), nil
 }
 
+// UpdateMember implements api.StrictServerInterface.
+func (h *Handler) UpdateMember(ctx context.Context, req api.UpdateMemberRequestObject) (api.UpdateMemberResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := h.svc.UpdateMemberRole(ctx, p, req.UserId, auth.Role(req.Body.Role))
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateMember200JSONResponse(memberToAPI(m)), nil
+}
+
+// RemoveMember implements api.StrictServerInterface.
+func (h *Handler) RemoveMember(ctx context.Context, req api.RemoveMemberRequestObject) (api.RemoveMemberResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.RemoveMember(ctx, p, req.UserId); err != nil {
+		return nil, err
+	}
+	return api.RemoveMember204Response{}, nil
+}
+
 func memberToAPI(m Member) api.Member {
 	return api.Member{UserId: m.UserID, Email: openapi_types.Email(m.Email), Role: api.Role(m.Role), JoinedAt: m.JoinedAt}
 }

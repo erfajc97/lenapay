@@ -16,6 +16,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/kyc/store"
+	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
@@ -24,6 +25,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
 	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
 )
 
 // Service is the KYC API used by the handler, the review job and orgs.
@@ -64,7 +66,7 @@ type Deps struct {
 // Limits and timings.
 const (
 	// MaxDocumentBytes is the contract's 10 MB per document.
-	MaxDocumentBytes = 10 << 20
+	MaxDocumentBytes = upload.MaxBytes
 	// personReviewBackstop re-runs the vendor check when the synchronous one at submit failed.
 	personReviewBackstop = 30 * time.Second
 	// reasonDevAutoApprove is the decision reason of the development auto-approval.
@@ -207,13 +209,13 @@ func (s *service) UploadDocument(ctx context.Context, p auth.Principal, in Docum
 	if len(content) > MaxDocumentBytes {
 		return Document{}, apperr.New(apperr.CodeBodyTooLarge, nil)
 	}
-	contentType := sniffType(content)
+	contentType := upload.Sniff(content)
 	if contentType == "" {
 		return Document{}, apperr.New(apperr.CodeKYCDocumentInvalid, nil)
 	}
-	sum := sha256Sum(content)
+	sum := upload.SHA256(content)
 	doc := Document{
-		ID: ids.New(), Kind: in.Kind, RepresentativeDNI: in.RepresentativeDNI, FileName: cleanFileName(in.FileName),
+		ID: ids.New(), Kind: in.Kind, RepresentativeDNI: in.RepresentativeDNI, FileName: upload.CleanFileName(in.FileName),
 		ContentType: contentType, SizeBytes: int64(len(content)), CreatedAt: s.now(),
 	}
 	key := "org/" + p.OrgID.String() + "/kyc/" + doc.ID.String() // T9: the tenant is the owner segment
@@ -439,6 +441,13 @@ func (s *service) applyDecision(ctx context.Context, tx pgx.Tx, row store.KycCas
 		return err
 	}
 	if to == StatusApproved {
+		id, err := verifiedIdentity(row)
+		if err != nil {
+			return err
+		}
+		if err := s.deps.Orgs.ApplyVerifiedIdentity(ctx, tx, row.OrgID, id); err != nil {
+			return fmt.Errorf("kyc: apply verified identity: %w", err)
+		}
 		for _, hook := range s.deps.OnApprove {
 			if err := hook.OnKYCApproved(ctx, tx, row.OrgID, orgKindFor(row.Kind)); err != nil {
 				return fmt.Errorf("kyc: approval hook: %w", err)
@@ -448,6 +457,22 @@ func (s *service) applyDecision(ctx context.Context, tx pgx.Tx, row store.KycCas
 	return s.deps.Audit.Record(ctx, tx, audit.Entry{
 		OrgID: &row.OrgID, ActorKind: actor, Action: "kyc." + string(to), TargetType: "kyc_case", TargetID: &row.ID,
 	})
+}
+
+// verifiedIdentity is what the approved case proved: the company's CUIT and legal name, or the
+// person's DNI and full name (copied onto the org so the ERP link finds it by CUIT).
+func verifiedIdentity(row store.KycCase) (orgs.VerifiedIdentity, error) {
+	var data caseData
+	if err := json.Unmarshal(row.Data, &data); err != nil {
+		return orgs.VerifiedIdentity{}, fmt.Errorf("kyc: decode case data: %w", err)
+	}
+	switch {
+	case data.Company != nil:
+		return orgs.VerifiedIdentity{LegalName: data.Company.LegalName, DocType: orgs.DocTypeCUIT, DocNumber: data.Company.CUIT}, nil
+	case data.Person != nil:
+		return orgs.VerifiedIdentity{LegalName: data.Person.FullName, DocType: orgs.DocTypeDNI, DocNumber: data.Person.DNI}, nil
+	}
+	return orgs.VerifiedIdentity{}, apperr.New(apperr.CodeKYCIncomplete, nil) // submit requires the data
 }
 
 func nonEmpty(s string) *string {

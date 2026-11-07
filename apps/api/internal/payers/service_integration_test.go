@@ -176,6 +176,15 @@ func TestPayerCRUDAndTenancy(t *testing.T) {
 	if _, err := e.svc.Update(ctx, e.p, created.ID, payers.UpdateInput{Name: &twoChars}); err != nil {
 		t.Fatalf("2 characters is the minimum: %v", err)
 	}
+	// "email": null clears it; a new email sets it again.
+	cleared, err := e.svc.Update(ctx, e.p, created.ID, payers.UpdateInput{ClearEmail: true})
+	if err != nil || cleared.Email != nil || cleared.Name != twoChars {
+		t.Fatalf("clear email %+v %v", cleared, err)
+	}
+	other := "otro@example.com"
+	if again, err := e.svc.Update(ctx, e.p, created.ID, payers.UpdateInput{Email: &other}); err != nil || again.Email == nil || *again.Email != other {
+		t.Fatalf("set email %+v %v", again, err)
+	}
 
 	// T2: another org cannot read, change or issue CVUs for this payer; it answers like a missing one.
 	if _, err := e.svc.Get(ctx, e.other, created.ID); !apperr.IsCode(err, apperr.CodePayerNotFound) {

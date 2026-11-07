@@ -64,11 +64,12 @@ type CreateInput struct {
 	Email     *string
 }
 
-// UpdateInput patches a payer: nil keeps the stored value (A4). The generated request type
-// cannot tell "email": null from an absent email, so clearing it is not offered (contract gap).
+// UpdateInput patches a payer: nil keeps the stored value (A4); ClearEmail ("email": null)
+// removes the stored email.
 type UpdateInput struct {
-	Name  *string
-	Email *string
+	Name       *string
+	Email      *string
+	ClearEmail bool
 }
 
 // CreateCVUInput issues a CVU for a payer.

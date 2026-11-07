@@ -9,6 +9,9 @@ type Platform string
 const (
 	PlatformIOS     Platform = "ios"
 	PlatformAndroid Platform = "android"
+	PlatformWeb     Platform = "web"
+	// PlatformUnknown is what a client that does not say gets (the contract's default).
+	PlatformUnknown Platform = "unknown"
 )
 
 // Notification is one outbox entry per user (ids and enums in Data, never PII).

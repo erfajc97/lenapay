@@ -69,3 +69,16 @@ SELECT * FROM invites WHERE token_hash = sqlc.arg(token_hash) FOR UPDATE;
 -- name: MarkInviteAccepted :execrows
 UPDATE invites SET accepted_at = sqlc.arg(accepted_at), accepted_by = sqlc.arg(accepted_by)
 WHERE id = sqlc.arg(id) AND accepted_at IS NULL;
+
+-- name: GetMembershipForUpdate :one
+SELECT * FROM memberships WHERE org_id = sqlc.arg(org_id) AND user_id = sqlc.arg(user_id) FOR UPDATE;
+
+-- name: DeleteMembership :execrows
+DELETE FROM memberships WHERE org_id = sqlc.arg(org_id) AND user_id = sqlc.arg(user_id);
+
+-- name: ApplyVerifiedIdentity :execrows
+-- KYC approval copies the verified identity onto the org (R-KYC-3, R-ERP-1 lookup by CUIT).
+UPDATE organizations
+SET legal_name = sqlc.arg(legal_name), cuit = COALESCE(sqlc.narg(cuit), cuit),
+    doc_type = sqlc.arg(doc_type), doc_number = sqlc.arg(doc_number), updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id);

@@ -9,7 +9,7 @@ info:
     Money mutations require a client-generated `Idempotency-Key`; step-up protected routes
     require `X-Step-Up-Token` (5-minute token from `/auth/step-up/verify`).
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:18080
 security:
   - bearerAuth: []
 tags:
@@ -71,6 +71,23 @@ paths:
             schema: { $ref: '#/components/schemas/VerifyEmailRequest' }
       responses:
         '204': { description: Email verified. }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/resend-code:
+    post:
+      operationId: resendEmailCode
+      tags: [identity]
+      security: []
+      description: |
+        Re-sends the 6-digit verification code of an unverified user (the previous code stops
+        working). The answer is the same whether or not the email is registered or already
+        verified (no user enumeration); at most 5 codes per hour per user (`request.rate_limited`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResendCodeRequest' }
+      responses:
+        '202': { description: Accepted; a code was sent if the email belongs to an unverified user. }
         default: { $ref: '#/components/responses/Error' }
   /auth/login:
     post:
@@ -254,6 +271,35 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Member' }
         default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      operationId: updateMember
+      tags: [orgs]
+      description: |
+        Changes a member's role (admins only, never above the caller's role). Demoting the last
+        admin is `org.last_admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMemberRequest' }
+      responses:
+        '200':
+          description: Role changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: removeMember
+      tags: [orgs]
+      description: Removes a member (admins only). Removing the last admin is `org.last_admin`.
+      responses:
+        '204': { description: Member removed. }
+        default: { $ref: '#/components/responses/Error' }
   /orgs/{orgId}/invites:
     parameters:
       - $ref: '#/components/parameters/OrgId'
@@ -421,7 +467,9 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateAccountRequest' }
       responses:
         '200':
-          description: Account renamed or archived (archive only with zero balance).
+          description: |
+            Account renamed or archived. Only project accounts can be archived
+            (`account.not_archivable` otherwise), and only with zero balance (`account.not_empty`).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Account' }
@@ -748,6 +796,29 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Payout' }
         default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    post:
+      operationId: uploadPayoutAttachment
+      tags: [payouts]
+      description: |
+        Attaches a supporting document (invoice, receipt) to a payout: PDF, JPEG or PNG decided by
+        the file's magic bytes (`payout.attachment_invalid` otherwise, or past 10 attachments),
+        at most 10 MB. Listed in `Payout.attachments`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/PayoutAttachmentUpload' }
+      responses:
+        '201':
+          description: Attachment stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutAttachment' }
+        default: { $ref: '#/components/responses/Error' }
   /orgs/{orgId}/payouts/{payoutId}/proof.pdf:
     parameters:
       - $ref: '#/components/parameters/OrgId'
@@ -816,11 +887,45 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MovementList' }
         default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/movements/{movementId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - name: movementId
+        in: path
+        required: true
+        description: A `Movement.id` from the list (payin, payout or internal-transfer leg).
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getMovement
+      tags: [movements]
+      responses:
+        '200':
+          description: One movement; `refId` leads to the payin, payout or internal transfer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Movement' }
+        default: { $ref: '#/components/responses/Error' }
 
   # ---------------------------------------------------------------- reconciliation
   /orgs/{orgId}/reconciliation/runs:
     parameters:
       - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: createReconciliationRun
+      tags: [reconciliation]
+      description: Queues an on-demand run of the organization's movements for a business day (admins).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunReconciliationRequest' }
+      responses:
+        '202':
+          description: Run queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRun' }
+        default: { $ref: '#/components/responses/Error' }
     get:
       operationId: listReconciliationRuns
       tags: [reconciliation]
@@ -836,6 +941,26 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReconciliationRunList' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/reconciliation/runs/{runId}/items:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listReconciliationItems
+      tags: [reconciliation]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Items of one of the organization's runs, in processing order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationItemList' }
         default: { $ref: '#/components/responses/Error' }
   /internal/reconciliation/run:
     post:
@@ -907,7 +1032,15 @@ paths:
       operationId: streamOrgEvents
       tags: [realtime]
       description: |
-        Server-sent events (`event:` is a `RealtimeEvent.type`, `data:` a `RealtimeEvent` JSON).
+        Server-sent events. Every frame is UNNAMED (no `event:` line, so an EventSource delivers
+        it as `message`); its `data:` line is one JSON object: the `RealtimeEvent` envelope
+        `{type, orgId, occurredAt, data}` with every member of `data` ALSO copied to the top level
+        (e.g. `event.payin`, `event.payout`). Comment lines (`: ping`) are heartbeats every 15 s.
+        Delivery is best effort: clients refetch on reconnect. Event types and their `data`:
+        `payin.credited` → `{payinId, accountId, cvuId, payerId, payin}`;
+        `payout.updated` → `{payoutId, status, payout}` (`payout` is a `Payout`, any status change);
+        `approval.requested` → `{payoutId, status, payout}`;
+        `balance.changed` → `{accountId}`.
         Hand-mounted (excluded from code generation).
       responses:
         '200':
@@ -963,6 +1096,11 @@ components:
       schema: { type: string, format: uuid }
     PayoutId:
       name: payoutId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1092,6 +1230,12 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 254 }
         code: { type: string, pattern: '^[0-9]{6}$', maxLength: 6 }
+    ResendCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
     LoginRequest:
       type: object
       additionalProperties: false
@@ -1241,7 +1385,7 @@ components:
     Organization:
       type: object
       additionalProperties: false
-      required: [id, kind, legalName, kycStatus, role, createdAt]
+      required: [id, kind, legalName, cuit, kycStatus, role, createdAt]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/OrgKind' }
@@ -1289,6 +1433,12 @@ components:
       required: [email, role]
       properties:
         email: { type: string, format: email, maxLength: 254 }
+        role: { $ref: '#/components/schemas/Role' }
+    UpdateMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
         role: { $ref: '#/components/schemas/Role' }
     CreateInviteRequest:
       type: object
@@ -1370,7 +1520,7 @@ components:
     KycDocument:
       type: object
       additionalProperties: false
-      required: [id, kind, fileName, contentType, sizeBytes, createdAt]
+      required: [id, kind, representativeDni, fileName, contentType, sizeBytes, createdAt]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/KycDocumentKind' }
@@ -1382,7 +1532,7 @@ components:
     KycCase:
       type: object
       additionalProperties: false
-      required: [id, orgId, kind, status, documents, updatedAt]
+      required: [id, orgId, kind, status, documents, decisionReason, submittedAt, decidedAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         orgId: { type: string, format: uuid }
@@ -1423,7 +1573,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, kind, name, archived, balances, createdAt]
+      required: [id, kind, name, archived, erpProjectRef, balances, createdAt]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/AccountKind' }
@@ -1488,7 +1638,7 @@ components:
     InternalTransfer:
       type: object
       additionalProperties: false
-      required: [id, fromAccountId, toAccountId, amount, createdAt]
+      required: [id, fromAccountId, toAccountId, amount, concept, createdAt]
       properties:
         id: { type: string, format: uuid }
         fromAccountId: { type: string, format: uuid }
@@ -1511,7 +1661,7 @@ components:
     Cvu:
       type: object
       additionalProperties: false
-      required: [id, accountId, currency, cvu, status, share, createdAt]
+      required: [id, payerId, accountId, currency, cvu, alias, status, share, createdAt]
       properties:
         id: { type: string, format: uuid }
         payerId: { type: string, format: uuid, nullable: true }
@@ -1525,7 +1675,7 @@ components:
     Payer:
       type: object
       additionalProperties: false
-      required: [id, accountId, name, docType, docNumber, cvus, createdAt]
+      required: [id, accountId, name, docType, docNumber, email, erpRef, cvus, createdAt]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
@@ -1562,7 +1712,15 @@ components:
       additionalProperties: false
       properties:
         name: { type: string, minLength: 2, maxLength: 120 }
-        email: { type: string, format: email, maxLength: 254, nullable: true }
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          nullable: true
+          description: '`null` clears the email; absent keeps it.'
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
     CreateCvuRequest:
       type: object
       additionalProperties: false
@@ -1595,6 +1753,7 @@ components:
     Counterparty:
       type: object
       additionalProperties: false
+      required: [name, cuit, cbu]
       properties:
         name: { type: string, nullable: true }
         cuit: { type: string, nullable: true }
@@ -1602,7 +1761,7 @@ components:
     Payin:
       type: object
       additionalProperties: false
-      required: [id, accountId, cvuId, gross, fee, net, origin, providerTransferId, status, createdAt]
+      required: [id, accountId, payerId, cvuId, gross, fee, net, origin, providerTransferId, status, createdAt, creditedAt]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
@@ -1624,7 +1783,7 @@ components:
     Destination:
       type: object
       additionalProperties: false
-      required: [type, value, accountNumber, holderName, holderCuit]
+      required: [type, value, accountNumber, holderName, holderCuit, bankName]
       properties:
         type: { $ref: '#/components/schemas/DestinationType' }
         value:
@@ -1669,7 +1828,7 @@ components:
     PayoutEvent:
       type: object
       additionalProperties: false
-      required: [toStatus, createdAt]
+      required: [fromStatus, toStatus, actorId, reason, createdAt]
       properties:
         fromStatus:
           allOf:
@@ -1682,7 +1841,7 @@ components:
     Payout:
       type: object
       additionalProperties: false
-      required: [id, accountId, amount, fee, total, destination, concept, status, createdBy, events, createdAt, updatedAt]
+      required: [id, accountId, amount, fee, total, destination, concept, status, createdBy, approvedBy, rejectReason, failureCode, events, attachments, createdAt, updatedAt, settledAt]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
@@ -1699,9 +1858,34 @@ components:
         events:
           type: array
           items: { $ref: '#/components/schemas/PayoutEvent' }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/PayoutAttachment' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         settledAt: { type: string, format: date-time, nullable: true }
+    PayoutAttachmentUpload:
+      type: object
+      additionalProperties: false
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: PDF, JPEG or PNG, at most 10 MB (the upload body limit).
+    PayoutAttachment:
+      type: object
+      additionalProperties: false
+      required: [id, fileName, contentType, sizeBytes, uploadedBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string }
+        contentType:
+          type: string
+          enum: [application/pdf, image/jpeg, image/png]
+        sizeBytes: { type: integer, format: int64 }
+        uploadedBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
     PayoutList:
       type: object
       additionalProperties: false
@@ -1731,7 +1915,7 @@ components:
     Movement:
       type: object
       additionalProperties: false
-      required: [id, type, status, direction, accountId, amount, refId, createdAt]
+      required: [id, type, status, direction, accountId, amount, fee, counterparty, concept, refId, createdAt]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: '#/components/schemas/MovementType' }
@@ -1767,7 +1951,7 @@ components:
     ReconciliationRun:
       type: object
       additionalProperties: false
-      required: [id, currency, day, status, matchedCount, missingInLedgerCount, missingAtPspCount, pspTotal, ledgerTotal, difference, createdAt]
+      required: [id, currency, day, status, matchedCount, missingInLedgerCount, missingAtPspCount, pspTotal, ledgerTotal, difference, createdAt, finishedAt]
       properties:
         id: { type: string, format: uuid }
         currency: { $ref: '#/components/schemas/Currency' }
@@ -1790,6 +1974,38 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ReconciliationRun' }
         nextCursor: { type: string, nullable: true }
+    ReconciliationItemStatus:
+      type: string
+      enum: [matched, missing_in_ledger, missing_at_psp]
+    ReconciliationItem:
+      type: object
+      additionalProperties: false
+      required: [id, status, providerTransferId, direction, pspAmount, ledgerAmount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ReconciliationItemStatus' }
+        providerTransferId: { type: string }
+        direction: { $ref: '#/components/schemas/MovementDirection' }
+        pspAmount:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          nullable: true
+          description: The PSP statement amount (null when missing at the PSP).
+        ledgerAmount:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          nullable: true
+          description: Our recorded amount (null when missing in the ledger).
+        createdAt: { type: string, format: date-time }
+    ReconciliationItemList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ReconciliationItem' }
+        nextCursor: { type: string, nullable: true }
     RunReconciliationRequest:
       type: object
       additionalProperties: false
@@ -1802,7 +2018,7 @@ components:
     ErpLinkCandidate:
       type: object
       additionalProperties: false
-      required: [found]
+      required: [found, erpOrgId, displayName]
       properties:
         found: { type: boolean }
         erpOrgId: { type: string, nullable: true }
@@ -1820,7 +2036,7 @@ components:
     ErpLink:
       type: object
       additionalProperties: false
-      required: [id, erpOrgId, displayName, linkedBy, linkedAt, importStatus]
+      required: [id, erpOrgId, displayName, linkedBy, linkedAt, importStatus, importedAt]
       properties:
         id: { type: string, format: uuid }
         erpOrgId: { type: string }
@@ -1833,7 +2049,7 @@ components:
     # ---------- realtime / push
     RealtimeEventType:
       type: string
-      enum: [payin.credited, payout.status_changed, approval.requested, balance.changed]
+      enum: [payin.credited, payout.updated, approval.requested, balance.changed]
     RealtimeEvent:
       type: object
       additionalProperties: false
@@ -1845,13 +2061,16 @@ components:
         data:
           type: object
           additionalProperties: true
-          description: Ids only; clients refetch through the authorized endpoints.
+          description: |
+            Per type (see `streamOrgEvents`); every member is also copied to the top level of the
+            frame. Clients may refetch through the authorized endpoints.
     RegisterPushTokenRequest:
       type: object
       additionalProperties: false
-      required: [token, platform]
+      required: [token]
       properties:
         token: { type: string, minLength: 1, maxLength: 200 }
         platform:
           type: string
-          enum: [ios, android]
+          enum: [ios, android, web, unknown]
+          default: unknown

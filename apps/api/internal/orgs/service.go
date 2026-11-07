@@ -36,6 +36,11 @@ type Service interface {
 	ListMembers(ctx context.Context, p auth.Principal) ([]Member, error)
 	// AddMember adds a registered user with a role not above the caller's (T4).
 	AddMember(ctx context.Context, p auth.Principal, in MemberInput) (Member, error)
+	// UpdateMemberRole changes a member's role: never above the caller's (T4), and never
+	// demoting the last admin (org.last_admin).
+	UpdateMemberRole(ctx context.Context, p auth.Principal, userID uuid.UUID, role auth.Role) (Member, error)
+	// RemoveMember removes a member; removing the last admin is org.last_admin.
+	RemoveMember(ctx context.Context, p auth.Principal, userID uuid.UUID) error
 	// CreateInvite emails a single-use invite valid 7 days (R-ORG-2).
 	CreateInvite(ctx context.Context, p auth.Principal, in MemberInput) (Invite, error)
 	// AcceptInvite makes the caller a member (token hashed, single use, email must match).
@@ -45,6 +50,9 @@ type Service interface {
 	MembershipsForUser(ctx context.Context, userID uuid.UUID) ([]identity.MembershipSummary, error)
 	// SetKYCStatus records the org's KYC status inside the kyc transaction (kyc.OrgStatus).
 	SetKYCStatus(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, status string) error
+	// ApplyVerifiedIdentity copies the KYC-verified identity onto the org inside the approval
+	// transaction (kyc.OrgStatus): legal name, document and, for companies, the CUIT.
+	ApplyVerifiedIdentity(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, id VerifiedIdentity) error
 	// OrgCUIT returns the org's CUIT for the ERP identity lookup ("" when it has none).
 	OrgCUIT(ctx context.Context, orgID uuid.UUID) (string, error)
 }
@@ -212,6 +220,90 @@ func (s *service) AddMember(ctx context.Context, p auth.Principal, in MemberInpu
 	return m, nil
 }
 
+func (s *service) UpdateMemberRole(ctx context.Context, p auth.Principal, userID uuid.UUID, role auth.Role) (Member, error) {
+	if err := checkGrant(p, role); err != nil {
+		return Member{}, err
+	}
+	var m Member
+	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		current, err := s.lockMember(ctx, q, p, userID)
+		if err != nil {
+			return err
+		}
+		if current == auth.RoleAdmin && role != auth.RoleAdmin {
+			if err := ensureAnotherAdmin(ctx, q, p.OrgID); err != nil {
+				return err
+			}
+		}
+		if err := q.UpdateMembershipRole(ctx, store.UpdateMembershipRoleParams{
+			Role: string(role), UpdatedAt: s.now(), OrgID: p.OrgID, UserID: userID,
+		}); err != nil {
+			return err
+		}
+		row, err := q.GetMember(ctx, store.GetMemberParams{OrgID: p.OrgID, UserID: userID})
+		if err != nil {
+			return err
+		}
+		m = Member{UserID: row.UserID, Email: row.Email, Role: auth.Role(row.Role), JoinedAt: row.CreatedAt}
+		return s.record(ctx, tx, p, p.OrgID, "member.role_change", "user", userID, map[string]any{"from": current, "to": role})
+	})
+	if err != nil {
+		return Member{}, err
+	}
+	return m, nil
+}
+
+func (s *service) RemoveMember(ctx context.Context, p auth.Principal, userID uuid.UUID) error {
+	return db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		current, err := s.lockMember(ctx, q, p, userID)
+		if err != nil {
+			return err
+		}
+		if current == auth.RoleAdmin {
+			if err := ensureAnotherAdmin(ctx, q, p.OrgID); err != nil {
+				return err
+			}
+		}
+		n, err := q.DeleteMembership(ctx, store.DeleteMembershipParams{OrgID: p.OrgID, UserID: userID})
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return apperr.New(apperr.CodeMemberNotFound, nil)
+		}
+		return s.record(ctx, tx, p, p.OrgID, "member.remove", "user", userID, map[string]any{"role": current})
+	})
+}
+
+// lockMember locks the target membership of p.OrgID and returns its role. Nobody changes a
+// member whose role is above their own (T4).
+func (s *service) lockMember(ctx context.Context, q *store.Queries, p auth.Principal, userID uuid.UUID) (auth.Role, error) {
+	row, err := q.GetMembershipForUpdate(ctx, store.GetMembershipForUpdateParams{OrgID: p.OrgID, UserID: userID})
+	if err != nil {
+		return "", notFoundAs(err, apperr.CodeMemberNotFound)
+	}
+	current := auth.Role(row.Role)
+	if !p.Role.AtLeast(current) {
+		return "", apperr.New(apperr.CodeRoleEscalation, map[string]any{"role": string(current)})
+	}
+	return current, nil
+}
+
+// ensureAnotherAdmin refuses losing an admin when it is the last one. The count locks every
+// admin row, so two admins demoting each other at once cannot both succeed.
+func ensureAnotherAdmin(ctx context.Context, q *store.Queries, orgID uuid.UUID) error {
+	admins, err := q.CountAdminsForUpdate(ctx, orgID)
+	if err != nil {
+		return err
+	}
+	if admins <= 1 {
+		return apperr.New(apperr.CodeLastAdmin, nil)
+	}
+	return nil
+}
+
 func (s *service) CreateInvite(ctx context.Context, p auth.Principal, in MemberInput) (Invite, error) {
 	if err := checkGrant(p, in.Role); err != nil {
 		return Invite{}, err
@@ -349,6 +441,30 @@ func (s *service) MembershipsForUser(ctx context.Context, userID uuid.UUID) ([]i
 
 func (s *service) SetKYCStatus(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, status string) error {
 	n, err := store.New(tx).SetOrganizationKYCStatus(ctx, store.SetOrganizationKYCStatusParams{ID: orgID, KycStatus: status, UpdatedAt: s.now()})
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return apperr.New(apperr.CodeOrgNotFound, nil)
+	}
+	return nil
+}
+
+func (s *service) ApplyVerifiedIdentity(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, id VerifiedIdentity) error {
+	name := strings.TrimSpace(id.LegalName)
+	if n := len([]rune(name)); n < 2 || n > 200 || id.DocNumber == "" {
+		return apperr.New(apperr.CodeValidation, map[string]any{"field": "verifiedIdentity"})
+	}
+	var cuit *string
+	if id.DocType == DocTypeCUIT {
+		cuit = &id.DocNumber
+	}
+	n, err := store.New(tx).ApplyVerifiedIdentity(ctx, store.ApplyVerifiedIdentityParams{
+		LegalName: name, Cuit: cuit, DocType: &id.DocType, DocNumber: &id.DocNumber, UpdatedAt: s.now(), ID: orgID,
+	})
+	if db.IsUniqueViolation(err, "") { // another org was already approved with this CUIT
+		return apperr.Wrap(apperr.CodeConflict, err, map[string]any{"field": "cuit"})
+	}
 	if err != nil {
 		return err
 	}

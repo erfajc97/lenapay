@@ -1,14 +1,8 @@
 package kyc
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"fmt"
-	"path"
 	"slices"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 // Case kinds (DB CHECK kyc_cases.kind) and the org kind each one maps to.
@@ -121,53 +115,4 @@ func equalPtr(a, b *string) bool {
 		return a == nil && b == nil
 	}
 	return *a == *b
-}
-
-// Accepted upload types (A13: never SVG or HTML), decided by the file's magic bytes.
-const (
-	TypePDF  = "application/pdf"
-	TypeJPEG = "image/jpeg"
-	TypePNG  = "image/png"
-)
-
-// sniffType returns the real type of content from its magic bytes, or "" when it is not an
-// accepted type (whatever the client declared).
-func sniffType(content []byte) string {
-	switch {
-	case bytes.HasPrefix(content, []byte("%PDF-")):
-		return TypePDF
-	case bytes.HasPrefix(content, []byte{0xFF, 0xD8, 0xFF}):
-		return TypeJPEG
-	case bytes.HasPrefix(content, []byte("\x89PNG\r\n\x1a\n")):
-		return TypePNG
-	}
-	return ""
-}
-
-// maxFileNameRunes is the kyc_documents.file_name CHECK.
-const maxFileNameRunes = 200
-
-// cleanFileName keeps the base name only, drops control characters and caps it to the column.
-func cleanFileName(name string) string {
-	// path, not filepath: the base name must be the same on every OS the API runs on.
-	name = path.Base(strings.ReplaceAll(name, `\`, "/"))
-	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || r == utf8.RuneError {
-			return -1
-		}
-		return r
-	}, name)
-	name = strings.TrimSpace(name)
-	if name == "" || name == "." || name == "/" {
-		return "document"
-	}
-	if utf8.RuneCountInString(name) > maxFileNameRunes {
-		name = string([]rune(name)[:maxFileNameRunes])
-	}
-	return name
-}
-
-func sha256Sum(b []byte) []byte {
-	sum := sha256.Sum256(b)
-	return sum[:]
 }

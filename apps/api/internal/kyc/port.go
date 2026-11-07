@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
 )
 
 // Provider is the identity-verification vendor (RENAPER validation later; provider/fake now:
@@ -43,9 +45,11 @@ type DocumentStore interface {
 	Put(ctx context.Context, key, contentType string, content io.Reader) error
 }
 
-// OrgStatus records the org's KYC status (implemented by orgs.Service).
+// OrgStatus records the org's KYC status and, on approval, its verified identity (implemented
+// by orgs.Service), both inside the decision transaction.
 type OrgStatus interface {
 	SetKYCStatus(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, status string) error
+	ApplyVerifiedIdentity(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, id orgs.VerifiedIdentity) error
 }
 
 // ApprovalHook runs inside the approval transaction (accounts.Service, payers.Service).

@@ -22,7 +22,11 @@ func (h *Handler) RegisterPushToken(ctx context.Context, req api.RegisterPushTok
 	if err != nil {
 		return nil, err
 	}
-	if err := h.svc.RegisterPushToken(ctx, p, req.Body.Token, Platform(req.Body.Platform)); err != nil {
+	platform := PlatformUnknown
+	if req.Body.Platform != nil {
+		platform = Platform(*req.Body.Platform)
+	}
+	if err := h.svc.RegisterPushToken(ctx, p, req.Body.Token, platform); err != nil {
 		return nil, err
 	}
 	return api.RegisterPushToken204Response{}, nil

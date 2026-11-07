@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -409,6 +410,27 @@ func (e PayinStatus) Valid() bool {
 	}
 }
 
+// Defines values for PayoutAttachmentContentType.
+const (
+	Applicationpdf PayoutAttachmentContentType = "application/pdf"
+	Imagejpeg      PayoutAttachmentContentType = "image/jpeg"
+	Imagepng       PayoutAttachmentContentType = "image/png"
+)
+
+// Valid indicates whether the value is a known member of the PayoutAttachmentContentType enum.
+func (e PayoutAttachmentContentType) Valid() bool {
+	switch e {
+	case Applicationpdf:
+		return true
+	case Imagejpeg:
+		return true
+	case Imagepng:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PayoutStatus.
 const (
 	PayoutStatusApproved        PayoutStatus = "approved"
@@ -459,10 +481,10 @@ func (e PspTransferWebhookType) Valid() bool {
 
 // Defines values for RealtimeEventType.
 const (
-	ApprovalRequested   RealtimeEventType = "approval.requested"
-	BalanceChanged      RealtimeEventType = "balance.changed"
-	PayinCredited       RealtimeEventType = "payin.credited"
-	PayoutStatusChanged RealtimeEventType = "payout.status_changed"
+	ApprovalRequested RealtimeEventType = "approval.requested"
+	BalanceChanged    RealtimeEventType = "balance.changed"
+	PayinCredited     RealtimeEventType = "payin.credited"
+	PayoutUpdated     RealtimeEventType = "payout.updated"
 )
 
 // Valid indicates whether the value is a known member of the RealtimeEventType enum.
@@ -474,7 +496,28 @@ func (e RealtimeEventType) Valid() bool {
 		return true
 	case PayinCredited:
 		return true
-	case PayoutStatusChanged:
+	case PayoutUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReconciliationItemStatus.
+const (
+	Matched         ReconciliationItemStatus = "matched"
+	MissingAtPsp    ReconciliationItemStatus = "missing_at_psp"
+	MissingInLedger ReconciliationItemStatus = "missing_in_ledger"
+)
+
+// Valid indicates whether the value is a known member of the ReconciliationItemStatus enum.
+func (e ReconciliationItemStatus) Valid() bool {
+	switch e {
+	case Matched:
+		return true
+	case MissingAtPsp:
+		return true
+	case MissingInLedger:
 		return true
 	default:
 		return false
@@ -509,6 +552,8 @@ func (e ReconciliationRunStatus) Valid() bool {
 const (
 	Android RegisterPushTokenRequestPlatform = "android"
 	Ios     RegisterPushTokenRequestPlatform = "ios"
+	Unknown RegisterPushTokenRequestPlatform = "unknown"
+	Web     RegisterPushTokenRequestPlatform = "web"
 )
 
 // Valid indicates whether the value is a known member of the RegisterPushTokenRequestPlatform enum.
@@ -517,6 +562,10 @@ func (e RegisterPushTokenRequestPlatform) Valid() bool {
 	case Android:
 		return true
 	case Ios:
+		return true
+	case Unknown:
+		return true
+	case Web:
 		return true
 	default:
 		return false
@@ -585,7 +634,7 @@ type Account struct {
 	Archived      bool               `json:"archived"`
 	Balances      []CurrencyBalance  `json:"balances"`
 	CreatedAt     time.Time          `json:"createdAt"`
-	ErpProjectRef *string            `json:"erpProjectRef,omitempty"`
+	ErpProjectRef *string            `json:"erpProjectRef"`
 	Id            openapi_types.UUID `json:"id"`
 	Kind          AccountKind        `json:"kind"`
 	Name          string             `json:"name"`
@@ -632,9 +681,9 @@ type Balances struct {
 
 // Counterparty defines model for Counterparty.
 type Counterparty struct {
-	Cbu  *string `json:"cbu,omitempty"`
-	Cuit *string `json:"cuit,omitempty"`
-	Name *string `json:"name,omitempty"`
+	Cbu  *string `json:"cbu"`
+	Cuit *string `json:"cuit"`
+	Name *string `json:"name"`
 }
 
 // CreateAccountRequest defines model for CreateAccountRequest.
@@ -698,12 +747,12 @@ type CurrencyBalance struct {
 // Cvu defines model for Cvu.
 type Cvu struct {
 	AccountId openapi_types.UUID  `json:"accountId"`
-	Alias     *string             `json:"alias,omitempty"`
+	Alias     *string             `json:"alias"`
 	CreatedAt time.Time           `json:"createdAt"`
 	Currency  Currency            `json:"currency"`
 	Cvu       string              `json:"cvu"`
 	Id        openapi_types.UUID  `json:"id"`
-	PayerId   *openapi_types.UUID `json:"payerId,omitempty"`
+	PayerId   *openapi_types.UUID `json:"payerId"`
 	Share     CvuShare            `json:"share"`
 	Status    CvuStatus           `json:"status"`
 }
@@ -721,7 +770,7 @@ type CvuStatus string
 type Destination struct {
 	// AccountNumber Resolved 22-digit CBU/CVU.
 	AccountNumber string          `json:"accountNumber"`
-	BankName      *string         `json:"bankName,omitempty"`
+	BankName      *string         `json:"bankName"`
 	HolderCuit    string          `json:"holderCuit"`
 	HolderName    string          `json:"holderName"`
 	Type          DestinationType `json:"type"`
@@ -752,15 +801,15 @@ type ErpLink struct {
 	ErpOrgId     string             `json:"erpOrgId"`
 	Id           openapi_types.UUID `json:"id"`
 	ImportStatus ErpImportStatus    `json:"importStatus"`
-	ImportedAt   *time.Time         `json:"importedAt,omitempty"`
+	ImportedAt   *time.Time         `json:"importedAt"`
 	LinkedAt     time.Time          `json:"linkedAt"`
 	LinkedBy     openapi_types.UUID `json:"linkedBy"`
 }
 
 // ErpLinkCandidate defines model for ErpLinkCandidate.
 type ErpLinkCandidate struct {
-	DisplayName *string `json:"displayName,omitempty"`
-	ErpOrgId    *string `json:"erpOrgId,omitempty"`
+	DisplayName *string `json:"displayName"`
+	ErpOrgId    *string `json:"erpOrgId"`
 	Found       bool    `json:"found"`
 }
 
@@ -793,7 +842,7 @@ type HealthStatus string
 // InternalTransfer defines model for InternalTransfer.
 type InternalTransfer struct {
 	Amount        Money              `json:"amount"`
-	Concept       *string            `json:"concept,omitempty"`
+	Concept       *string            `json:"concept"`
 	CreatedAt     time.Time          `json:"createdAt"`
 	FromAccountId openapi_types.UUID `json:"fromAccountId"`
 	Id            openapi_types.UUID `json:"id"`
@@ -847,15 +896,15 @@ type Jwks struct {
 // KycCase defines model for KycCase.
 type KycCase struct {
 	Company        *KycCompanyData    `json:"company,omitempty"`
-	DecidedAt      *time.Time         `json:"decidedAt,omitempty"`
-	DecisionReason *string            `json:"decisionReason,omitempty"`
+	DecidedAt      *time.Time         `json:"decidedAt"`
+	DecisionReason *string            `json:"decisionReason"`
 	Documents      []KycDocument      `json:"documents"`
 	Id             openapi_types.UUID `json:"id"`
 	Kind           KycCaseKind        `json:"kind"`
 	OrgId          openapi_types.UUID `json:"orgId"`
 	Person         *KycPersonData     `json:"person,omitempty"`
 	Status         KycStatus          `json:"status"`
-	SubmittedAt    *time.Time         `json:"submittedAt,omitempty"`
+	SubmittedAt    *time.Time         `json:"submittedAt"`
 	UpdatedAt      time.Time          `json:"updatedAt"`
 }
 
@@ -886,7 +935,7 @@ type KycDocument struct {
 	FileName          string             `json:"fileName"`
 	Id                openapi_types.UUID `json:"id"`
 	Kind              KycDocumentKind    `json:"kind"`
-	RepresentativeDni *string            `json:"representativeDni,omitempty"`
+	RepresentativeDni *string            `json:"representativeDni"`
 	SizeBytes         int64              `json:"sizeBytes"`
 }
 
@@ -972,11 +1021,11 @@ type Money struct {
 type Movement struct {
 	AccountId    openapi_types.UUID `json:"accountId"`
 	Amount       Money              `json:"amount"`
-	Concept      *string            `json:"concept,omitempty"`
-	Counterparty *Counterparty      `json:"counterparty,omitempty"`
+	Concept      *string            `json:"concept"`
+	Counterparty Counterparty       `json:"counterparty"`
 	CreatedAt    time.Time          `json:"createdAt"`
 	Direction    MovementDirection  `json:"direction"`
-	Fee          *Money             `json:"fee,omitempty"`
+	Fee          *Money             `json:"fee"`
 	Id           openapi_types.UUID `json:"id"`
 
 	// RefId Id of the payin, payout or internal transfer.
@@ -1006,7 +1055,7 @@ type OrgKind string
 // Organization defines model for Organization.
 type Organization struct {
 	CreatedAt time.Time          `json:"createdAt"`
-	Cuit      *string            `json:"cuit,omitempty"`
+	Cuit      *string            `json:"cuit"`
 	Id        openapi_types.UUID `json:"id"`
 	Kind      OrgKind            `json:"kind"`
 	KycStatus KycStatus          `json:"kycStatus"`
@@ -1026,8 +1075,8 @@ type Payer struct {
 	Cvus      []Cvu                `json:"cvus"`
 	DocNumber string               `json:"docNumber"`
 	DocType   DocType              `json:"docType"`
-	Email     *openapi_types.Email `json:"email,omitempty"`
-	ErpRef    *string              `json:"erpRef,omitempty"`
+	Email     *openapi_types.Email `json:"email"`
+	ErpRef    *string              `json:"erpRef"`
 	Id        openapi_types.UUID   `json:"id"`
 	Name      string               `json:"name"`
 }
@@ -1042,14 +1091,14 @@ type PayerList struct {
 type Payin struct {
 	AccountId          openapi_types.UUID  `json:"accountId"`
 	CreatedAt          time.Time           `json:"createdAt"`
-	CreditedAt         *time.Time          `json:"creditedAt,omitempty"`
+	CreditedAt         *time.Time          `json:"creditedAt"`
 	CvuId              openapi_types.UUID  `json:"cvuId"`
 	Fee                Money               `json:"fee"`
 	Gross              Money               `json:"gross"`
 	Id                 openapi_types.UUID  `json:"id"`
 	Net                Money               `json:"net"`
 	Origin             Counterparty        `json:"origin"`
-	PayerId            *openapi_types.UUID `json:"payerId,omitempty"`
+	PayerId            *openapi_types.UUID `json:"payerId"`
 	ProviderTransferId string              `json:"providerTransferId"`
 	Status             PayinStatus         `json:"status"`
 }
@@ -1061,28 +1110,48 @@ type PayinStatus string
 type Payout struct {
 	AccountId    openapi_types.UUID  `json:"accountId"`
 	Amount       Money               `json:"amount"`
-	ApprovedBy   *openapi_types.UUID `json:"approvedBy,omitempty"`
+	ApprovedBy   *openapi_types.UUID `json:"approvedBy"`
+	Attachments  []PayoutAttachment  `json:"attachments"`
 	Concept      string              `json:"concept"`
 	CreatedAt    time.Time           `json:"createdAt"`
 	CreatedBy    openapi_types.UUID  `json:"createdBy"`
 	Destination  Destination         `json:"destination"`
 	Events       []PayoutEvent       `json:"events"`
-	FailureCode  *string             `json:"failureCode,omitempty"`
+	FailureCode  *string             `json:"failureCode"`
 	Fee          Money               `json:"fee"`
 	Id           openapi_types.UUID  `json:"id"`
-	RejectReason *string             `json:"rejectReason,omitempty"`
-	SettledAt    *time.Time          `json:"settledAt,omitempty"`
+	RejectReason *string             `json:"rejectReason"`
+	SettledAt    *time.Time          `json:"settledAt"`
 	Status       PayoutStatus        `json:"status"`
 	Total        Money               `json:"total"`
 	UpdatedAt    time.Time           `json:"updatedAt"`
 }
 
+// PayoutAttachment defines model for PayoutAttachment.
+type PayoutAttachment struct {
+	ContentType PayoutAttachmentContentType `json:"contentType"`
+	CreatedAt   time.Time                   `json:"createdAt"`
+	FileName    string                      `json:"fileName"`
+	Id          openapi_types.UUID          `json:"id"`
+	SizeBytes   int64                       `json:"sizeBytes"`
+	UploadedBy  openapi_types.UUID          `json:"uploadedBy"`
+}
+
+// PayoutAttachmentContentType defines model for PayoutAttachment.ContentType.
+type PayoutAttachmentContentType string
+
+// PayoutAttachmentUpload defines model for PayoutAttachmentUpload.
+type PayoutAttachmentUpload struct {
+	// File PDF, JPEG or PNG, at most 10 MB (the upload body limit).
+	File openapi_types.File `json:"file"`
+}
+
 // PayoutEvent defines model for PayoutEvent.
 type PayoutEvent struct {
-	ActorId    *openapi_types.UUID `json:"actorId,omitempty"`
+	ActorId    *openapi_types.UUID `json:"actorId"`
 	CreatedAt  time.Time           `json:"createdAt"`
-	FromStatus *PayoutStatus       `json:"fromStatus,omitempty"`
-	Reason     *string             `json:"reason,omitempty"`
+	FromStatus *PayoutStatus       `json:"fromStatus"`
+	Reason     *string             `json:"reason"`
 	ToStatus   PayoutStatus        `json:"toStatus"`
 }
 
@@ -1124,7 +1193,8 @@ type PspTransferWebhookType string
 
 // RealtimeEvent defines model for RealtimeEvent.
 type RealtimeEvent struct {
-	// Data Ids only; clients refetch through the authorized endpoints.
+	// Data Per type (see `streamOrgEvents`); every member is also copied to the top level of the
+	// frame. Clients may refetch through the authorized endpoints.
 	Data       map[string]interface{} `json:"data"`
 	OccurredAt time.Time              `json:"occurredAt"`
 	OrgId      openapi_types.UUID     `json:"orgId"`
@@ -1134,13 +1204,37 @@ type RealtimeEvent struct {
 // RealtimeEventType defines model for RealtimeEventType.
 type RealtimeEventType string
 
+// ReconciliationItem defines model for ReconciliationItem.
+type ReconciliationItem struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	Direction MovementDirection  `json:"direction"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// LedgerAmount Our recorded amount (null when missing in the ledger).
+	LedgerAmount       *Money `json:"ledgerAmount"`
+	ProviderTransferId string `json:"providerTransferId"`
+
+	// PspAmount The PSP statement amount (null when missing at the PSP).
+	PspAmount *Money                   `json:"pspAmount"`
+	Status    ReconciliationItemStatus `json:"status"`
+}
+
+// ReconciliationItemList defines model for ReconciliationItemList.
+type ReconciliationItemList struct {
+	Items      []ReconciliationItem `json:"items"`
+	NextCursor *string              `json:"nextCursor"`
+}
+
+// ReconciliationItemStatus defines model for ReconciliationItemStatus.
+type ReconciliationItemStatus string
+
 // ReconciliationRun defines model for ReconciliationRun.
 type ReconciliationRun struct {
 	CreatedAt            time.Time               `json:"createdAt"`
 	Currency             Currency                `json:"currency"`
 	Day                  openapi_types.Date      `json:"day"`
 	Difference           Money                   `json:"difference"`
-	FinishedAt           *time.Time              `json:"finishedAt,omitempty"`
+	FinishedAt           *time.Time              `json:"finishedAt"`
 	Id                   openapi_types.UUID      `json:"id"`
 	LedgerTotal          Money                   `json:"ledgerTotal"`
 	MatchedCount         int32                   `json:"matchedCount"`
@@ -1174,8 +1268,8 @@ type RegisterDeviceRequest struct {
 
 // RegisterPushTokenRequest defines model for RegisterPushTokenRequest.
 type RegisterPushTokenRequest struct {
-	Platform RegisterPushTokenRequestPlatform `json:"platform"`
-	Token    string                           `json:"token"`
+	Platform *RegisterPushTokenRequestPlatform `json:"platform,omitempty"`
+	Token    string                            `json:"token"`
 }
 
 // RegisterPushTokenRequestPlatform defines model for RegisterPushTokenRequest.Platform.
@@ -1184,6 +1278,11 @@ type RegisterPushTokenRequestPlatform string
 // RejectPayoutRequest defines model for RejectPayoutRequest.
 type RejectPayoutRequest struct {
 	Reason string `json:"reason"`
+}
+
+// ResendCodeRequest defines model for ResendCodeRequest.
+type ResendCodeRequest struct {
+	Email openapi_types.Email `json:"email"`
 }
 
 // Role defines model for Role.
@@ -1272,10 +1371,16 @@ type UpdateKycRequest struct {
 	Person  *KycPersonData  `json:"person,omitempty"`
 }
 
+// UpdateMemberRequest defines model for UpdateMemberRequest.
+type UpdateMemberRequest struct {
+	Role Role `json:"role"`
+}
+
 // UpdatePayerRequest defines model for UpdatePayerRequest.
 type UpdatePayerRequest struct {
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	// Email `null` clears the email; absent keeps it.
+	Email nullable.Nullable[string] `json:"email,omitempty"`
+	Name  *string                   `json:"name,omitempty"`
 }
 
 // User defines model for User.
@@ -1319,6 +1424,9 @@ type PayoutId = openapi_types.UUID
 
 // StepUpTokenHeader defines model for StepUpTokenHeader.
 type StepUpTokenHeader = string
+
+// UserId defines model for UserId.
+type UserId = openapi_types.UUID
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -1419,11 +1527,21 @@ type ListReconciliationRunsParams struct {
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListReconciliationItemsParams defines parameters for ListReconciliationItems.
+type ListReconciliationItemsParams struct {
+	// Cursor Opaque cursor from a previous page's `nextCursor`.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
 // RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
 type RefreshTokenJSONRequestBody = RefreshRequest
+
+// ResendEmailCodeJSONRequestBody defines body for ResendEmailCode for application/json ContentType.
+type ResendEmailCodeJSONRequestBody = ResendCodeRequest
 
 // SignupJSONRequestBody defines body for Signup for application/json ContentType.
 type SignupJSONRequestBody = SignupRequest
@@ -1476,6 +1594,9 @@ type UploadKycDocumentMultipartRequestBody = KycDocumentUpload
 // AddMemberJSONRequestBody defines body for AddMember for application/json ContentType.
 type AddMemberJSONRequestBody = AddMemberRequest
 
+// UpdateMemberJSONRequestBody defines body for UpdateMember for application/json ContentType.
+type UpdateMemberJSONRequestBody = UpdateMemberRequest
+
 // CreatePayerJSONRequestBody defines body for CreatePayer for application/json ContentType.
 type CreatePayerJSONRequestBody = CreatePayerRequest
 
@@ -1491,8 +1612,14 @@ type CreatePayoutJSONRequestBody = CreatePayoutRequest
 // QuotePayoutJSONRequestBody defines body for QuotePayout for application/json ContentType.
 type QuotePayoutJSONRequestBody = PayoutQuoteRequest
 
+// UploadPayoutAttachmentMultipartRequestBody defines body for UploadPayoutAttachment for multipart/form-data ContentType.
+type UploadPayoutAttachmentMultipartRequestBody = PayoutAttachmentUpload
+
 // RejectPayoutJSONRequestBody defines body for RejectPayout for application/json ContentType.
 type RejectPayoutJSONRequestBody = RejectPayoutRequest
+
+// CreateReconciliationRunJSONRequestBody defines body for CreateReconciliationRun for application/json ContentType.
+type CreateReconciliationRunJSONRequestBody = RunReconciliationRequest
 
 // RegisterPushTokenJSONRequestBody defines body for RegisterPushToken for application/json ContentType.
 type RegisterPushTokenJSONRequestBody = RegisterPushTokenRequest
@@ -1511,6 +1638,9 @@ type ServerInterface interface {
 
 	// (POST /auth/refresh)
 	RefreshToken(w http.ResponseWriter, r *http.Request)
+
+	// (POST /auth/resend-code)
+	ResendEmailCode(w http.ResponseWriter, r *http.Request)
 
 	// (POST /auth/signup)
 	Signup(w http.ResponseWriter, r *http.Request)
@@ -1608,8 +1738,17 @@ type ServerInterface interface {
 	// (POST /orgs/{orgId}/members)
 	AddMember(w http.ResponseWriter, r *http.Request, orgId OrgId)
 
+	// (DELETE /orgs/{orgId}/members/{userId})
+	RemoveMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId)
+
+	// (PATCH /orgs/{orgId}/members/{userId})
+	UpdateMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId)
+
 	// (GET /orgs/{orgId}/movements)
 	ListMovements(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListMovementsParams)
+
+	// (GET /orgs/{orgId}/movements/{movementId})
+	GetMovement(w http.ResponseWriter, r *http.Request, orgId OrgId, movementId openapi_types.UUID)
 
 	// (GET /orgs/{orgId}/payers)
 	ListPayers(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListPayersParams)
@@ -1641,6 +1780,9 @@ type ServerInterface interface {
 	// (POST /orgs/{orgId}/payouts/{payoutId}/approve)
 	ApprovePayout(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId, params ApprovePayoutParams)
 
+	// (POST /orgs/{orgId}/payouts/{payoutId}/attachments)
+	UploadPayoutAttachment(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId)
+
 	// (POST /orgs/{orgId}/payouts/{payoutId}/cancel)
 	CancelPayout(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId)
 
@@ -1652,6 +1794,12 @@ type ServerInterface interface {
 
 	// (GET /orgs/{orgId}/reconciliation/runs)
 	ListReconciliationRuns(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListReconciliationRunsParams)
+
+	// (POST /orgs/{orgId}/reconciliation/runs)
+	CreateReconciliationRun(w http.ResponseWriter, r *http.Request, orgId OrgId)
+
+	// (GET /orgs/{orgId}/reconciliation/runs/{runId}/items)
+	ListReconciliationItems(w http.ResponseWriter, r *http.Request, orgId OrgId, runId openapi_types.UUID, params ListReconciliationItemsParams)
 
 	// (POST /push-tokens)
 	RegisterPushToken(w http.ResponseWriter, r *http.Request)
@@ -1678,6 +1826,11 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 
 // (POST /auth/refresh)
 func (_ Unimplemented) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /auth/resend-code)
+func (_ Unimplemented) ResendEmailCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1841,8 +1994,23 @@ func (_ Unimplemented) AddMember(w http.ResponseWriter, r *http.Request, orgId O
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// (DELETE /orgs/{orgId}/members/{userId})
+func (_ Unimplemented) RemoveMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PATCH /orgs/{orgId}/members/{userId})
+func (_ Unimplemented) UpdateMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /orgs/{orgId}/movements)
 func (_ Unimplemented) ListMovements(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListMovementsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /orgs/{orgId}/movements/{movementId})
+func (_ Unimplemented) GetMovement(w http.ResponseWriter, r *http.Request, orgId OrgId, movementId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1896,6 +2064,11 @@ func (_ Unimplemented) ApprovePayout(w http.ResponseWriter, r *http.Request, org
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// (POST /orgs/{orgId}/payouts/{payoutId}/attachments)
+func (_ Unimplemented) UploadPayoutAttachment(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (POST /orgs/{orgId}/payouts/{payoutId}/cancel)
 func (_ Unimplemented) CancelPayout(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1913,6 +2086,16 @@ func (_ Unimplemented) RejectPayout(w http.ResponseWriter, r *http.Request, orgI
 
 // (GET /orgs/{orgId}/reconciliation/runs)
 func (_ Unimplemented) ListReconciliationRuns(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListReconciliationRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /orgs/{orgId}/reconciliation/runs)
+func (_ Unimplemented) CreateReconciliationRun(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /orgs/{orgId}/reconciliation/runs/{runId}/items)
+func (_ Unimplemented) ListReconciliationItems(w http.ResponseWriter, r *http.Request, orgId OrgId, runId openapi_types.UUID, params ListReconciliationItemsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1977,6 +2160,20 @@ func (siw *ServerInterfaceWrapper) RefreshToken(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RefreshToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResendEmailCode operation middleware
+func (siw *ServerInterfaceWrapper) ResendEmailCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResendEmailCode(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2837,6 +3034,76 @@ func (siw *ServerInterfaceWrapper) AddMember(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// RemoveMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveMember(w, r, orgId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMember operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMember(w, r, orgId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMovements operation middleware
 func (siw *ServerInterfaceWrapper) ListMovements(w http.ResponseWriter, r *http.Request) {
 
@@ -2961,6 +3228,41 @@ func (siw *ServerInterfaceWrapper) ListMovements(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMovements(w, r, orgId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMovement operation middleware
+func (siw *ServerInterfaceWrapper) GetMovement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "movementId" -------------
+	var movementId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "movementId", chi.URLParam(r, "movementId"), &movementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "movementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMovement(w, r, orgId, movementId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3492,6 +3794,41 @@ func (siw *ServerInterfaceWrapper) ApprovePayout(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// UploadPayoutAttachment operation middleware
+func (siw *ServerInterfaceWrapper) UploadPayoutAttachment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "payoutId" -------------
+	var payoutId PayoutId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "payoutId", chi.URLParam(r, "payoutId"), &payoutId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "payoutId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadPayoutAttachment(w, r, orgId, payoutId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CancelPayout operation middleware
 func (siw *ServerInterfaceWrapper) CancelPayout(w http.ResponseWriter, r *http.Request) {
 
@@ -3693,6 +4030,96 @@ func (siw *ServerInterfaceWrapper) ListReconciliationRuns(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// CreateReconciliationRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateReconciliationRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReconciliationRun(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListReconciliationItems operation middleware
+func (siw *ServerInterfaceWrapper) ListReconciliationItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReconciliationItemsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReconciliationItems(w, r, orgId, runId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RegisterPushToken operation middleware
 func (siw *ServerInterfaceWrapper) RegisterPushToken(w http.ResponseWriter, r *http.Request) {
 
@@ -3830,6 +4257,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/verify-email", wrapper.VerifyEmail)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/resend-code", wrapper.ResendEmailCode)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
 	})
 	r.Group(func(r chi.Router) {
@@ -3867,6 +4297,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orgs/{orgId}/members", wrapper.AddMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/orgs/{orgId}/members/{userId}", wrapper.RemoveMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/orgs/{orgId}/members/{userId}", wrapper.UpdateMember)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orgs/{orgId}/invites", wrapper.CreateInvite)
@@ -3950,6 +4386,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/orgs/{orgId}/payouts/{payoutId}/cancel", wrapper.CancelPayout)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orgs/{orgId}/payouts/{payoutId}/attachments", wrapper.UploadPayoutAttachment)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orgs/{orgId}/payouts/{payoutId}/proof.pdf", wrapper.GetPayoutProof)
 	})
 	r.Group(func(r chi.Router) {
@@ -3959,7 +4398,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/orgs/{orgId}/movements", wrapper.ListMovements)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orgs/{orgId}/movements/{movementId}", wrapper.GetMovement)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orgs/{orgId}/reconciliation/runs", wrapper.ListReconciliationRuns)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orgs/{orgId}/reconciliation/runs", wrapper.CreateReconciliationRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orgs/{orgId}/reconciliation/runs/{runId}/items", wrapper.ListReconciliationItems)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/internal/reconciliation/run", wrapper.RunReconciliation)
@@ -4119,6 +4567,39 @@ type RefreshTokendefaultJSONResponse struct {
 }
 
 func (response RefreshTokendefaultJSONResponse) VisitRefreshTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResendEmailCodeRequestObject struct {
+	Body *ResendEmailCodeJSONRequestBody
+}
+
+type ResendEmailCodeResponseObject interface {
+	VisitResendEmailCodeResponse(w http.ResponseWriter) error
+}
+
+type ResendEmailCode202Response struct {
+}
+
+func (response ResendEmailCode202Response) VisitResendEmailCodeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ResendEmailCodedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ResendEmailCodedefaultJSONResponse) VisitResendEmailCodeResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5380,6 +5861,81 @@ func (response AddMemberdefaultJSONResponse) VisitAddMemberResponse(w http.Respo
 	return err
 }
 
+type RemoveMemberRequestObject struct {
+	OrgId  OrgId  `json:"orgId"`
+	UserId UserId `json:"userId"`
+}
+
+type RemoveMemberResponseObject interface {
+	VisitRemoveMemberResponse(w http.ResponseWriter) error
+}
+
+type RemoveMember204Response struct {
+}
+
+func (response RemoveMember204Response) VisitRemoveMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveMemberdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RemoveMemberdefaultJSONResponse) VisitRemoveMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMemberRequestObject struct {
+	OrgId  OrgId  `json:"orgId"`
+	UserId UserId `json:"userId"`
+	Body   *UpdateMemberJSONRequestBody
+}
+
+type UpdateMemberResponseObject interface {
+	VisitUpdateMemberResponse(w http.ResponseWriter) error
+}
+
+type UpdateMember200JSONResponse Member
+
+func (response UpdateMember200JSONResponse) VisitUpdateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMemberdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateMemberdefaultJSONResponse) VisitUpdateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMovementsRequestObject struct {
 	OrgId  OrgId `json:"orgId"`
 	Params ListMovementsParams
@@ -5409,6 +5965,46 @@ type ListMovementsdefaultJSONResponse struct {
 }
 
 func (response ListMovementsdefaultJSONResponse) VisitListMovementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMovementRequestObject struct {
+	OrgId      OrgId              `json:"orgId"`
+	MovementId openapi_types.UUID `json:"movementId"`
+}
+
+type GetMovementResponseObject interface {
+	VisitGetMovementResponse(w http.ResponseWriter) error
+}
+
+type GetMovement200JSONResponse Movement
+
+func (response GetMovement200JSONResponse) VisitGetMovementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMovementdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetMovementdefaultJSONResponse) VisitGetMovementResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5825,6 +6421,47 @@ func (response ApprovePayoutdefaultJSONResponse) VisitApprovePayoutResponse(w ht
 	return err
 }
 
+type UploadPayoutAttachmentRequestObject struct {
+	OrgId    OrgId    `json:"orgId"`
+	PayoutId PayoutId `json:"payoutId"`
+	Body     *multipart.Reader
+}
+
+type UploadPayoutAttachmentResponseObject interface {
+	VisitUploadPayoutAttachmentResponse(w http.ResponseWriter) error
+}
+
+type UploadPayoutAttachment201JSONResponse PayoutAttachment
+
+func (response UploadPayoutAttachment201JSONResponse) VisitUploadPayoutAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadPayoutAttachmentdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UploadPayoutAttachmentdefaultJSONResponse) VisitUploadPayoutAttachmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CancelPayoutRequestObject struct {
 	OrgId    OrgId    `json:"orgId"`
 	PayoutId PayoutId `json:"payoutId"`
@@ -5993,6 +6630,87 @@ func (response ListReconciliationRunsdefaultJSONResponse) VisitListReconciliatio
 	return err
 }
 
+type CreateReconciliationRunRequestObject struct {
+	OrgId OrgId `json:"orgId"`
+	Body  *CreateReconciliationRunJSONRequestBody
+}
+
+type CreateReconciliationRunResponseObject interface {
+	VisitCreateReconciliationRunResponse(w http.ResponseWriter) error
+}
+
+type CreateReconciliationRun202JSONResponse ReconciliationRun
+
+func (response CreateReconciliationRun202JSONResponse) VisitCreateReconciliationRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReconciliationRundefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateReconciliationRundefaultJSONResponse) VisitCreateReconciliationRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReconciliationItemsRequestObject struct {
+	OrgId  OrgId              `json:"orgId"`
+	RunId  openapi_types.UUID `json:"runId"`
+	Params ListReconciliationItemsParams
+}
+
+type ListReconciliationItemsResponseObject interface {
+	VisitListReconciliationItemsResponse(w http.ResponseWriter) error
+}
+
+type ListReconciliationItems200JSONResponse ReconciliationItemList
+
+func (response ListReconciliationItems200JSONResponse) VisitListReconciliationItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReconciliationItemsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListReconciliationItemsdefaultJSONResponse) VisitListReconciliationItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RegisterPushTokenRequestObject struct {
 	Body *RegisterPushTokenJSONRequestBody
 }
@@ -6040,6 +6758,9 @@ type StrictServerInterface interface {
 
 	// (POST /auth/refresh)
 	RefreshToken(ctx context.Context, request RefreshTokenRequestObject) (RefreshTokenResponseObject, error)
+
+	// (POST /auth/resend-code)
+	ResendEmailCode(ctx context.Context, request ResendEmailCodeRequestObject) (ResendEmailCodeResponseObject, error)
 
 	// (POST /auth/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
@@ -6137,8 +6858,17 @@ type StrictServerInterface interface {
 	// (POST /orgs/{orgId}/members)
 	AddMember(ctx context.Context, request AddMemberRequestObject) (AddMemberResponseObject, error)
 
+	// (DELETE /orgs/{orgId}/members/{userId})
+	RemoveMember(ctx context.Context, request RemoveMemberRequestObject) (RemoveMemberResponseObject, error)
+
+	// (PATCH /orgs/{orgId}/members/{userId})
+	UpdateMember(ctx context.Context, request UpdateMemberRequestObject) (UpdateMemberResponseObject, error)
+
 	// (GET /orgs/{orgId}/movements)
 	ListMovements(ctx context.Context, request ListMovementsRequestObject) (ListMovementsResponseObject, error)
+
+	// (GET /orgs/{orgId}/movements/{movementId})
+	GetMovement(ctx context.Context, request GetMovementRequestObject) (GetMovementResponseObject, error)
 
 	// (GET /orgs/{orgId}/payers)
 	ListPayers(ctx context.Context, request ListPayersRequestObject) (ListPayersResponseObject, error)
@@ -6170,6 +6900,9 @@ type StrictServerInterface interface {
 	// (POST /orgs/{orgId}/payouts/{payoutId}/approve)
 	ApprovePayout(ctx context.Context, request ApprovePayoutRequestObject) (ApprovePayoutResponseObject, error)
 
+	// (POST /orgs/{orgId}/payouts/{payoutId}/attachments)
+	UploadPayoutAttachment(ctx context.Context, request UploadPayoutAttachmentRequestObject) (UploadPayoutAttachmentResponseObject, error)
+
 	// (POST /orgs/{orgId}/payouts/{payoutId}/cancel)
 	CancelPayout(ctx context.Context, request CancelPayoutRequestObject) (CancelPayoutResponseObject, error)
 
@@ -6181,6 +6914,12 @@ type StrictServerInterface interface {
 
 	// (GET /orgs/{orgId}/reconciliation/runs)
 	ListReconciliationRuns(ctx context.Context, request ListReconciliationRunsRequestObject) (ListReconciliationRunsResponseObject, error)
+
+	// (POST /orgs/{orgId}/reconciliation/runs)
+	CreateReconciliationRun(ctx context.Context, request CreateReconciliationRunRequestObject) (CreateReconciliationRunResponseObject, error)
+
+	// (GET /orgs/{orgId}/reconciliation/runs/{runId}/items)
+	ListReconciliationItems(ctx context.Context, request ListReconciliationItemsRequestObject) (ListReconciliationItemsResponseObject, error)
 
 	// (POST /push-tokens)
 	RegisterPushToken(ctx context.Context, request RegisterPushTokenRequestObject) (RegisterPushTokenResponseObject, error)
@@ -6328,6 +7067,37 @@ func (sh *strictHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshTokenResponseObject); ok {
 		if err := validResponse.VisitRefreshTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResendEmailCode operation middleware
+func (sh *strictHandler) ResendEmailCode(w http.ResponseWriter, r *http.Request) {
+	var request ResendEmailCodeRequestObject
+
+	var body ResendEmailCodeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResendEmailCode(ctx, request.(ResendEmailCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResendEmailCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResendEmailCodeResponseObject); ok {
+		if err := validResponse.VisitResendEmailCodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7273,6 +8043,67 @@ func (sh *strictHandler) AddMember(w http.ResponseWriter, r *http.Request, orgId
 	}
 }
 
+// RemoveMember operation middleware
+func (sh *strictHandler) RemoveMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId) {
+	var request RemoveMemberRequestObject
+
+	request.OrgId = orgId
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveMember(ctx, request.(RemoveMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveMemberResponseObject); ok {
+		if err := validResponse.VisitRemoveMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMember operation middleware
+func (sh *strictHandler) UpdateMember(w http.ResponseWriter, r *http.Request, orgId OrgId, userId UserId) {
+	var request UpdateMemberRequestObject
+
+	request.OrgId = orgId
+	request.UserId = userId
+
+	var body UpdateMemberJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMember(ctx, request.(UpdateMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMemberResponseObject); ok {
+		if err := validResponse.VisitUpdateMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMovements operation middleware
 func (sh *strictHandler) ListMovements(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListMovementsParams) {
 	var request ListMovementsRequestObject
@@ -7293,6 +8124,33 @@ func (sh *strictHandler) ListMovements(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMovementsResponseObject); ok {
 		if err := validResponse.VisitListMovementsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMovement operation middleware
+func (sh *strictHandler) GetMovement(w http.ResponseWriter, r *http.Request, orgId OrgId, movementId openapi_types.UUID) {
+	var request GetMovementRequestObject
+
+	request.OrgId = orgId
+	request.MovementId = movementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMovement(ctx, request.(GetMovementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMovement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMovementResponseObject); ok {
+		if err := validResponse.VisitGetMovementResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7605,6 +8463,40 @@ func (sh *strictHandler) ApprovePayout(w http.ResponseWriter, r *http.Request, o
 	}
 }
 
+// UploadPayoutAttachment operation middleware
+func (sh *strictHandler) UploadPayoutAttachment(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId) {
+	var request UploadPayoutAttachmentRequestObject
+
+	request.OrgId = orgId
+	request.PayoutId = payoutId
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadPayoutAttachment(ctx, request.(UploadPayoutAttachmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadPayoutAttachment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadPayoutAttachmentResponseObject); ok {
+		if err := validResponse.VisitUploadPayoutAttachmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CancelPayout operation middleware
 func (sh *strictHandler) CancelPayout(w http.ResponseWriter, r *http.Request, orgId OrgId, payoutId PayoutId) {
 	var request CancelPayoutRequestObject
@@ -7714,6 +8606,67 @@ func (sh *strictHandler) ListReconciliationRuns(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListReconciliationRunsResponseObject); ok {
 		if err := validResponse.VisitListReconciliationRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateReconciliationRun operation middleware
+func (sh *strictHandler) CreateReconciliationRun(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request CreateReconciliationRunRequestObject
+
+	request.OrgId = orgId
+
+	var body CreateReconciliationRunJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReconciliationRun(ctx, request.(CreateReconciliationRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReconciliationRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReconciliationRunResponseObject); ok {
+		if err := validResponse.VisitCreateReconciliationRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListReconciliationItems operation middleware
+func (sh *strictHandler) ListReconciliationItems(w http.ResponseWriter, r *http.Request, orgId OrgId, runId openapi_types.UUID, params ListReconciliationItemsParams) {
+	var request ListReconciliationItemsRequestObject
+
+	request.OrgId = orgId
+	request.RunId = runId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReconciliationItems(ctx, request.(ListReconciliationItemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReconciliationItems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReconciliationItemsResponseObject); ok {
+		if err := validResponse.VisitListReconciliationItemsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

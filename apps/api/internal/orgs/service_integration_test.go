@@ -286,3 +286,135 @@ func TestOtherTenant(t *testing.T) {
 		t.Fatalf("/me of ana %+v %v", me, err)
 	}
 }
+
+// Role changes and removals: never above the caller, never losing the last admin, tenant
+// scoped (a member of another org is member.not_found), audited.
+func TestUpdateAndRemoveMembers(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, false)
+	ctx := t.Context()
+	ana := e.user(t, "ana@example.com")
+	org, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Constructora Sur"})
+	admin := in(ana, org.ID, auth.RoleAdmin)
+	bruno := e.user(t, "bruno@example.com")
+	if _, err := e.orgs.AddMember(ctx, admin, orgs.MemberInput{Email: "bruno@example.com", Role: auth.RoleOperator}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The only admin cannot demote or remove themselves.
+	_, err := e.orgs.UpdateMemberRole(ctx, admin, ana.UserID, auth.RoleViewer)
+	wantCode(t, err, apperr.CodeLastAdmin)
+	wantCode(t, e.orgs.RemoveMember(ctx, admin, ana.UserID), apperr.CodeLastAdmin)
+
+	// An approver cannot grant admin nor touch an admin.
+	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleApprover), bruno.UserID, auth.RoleAdmin)
+	wantCode(t, err, apperr.CodeRoleEscalation)
+	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleApprover), ana.UserID, auth.RoleViewer)
+	wantCode(t, err, apperr.CodeRoleEscalation)
+
+	m, err := e.orgs.UpdateMemberRole(ctx, admin, bruno.UserID, auth.RoleAdmin)
+	if err != nil || m.Role != auth.RoleAdmin || m.Email != "bruno@example.com" {
+		t.Fatalf("promote %+v %v", m, err)
+	}
+	// Two admins now: ana can step down, then bruno is the last one.
+	if _, err := e.orgs.UpdateMemberRole(ctx, admin, ana.UserID, auth.RoleApprover); err != nil {
+		t.Fatalf("demote with another admin: %v", err)
+	}
+	wantCode(t, e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), bruno.UserID), apperr.CodeLastAdmin)
+	if err := e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	members, _ := e.orgs.ListMembers(ctx, in(bruno, org.ID, auth.RoleAdmin))
+	if len(members) != 1 || members[0].UserID != bruno.UserID {
+		t.Fatalf("members %+v", members)
+	}
+	wantCode(t, e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID), apperr.CodeMemberNotFound)
+
+	// Another org's member is not found from here (T).
+	other, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Otra SA"})
+	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID, auth.RoleViewer)
+	wantCode(t, err, apperr.CodeMemberNotFound)
+	if _, err := e.orgs.Get(ctx, in(ana, other.ID, auth.RoleAdmin)); err != nil {
+		t.Fatal(err)
+	}
+	var audits int
+	if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM audit_log WHERE org_id = $1 AND action IN ('member.role_change', 'member.remove')", org.ID).Scan(&audits); err != nil || audits != 3 {
+		t.Fatalf("audit rows %d (%v)", audits, err)
+	}
+}
+
+// Concurrent demotions of the only two admins: exactly one succeeds (the count locks).
+func TestConcurrentDemotionsKeepOneAdmin(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, false)
+	ctx := t.Context()
+	ana := e.user(t, "ana@example.com")
+	org, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Constructora Sur"})
+	bruno := e.user(t, "bruno@example.com")
+	if _, err := e.orgs.AddMember(ctx, in(ana, org.ID, auth.RoleAdmin), orgs.MemberInput{Email: "bruno@example.com", Role: auth.RoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i, pair := range [][2]auth.Principal{{ana, bruno}, {bruno, ana}} {
+		wg.Go(func() {
+			_, errs[i] = e.orgs.UpdateMemberRole(ctx, in(pair[0], org.ID, auth.RoleAdmin), pair[1].UserID, auth.RoleViewer)
+		})
+	}
+	wg.Wait()
+	ok := 0
+	for _, err := range errs {
+		if err == nil {
+			ok++
+		} else if !apperr.IsCode(err, apperr.CodeLastAdmin) {
+			t.Fatalf("unexpected: %v", err)
+		}
+	}
+	var admins int
+	if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE org_id = $1 AND role = 'admin'", org.ID).Scan(&admins); err != nil || ok != 1 || admins != 1 {
+		t.Fatalf("ok %d admins %d (%v)", ok, admins, err)
+	}
+}
+
+// KYC approval copies the verified identity onto the org: the company's CUIT and legal name
+// (so the ERP candidate lookup by CUIT works) or the person's DNI and name.
+func TestApplyVerifiedIdentity(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, false)
+	ctx := t.Context()
+	ana := e.user(t, "ana@example.com")
+	org, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Nombre provisorio"})
+	apply := func(id orgs.VerifiedIdentity) error {
+		tx, err := e.pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if err := e.orgs.ApplyVerifiedIdentity(ctx, tx, org.ID, id); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	if err := apply(orgs.VerifiedIdentity{LegalName: " Desarrollos Del Sur SA ", DocType: orgs.DocTypeCUIT, DocNumber: "30712345678"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := e.orgs.Get(ctx, in(ana, org.ID, auth.RoleAdmin))
+	if got.LegalName != "Desarrollos Del Sur SA" || got.CUIT == nil || *got.CUIT != "30712345678" {
+		t.Fatalf("org %+v", got)
+	}
+	if c, _ := e.orgs.OrgCUIT(ctx, org.ID); c != "30712345678" {
+		t.Fatalf("OrgCUIT %q", c)
+	}
+	// A DNI never lands in the CUIT column (it keeps the last verified CUIT).
+	if err := apply(orgs.VerifiedIdentity{LegalName: "Ana Pérez", DocType: orgs.DocTypeDNI, DocNumber: "30111222"}); err != nil {
+		t.Fatal(err)
+	}
+	var docType, docNumber string
+	if err := e.pool.QueryRow(ctx, "SELECT doc_type, doc_number FROM organizations WHERE id = $1", org.ID).Scan(&docType, &docNumber); err != nil || docType != "dni" || docNumber != "30111222" {
+		t.Fatalf("doc %s/%s (%v)", docType, docNumber, err)
+	}
+	wantCode(t, apply(orgs.VerifiedIdentity{LegalName: "X", DocType: orgs.DocTypeCUIT, DocNumber: "30712345678"}), apperr.CodeValidation)
+	tx, _ := e.pool.Begin(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
+	wantCode(t, e.orgs.ApplyVerifiedIdentity(ctx, tx, ids.New(), orgs.VerifiedIdentity{LegalName: "Nadie SA", DocType: orgs.DocTypeCUIT, DocNumber: "30712345678"}), apperr.CodeOrgNotFound)
+}

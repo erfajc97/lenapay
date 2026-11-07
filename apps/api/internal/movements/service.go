@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/movements/store"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
 )
@@ -18,6 +20,8 @@ import (
 type Service interface {
 	// List returns p.OrgID's movements, newest first.
 	List(ctx context.Context, p auth.Principal, f Filter) (page.Page[Movement], error)
+	// Get returns one of p.OrgID's movements (movement.not_found when missing or foreign).
+	Get(ctx context.Context, p auth.Principal, id uuid.UUID) (Movement, error)
 }
 
 // Deps are the collaborators of the movements service.
@@ -58,6 +62,17 @@ func (s *service) List(ctx context.Context, p auth.Principal, f Filter) (page.Pa
 	return page.Build(items, f.Page.Limit, func(m Movement) page.Position {
 		return page.Position{CreatedAt: m.CreatedAt, ID: m.ID}
 	}), nil
+}
+
+func (s *service) Get(ctx context.Context, p auth.Principal, id uuid.UUID) (Movement, error) {
+	row, err := store.New(s.deps.Pool).GetMovement(ctx, store.GetMovementParams{ID: id, OrgID: &p.OrgID})
+	if db.IsNoRows(err) {
+		return Movement{}, apperr.New(apperr.CodeMovementNotFound, map[string]any{"movementId": id.String()})
+	}
+	if err != nil {
+		return Movement{}, fmt.Errorf("movements: get: %w", err)
+	}
+	return toMovement(store.ListMovementsRow(row)), nil
 }
 
 // window turns inclusive business dates into the half-open instant range

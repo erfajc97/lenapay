@@ -163,7 +163,7 @@ func (s *service) setArchived(ctx context.Context, tx pgx.Tx, acc store.Account,
 		return nil
 	}
 	if Kind(acc.Kind) != KindProject {
-		return apperr.New(apperr.CodeValidation, map[string]any{"field": "archived", "reason": "not_project_account"})
+		return apperr.New(apperr.CodeAccountNotArchivable, map[string]any{"kind": acc.Kind})
 	}
 	balances, err := s.deps.Ledger.LockBalances(ctx, tx, []uuid.UUID{acc.ID})
 	if err != nil {

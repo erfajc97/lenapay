@@ -2,7 +2,6 @@ package kyc
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
@@ -72,52 +71,6 @@ func TestMissingItems(t *testing.T) {
 				t.Fatalf("missing %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-// A13: the real type comes from the magic bytes; SVG, HTML and a renamed file are refused.
-func TestSniffType(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		content string
-		want    string
-	}{
-		{"pdf", "%PDF-1.7\n...", TypePDF},
-		{"jpeg", "\xFF\xD8\xFF\xE0rest", TypeJPEG},
-		{"png", "\x89PNG\r\n\x1a\nrest", TypePNG},
-		{"svg", `<svg xmlns="http://www.w3.org/2000/svg"></svg>`, ""},
-		{"html", "<!doctype html><script>", ""},
-		{"truncated png header", "\x89PNG\r\n", ""},
-		{"empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := sniffType([]byte(tt.content)); got != tt.want {
-				t.Fatalf("sniffType = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCleanFileName(t *testing.T) {
-	t.Parallel()
-	tests := []struct{ in, want string }{
-		{"estatuto.pdf", "estatuto.pdf"},
-		{"../../etc/passwd", "passwd"},
-		{`C:\Users\ana\dni frente.jpg`, "dni frente.jpg"},
-		{"evil\x00name\n.png", "evilname.png"},
-		{"", "document"},
-		{"   ", "document"},
-		{"/", "document"},
-		{strings.Repeat("a", 200), strings.Repeat("a", 200)},
-		{strings.Repeat("ñ", 201), strings.Repeat("ñ", 200)},
-	}
-	for _, tt := range tests {
-		if got := cleanFileName(tt.in); got != tt.want {
-			t.Errorf("cleanFileName(%q) = %q, want %q", tt.in, got, tt.want)
-		}
 	}
 }
 

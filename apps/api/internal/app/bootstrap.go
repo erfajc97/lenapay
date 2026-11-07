@@ -8,6 +8,7 @@ import (
 	erpfake "github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
 	kycfake "github.com/erfajc97/lenapay/apps/api/internal/kyc/provider/fake"
 	notifyfake "github.com/erfajc97/lenapay/apps/api/internal/notifications/provider/fake"
+	payoutfake "github.com/erfajc97/lenapay/apps/api/internal/payouts/provider/fake"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
@@ -42,6 +43,7 @@ func FakePorts(cfg config.Config) Ports {
 		KYCDocuments: kycfake.NewDocumentStore(),
 		ERP:          erpfake.NewDirectory(cfg.ERPFixturesDir),
 		Sender:       notifyfake.NewSender(cfg.DevInboxEnabled),
+		Documents:    payoutfake.NewDiskDocumentStore(cfg.DocumentsDir),
 	}
 }
 

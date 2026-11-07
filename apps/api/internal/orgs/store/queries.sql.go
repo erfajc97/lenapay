@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const applyVerifiedIdentity = `-- name: ApplyVerifiedIdentity :execrows
+UPDATE organizations
+SET legal_name = $1, cuit = COALESCE($2, cuit),
+    doc_type = $3, doc_number = $4, updated_at = $5
+WHERE id = $6
+`
+
+type ApplyVerifiedIdentityParams struct {
+	LegalName string
+	Cuit      *string
+	DocType   *string
+	DocNumber *string
+	UpdatedAt time.Time
+	ID        uuid.UUID
+}
+
+// KYC approval copies the verified identity onto the org (R-KYC-3, R-ERP-1 lookup by CUIT).
+func (q *Queries) ApplyVerifiedIdentity(ctx context.Context, arg ApplyVerifiedIdentityParams) (int64, error) {
+	result, err := q.db.Exec(ctx, applyVerifiedIdentity,
+		arg.LegalName,
+		arg.Cuit,
+		arg.DocType,
+		arg.DocNumber,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countAdminsForUpdate = `-- name: CountAdminsForUpdate :one
 SELECT count(*) FROM (
     SELECT 1 FROM memberships WHERE org_id = $1 AND role = 'admin' FOR UPDATE
@@ -35,6 +67,23 @@ func (q *Queries) CountPersonalOrgsCreatedBy(ctx context.Context, createdBy uuid
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const deleteMembership = `-- name: DeleteMembership :execrows
+DELETE FROM memberships WHERE org_id = $1 AND user_id = $2
+`
+
+type DeleteMembershipParams struct {
+	OrgID  uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMembership, arg.OrgID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getInviteByTokenHashForUpdate = `-- name: GetInviteByTokenHashForUpdate :one
@@ -112,8 +161,30 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 	return i, err
 }
 
+const getMembershipForUpdate = `-- name: GetMembershipForUpdate :one
+SELECT org_id, user_id, role, created_at, updated_at FROM memberships WHERE org_id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type GetMembershipForUpdateParams struct {
+	OrgID  uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) GetMembershipForUpdate(ctx context.Context, arg GetMembershipForUpdateParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, getMembershipForUpdate, arg.OrgID, arg.UserID)
+	var i Membership
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getOrganization = `-- name: GetOrganization :one
-SELECT id, kind, legal_name, cuit, kyc_status, fee_plan_id, created_by, created_at, updated_at FROM organizations WHERE id = $1
+SELECT id, kind, legal_name, cuit, kyc_status, fee_plan_id, created_by, created_at, updated_at, doc_type, doc_number FROM organizations WHERE id = $1
 `
 
 func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error) {
@@ -129,12 +200,14 @@ func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (Organizati
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DocType,
+		&i.DocNumber,
 	)
 	return i, err
 }
 
 const getOrganizationForUser = `-- name: GetOrganizationForUser :one
-SELECT o.id, o.kind, o.legal_name, o.cuit, o.kyc_status, o.fee_plan_id, o.created_by, o.created_at, o.updated_at, m.role
+SELECT o.id, o.kind, o.legal_name, o.cuit, o.kyc_status, o.fee_plan_id, o.created_by, o.created_at, o.updated_at, o.doc_type, o.doc_number, m.role
 FROM organizations o
 JOIN memberships m ON m.org_id = o.id
 WHERE o.id = $1 AND m.user_id = $2
@@ -155,6 +228,8 @@ type GetOrganizationForUserRow struct {
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DocType   *string
+	DocNumber *string
 	Role      string
 }
 
@@ -171,6 +246,8 @@ func (q *Queries) GetOrganizationForUser(ctx context.Context, arg GetOrganizatio
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DocType,
+		&i.DocNumber,
 		&i.Role,
 	)
 	return i, err
@@ -301,7 +378,7 @@ func (q *Queries) ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembe
 }
 
 const listOrganizationsForUser = `-- name: ListOrganizationsForUser :many
-SELECT o.id, o.kind, o.legal_name, o.cuit, o.kyc_status, o.fee_plan_id, o.created_by, o.created_at, o.updated_at, m.role
+SELECT o.id, o.kind, o.legal_name, o.cuit, o.kyc_status, o.fee_plan_id, o.created_by, o.created_at, o.updated_at, o.doc_type, o.doc_number, m.role
 FROM organizations o
 JOIN memberships m ON m.org_id = o.id
 WHERE m.user_id = $1
@@ -318,6 +395,8 @@ type ListOrganizationsForUserRow struct {
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DocType   *string
+	DocNumber *string
 	Role      string
 }
 
@@ -340,6 +419,8 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID uuid.UUID
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DocType,
+			&i.DocNumber,
 			&i.Role,
 		); err != nil {
 			return nil, err

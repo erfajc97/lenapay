@@ -247,8 +247,8 @@ func TestArchiveOnlyEmptyProjectAccounts(t *testing.T) {
 	}
 	for _, a := range mainAcc {
 		if a.Kind == accounts.KindMain {
-			if _, err := e.svc.Update(t.Context(), e.p, a.ID, accounts.UpdateInput{Archived: &yes}); !apperr.IsCode(err, apperr.CodeValidation) {
-				t.Fatalf("archive main account: err = %v, want validation.failed", err)
+			if _, err := e.svc.Update(t.Context(), e.p, a.ID, accounts.UpdateInput{Archived: &yes}); !apperr.IsCode(err, apperr.CodeAccountNotArchivable) {
+				t.Fatalf("archive main account: err = %v, want account.not_archivable", err)
 			}
 		}
 	}

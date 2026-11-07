@@ -16,7 +16,7 @@ Fakes inside apps/api (adapters): KYC, ERP, notifications (email/push), clock.
 - One Go module per app (`apps/api`, `apps/bind-mock`); Go 1.27.
 - One contract: `contracts/openapi.yaml` (OpenAPI 3.0.3). Generates the Go strict server
   (`oapi-codegen`) and the TS client types (`openapi-typescript`) used by the app.
-- Local run: `docker compose up` → postgres:17, api (:8080), bind-mock (:8090). The app runs
+- Local run: `docker compose up` → postgres:17, api (host :18080 → container :8080), bind-mock (:8090). The app runs
   with `npx expo start` in its own terminal (ME14) pointing at `EXPO_PUBLIC_API_URL`.
 
 ## 2. Monorepo layout
@@ -106,10 +106,11 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 
 ## 5. API surface (contract summary)
 
-Auth: `POST /auth/signup`, `/auth/verify-email`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
+Auth: `POST /auth/signup`, `/auth/verify-email`, `/auth/resend-code`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
 `/auth/step-up/challenge`, `/auth/step-up/verify`, `POST /devices`, `GET /.well-known/jwks.json`,
 `GET /me`.
-Orgs: `GET/POST /orgs`, `GET /orgs/{org}`, `GET/POST /orgs/{org}/members`, `POST /orgs/{org}/invites`,
+Orgs: `GET/POST /orgs`, `GET /orgs/{org}`, `GET/POST /orgs/{org}/members`,
+`PATCH/DELETE /orgs/{org}/members/{userId}`, `POST /orgs/{org}/invites`,
 `POST /invites/{token}/accept`.
 KYC: `GET/PUT /orgs/{org}/kyc`, `POST /orgs/{org}/kyc/documents`, `POST /orgs/{org}/kyc/submit`,
 `POST /internal/kyc/{case}/decision` (ops, API key).
@@ -120,11 +121,16 @@ Payers/CVU: `GET/POST /orgs/{org}/payers`, `GET/PATCH /orgs/{org}/payers/{id}`,
 Payins: `POST /webhooks/psp/transfers`, `GET /orgs/{org}/payins/{id}`.
 Payouts: `POST /orgs/{org}/payouts/quote`, `POST /orgs/{org}/payouts`, `GET /orgs/{org}/payouts/{id}`,
 `POST /orgs/{org}/payouts/{id}/approve|reject|cancel`, `GET /orgs/{org}/approvals`,
-`GET /orgs/{org}/payouts/{id}/proof.pdf`, `GET /orgs/{org}/destinations/resolve?to=`.
-Movements: `GET /orgs/{org}/movements?account=&type=&status=&currency=&from=&to=&cursor=`.
-Reconciliation: `GET /orgs/{org}/reconciliation/runs`, `POST /internal/reconciliation/run`.
+`GET /orgs/{org}/payouts/{id}/proof.pdf`, `POST /orgs/{org}/payouts/{id}/attachments`,
+`GET /orgs/{org}/destinations/resolve?to=`.
+Movements: `GET /orgs/{org}/movements?account=&type=&status=&currency=&from=&to=&cursor=`,
+`GET /orgs/{org}/movements/{id}`.
+Reconciliation: `GET/POST /orgs/{org}/reconciliation/runs`, `GET /orgs/{org}/reconciliation/runs/{id}/items`,
+`POST /internal/reconciliation/run`.
 ERP: `GET /orgs/{org}/erp-link/candidate`, `POST /orgs/{org}/erp-link`, `GET /orgs/{org}/erp-link`.
-Realtime/push: `GET /orgs/{org}/events` (SSE), `POST /push-tokens`.
+Realtime/push: `GET /orgs/{org}/events` (SSE: unnamed `message` frames whose data is
+`{type, orgId, occurredAt, data, ...data copied top-level}`; types `payin.credited`, `payout.updated`
+(carries the `payout`), `approval.requested`, `balance.changed`), `POST /push-tokens`.
 Errors: `{ "error": { "code": "payout.insufficient_funds", "message": "...", "details": {} } }`.
 
 ## 6. Auth and security

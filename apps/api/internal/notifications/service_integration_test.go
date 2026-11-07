@@ -107,6 +107,15 @@ func TestPushTokensMoveBetweenUsers(t *testing.T) {
 	if err := e.svc.RegisterPushToken(ctx, auth.Principal{UserID: ana}, "", notifications.PlatformIOS); !apperr.IsCode(err, apperr.CodeValidation) {
 		t.Fatalf("empty token: %v", err)
 	}
+	// web and unknown (the contract default when the client does not say) are stored as given.
+	for _, pl := range []notifications.Platform{notifications.PlatformWeb, notifications.PlatformUnknown} {
+		if err := e.svc.RegisterPushToken(ctx, auth.Principal{UserID: ana}, "ExponentPushToken["+string(pl)+"]", pl); err != nil {
+			t.Fatalf("%s: %v", pl, err)
+		}
+	}
+	if err := e.svc.RegisterPushToken(ctx, auth.Principal{UserID: ana}, "ExponentPushToken[x]", "symbian"); !apperr.IsCode(err, apperr.CodeValidation) {
+		t.Fatalf("unknown platform: %v", err)
+	}
 }
 
 // The outbox entry and its job are written in the fact's transaction: a rollback leaves neither.

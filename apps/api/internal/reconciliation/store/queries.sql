@@ -41,5 +41,15 @@ VALUES (sqlc.arg(id), sqlc.arg(run_id), sqlc.narg(org_id), sqlc.arg(provider_tra
         sqlc.arg(currency), sqlc.narg(psp_amount_minor), sqlc.narg(ledger_amount_minor), sqlc.arg(status),
         sqlc.arg(created_at));
 
--- name: ListItems :many
-SELECT * FROM reconciliation_items WHERE run_id = sqlc.arg(run_id) ORDER BY created_at, id;
+
+-- name: GetOrgRun :one
+SELECT * FROM reconciliation_runs WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
+
+-- name: ListRunItemsPage :many
+-- Items of one run in processing order, keyset-paginated on (created_at, id) ascending.
+SELECT * FROM reconciliation_items
+WHERE run_id = sqlc.arg(run_id)
+  AND (sqlc.narg(cursor_created_at)::timestamptz IS NULL
+       OR (created_at, id) > (sqlc.narg(cursor_created_at)::timestamptz, sqlc.narg(cursor_id)::uuid))
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_limit);

@@ -20,8 +20,14 @@ import (
 // stubService answers the handler with fixed data and records the input it got.
 type stubService struct {
 	Service
-	gotCVU CreateCVUInput
-	gotP   auth.Principal
+	gotCVU    CreateCVUInput
+	gotP      auth.Principal
+	gotUpdate UpdateInput
+}
+
+func (s *stubService) Update(ctx context.Context, p auth.Principal, id uuid.UUID, in UpdateInput) (Payer, error) {
+	s.gotUpdate = in
+	return s.Get(ctx, p, id)
 }
 
 func (s *stubService) CreateCVU(_ context.Context, p auth.Principal, _ uuid.UUID, in CreateCVUInput) (CVU, error) {
@@ -49,7 +55,7 @@ func keys(t *testing.T, v any) []string {
 	return slices.Sorted(maps.Keys(m))
 }
 
-// A5/FT20: responses carry exactly the contract's keys (optional nulls omitted by codegen).
+// A5/FT20: responses carry exactly the contract's keys (nullable members present as null).
 func TestResponsesAreAllowlists(t *testing.T) {
 	t.Parallel()
 	ctx := auth.WithPrincipal(t.Context(), auth.Principal{UserID: uuid.New(), OrgID: uuid.New()})
@@ -59,10 +65,10 @@ func TestResponsesAreAllowlists(t *testing.T) {
 		t.Fatal(err)
 	}
 	payer := res.(api.GetPayer200JSONResponse)
-	if got := strings.Join(keys(t, payer), ","); got != "accountId,createdAt,cvus,docNumber,docType,email,id,name" {
+	if got := strings.Join(keys(t, payer), ","); got != "accountId,createdAt,cvus,docNumber,docType,email,erpRef,id,name" {
 		t.Fatalf("payer keys %s", got)
 	}
-	if got := strings.Join(keys(t, payer.Cvus[0]), ","); got != "accountId,createdAt,currency,cvu,id,share,status" {
+	if got := strings.Join(keys(t, payer.Cvus[0]), ","); got != "accountId,alias,createdAt,currency,cvu,id,payerId,share,status" {
 		t.Fatalf("cvu keys %s", got)
 	}
 	if payer.Cvus[0].Status != api.Active || payer.Cvus[0].Share.QrPayload != "https://l/x?currency=ARS" {
@@ -83,5 +89,33 @@ func TestCreateCvuPassesTheIdempotencyKey(t *testing.T) {
 	}
 	if _, err := NewHandler(stub).CreateCvu(t.Context(), api.CreateCvuRequestObject{}); !apperr.IsCode(err, apperr.CodeUnauthenticated) {
 		t.Fatalf("no principal: %v", err)
+	}
+}
+
+// The PATCH body tells "email": null (clear) from an absent email (keep) and a value (set).
+func TestUpdatePayerEmailPatchSemantics(t *testing.T) {
+	t.Parallel()
+	ctx := auth.WithPrincipal(t.Context(), auth.Principal{UserID: uuid.New(), OrgID: uuid.New()})
+	for _, tt := range []struct {
+		body      string
+		wantClear bool
+		wantEmail string
+	}{
+		{`{"email": null}`, true, ""},
+		{`{"name": "Ana"}`, false, ""},
+		{`{"email": "b@example.com"}`, false, "b@example.com"},
+	} {
+		var body api.UpdatePayerJSONRequestBody
+		if err := json.Unmarshal([]byte(tt.body), &body); err != nil {
+			t.Fatal(err)
+		}
+		stub := &stubService{}
+		if _, err := NewHandler(stub).UpdatePayer(ctx, api.UpdatePayerRequestObject{Body: &body}); err != nil {
+			t.Fatal(err)
+		}
+		got := stub.gotUpdate
+		if got.ClearEmail != tt.wantClear || (tt.wantEmail == "") != (got.Email == nil) || (got.Email != nil && *got.Email != tt.wantEmail) {
+			t.Fatalf("%s: input %+v", tt.body, got)
+		}
 	}
 }

@@ -36,6 +36,7 @@ type Ports struct {
 	KYCDocuments kyc.DocumentStore
 	ERP          erplink.Directory
 	Sender       notifications.Sender
+	Documents    payouts.DocumentStore
 }
 
 // Platform is the shared infrastructure every service gets.
@@ -105,7 +106,7 @@ func NewServices(p Platform, ports Ports) *Services {
 	s.Payouts = payouts.NewService(payouts.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP,
 		Accounts: s.Accounts, Ledger: s.Ledger, Fees: s.Fees, Notifications: s.Notifications,
-		Orgs: s.Orgs, Location: p.Config.Location(),
+		Orgs: s.Orgs, Documents: ports.Documents, Location: p.Config.Location(),
 	})
 	s.Movements = movements.NewService(movements.Deps{Pool: p.Pool, Location: p.Config.Location()})
 	s.Reconciliation = reconciliation.NewService(reconciliation.Deps{

@@ -288,6 +288,8 @@ type Organization struct {
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DocType   *string
+	DocNumber *string
 }
 
 type Payer struct {
@@ -357,6 +359,19 @@ type Payout struct {
 	FailedAt              *time.Time
 }
 
+type PayoutAttachment struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	PayoutID    uuid.UUID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	Sha256      []byte
+	StorageKey  string
+	UploadedBy  uuid.UUID
+	CreatedAt   time.Time
+}
+
 type PayoutEvent struct {
 	ID         uuid.UUID
 	PayoutID   uuid.UUID
@@ -416,6 +431,7 @@ type ReconciliationRun struct {
 	CreatedAt            time.Time
 	StartedAt            *time.Time
 	FinishedAt           *time.Time
+	OrgID                *uuid.UUID
 }
 
 type RefreshToken struct {
