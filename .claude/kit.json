@@ -1,0 +1,27 @@
+{
+  "kitVersion": "0.3.0",
+  "project": "lenapay",
+  "locale": { "code": "en", "ui": "es-AR" },
+  "requirements": { "source": "docs/prd.md", "idScheme": "R-<AREA>-<n>", "checklist": "docs/backlog.md" },
+  "tracking": "backlog",
+  "trackingDocs": { "backlog": "docs/backlog.md", "progress": "docs/progress.md" },
+  "commitStyle": "tags",
+  "rigor": "lite",
+  "coverage": 70,
+  "testRunner": { "api": "go", "bindmock": "go", "mobile": "vitest" },
+  "scopes": {
+    "api":      { "kind": "api",    "stack": "go",   "path": "apps/api",       "mode": "enforce" },
+    "bindmock": { "kind": "api",    "stack": "go",   "path": "apps/bind-mock", "mode": "report" },
+    "mobile":   { "kind": "mobile", "stack": "expo", "path": "apps/mobile",    "mode": "enforce" }
+  },
+  "addons": ["money", "tenancy"],
+  "brand": "docs/brand.md",
+  "commands": {
+    "api":      { "lint": "go vet ./...", "typecheck": "go build ./...", "test": "go test -race ./...", "build": "go build ./..." },
+    "bindmock": { "lint": "go vet ./...", "typecheck": "go build ./...", "test": "go test ./...", "build": "go build ./..." },
+    "mobile":   { "lint": "pnpm lint", "typecheck": "pnpm typecheck", "test": "pnpm test", "build": "n/a" },
+    "e2e": ""
+  },
+  "audit": { "chain": [], "milestone": [] },
+  "seal": false
+}

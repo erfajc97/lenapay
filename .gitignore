@@ -1,0 +1,9 @@
+.env
+node_modules/
+.expo/
+dist/
+bin/
+*.exe
+coverage.out
+.claude/kit-seal.json
+.claude/kit-audit-state.json

@@ -1,0 +1,158 @@
+# Lenapay — Architecture (MVP)
+
+Requirements: `docs/prd.md`. Rules: `CLAUDE.md` (kit blocks G, A, AG, M, ME, addons MO, T, OB).
+
+## 1. Shape
+
+```
+apps/mobile (Expo)  ──HTTPS/JSON + SSE──►  apps/api (Go)  ──►  Postgres 17 (lenapay)
+                                              │  ▲
+                              PSP port (HTTP) │  │ signed webhooks
+                                              ▼  │
+                                         apps/bind-mock (Go)   ← simulates BIND COBRO + CVUCOLLECT
+Fakes inside apps/api (adapters): KYC, ERP, notifications (email/push), clock.
+```
+
+- One Go module per app (`apps/api`, `apps/bind-mock`); Go 1.27.
+- One contract: `contracts/openapi.yaml` (OpenAPI 3.0.3). Generates the Go strict server
+  (`oapi-codegen`) and the TS client types (`openapi-typescript`) used by the app.
+- Local run: `docker compose up` → postgres:17, api (:8080), bind-mock (:8090). The app runs
+  with `npx expo start` in its own terminal (ME14) pointing at `EXPO_PUBLIC_API_URL`.
+
+## 2. Monorepo layout
+
+```
+contracts/openapi.yaml              single source of the API contract
+apps/api/
+  cmd/api/main.go                   wiring only: config → pool → river → adapters → router
+  internal/platform/                config, db (pool, WithTx, serializable retry), httpx (errors,
+                                    middleware, SSE), auth (JWT/JWKS, step-up), idempotency,
+                                    money (Amount{Minor int64, Currency}, split), audit, clock
+  internal/gen/                     oapi-codegen output (do not edit)
+  internal/<feature>/               handler.go · service.go · store.go (+ queries.sql → sqlc gen
+                                    in internal/<feature>/db) · service_test.go · fake_*.go
+     identity  orgs  kyc  accounts  ledger  payers  payins  payouts  fees  reconciliation
+     erplink  movements  notifications  realtime  providers/psp (port + bind http adapter)
+     providers/kyc  providers/erp  providers/notify
+  migrations/                       goose SQL, numbered, hand-written
+  sqlc.yaml                         one sql entry per feature → its own package
+apps/bind-mock/                     fake PSP: REST endpoints shaped like BIND + webhook sender
+                                    + `/_mock/*` control endpoints (simulate incoming transfer,
+                                    force payout failure/timeout, statement)
+apps/mobile/                        Expo Router app (kit M/ME): src/app routes, src/features/*,
+                                    src/shared (api client, queries, ui kit, i18n, theme)
+docs/  prd.md · architecture.md · backlog.md · progress.md · brand.md · decisions.md
+docker-compose.yml · Makefile (gen, test, lint, up, seed)
+```
+
+Feature packages never import each other's internals; cross-feature calls go through the
+exported service interface of the other feature (wired in `main.go`). The ledger is the only
+writer of balances.
+
+## 3. Data model (Postgres)
+
+All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`; timestamps
+`timestamptz` UTC. Tenancy: every org-owned row carries `org_id`; queries filter by it (T).
+
+| Table | Purpose |
+|---|---|
+| `users` | email, password hash (argon2id), email_verified_at, totp_secret?, status |
+| `sessions` / `refresh_tokens` | rotating refresh tokens (hashed), device id |
+| `devices` | device public key for biometric step-up |
+| `email_codes` | verification codes (hashed, expiry) |
+| `organizations` | kind `company`/`personal`, legal name, cuit, kyc_status, fee_plan_id, erp_link |
+| `memberships` | user × org × role |
+| `invites` | email, role, token hash, expires_at |
+| `kyc_cases` / `kyc_documents` | onboarding case per org/person, status, provider ref, files |
+| `accounts` | org_id, kind `main`/`project`/`personal`/`system`, name, archived_at |
+| `ledger_accounts` | (account_id, currency) → ledger account; system accounts: psp_master, fees_revenue, payout_clearing, suspense |
+| `ledger_transactions` | id, kind, ref_type/ref_id, idempotency key, created_by |
+| `ledger_postings` | transaction_id, ledger_account_id, amount (signed); CHECK sum per tx = 0 (deferred trigger) |
+| `ledger_balances` | cached posted + held per ledger account, updated in the same tx with `FOR UPDATE` |
+| `holds` | amount held per payout, released/captured |
+| `payers` | org_id, account_id, name, doc, email, erp_ref? |
+| `cvus` | payer_id or account_id, currency, cvu, alias, psp_ref, status |
+| `psp_webhook_events` | raw body, signature ok, provider event id UNIQUE, processed_at |
+| `payins` | cvu_id, amount, fee, net, origin name/cuit/cbu, provider transfer id UNIQUE, status |
+| `payouts` | org, account, currency, amount, fee, destination snapshot, concept, status, created_by, approved_by, provider attempt id, idempotency key |
+| `payout_events` | status history |
+| `fee_plans` | payin_bps, payout_fixed_minor, payout_bps per currency |
+| `reconciliation_runs` / `reconciliation_items` | per currency/day, counts, difference |
+| `erp_identity_index` | doc_type, doc_number PK → erp_org_id, erp_client_id, display name |
+| `erp_links` | org ↔ erp org, linked_by, linked_at; imported snapshot refs |
+| `idempotency_keys` | (scope, key) PK, request hash, response status/body, expires_at |
+| `audit_log` | actor, action, target, request id, idempotency key, payload hash |
+| `notifications` / `push_tokens` | outbox of user notifications, Expo push tokens |
+| River tables | job queue (`river migrate`) |
+
+## 4. Key flows
+
+- **Payin**: bind-mock POSTs `/webhooks/psp/transfers` with `X-Signature: sha256=<hmac(raw)>` →
+  verify → insert event (dedupe) → enqueue `process_payin` (same tx) → job re-reads the
+  transfer at the PSP (`GET /transfers/{id}`), finds the CVU, posts ledger (psp_master −gross →
+  account +net, fees_revenue +fee) → payin row → notify (SSE via `LISTEN/NOTIFY` + push outbox).
+- **Payout**: `POST /orgs/{org}/payouts` (Idempotency-Key + step-up) → resolve destination at
+  PSP → compute fee → tx: lock balance, hold amount+fee, insert payout `pending_approval`
+  (company) or `approved` (personal) → approver `POST /payouts/{id}/approve` (step-up, not
+  creator) → enqueue `dispatch_payout` → job calls PSP with a per-attempt origin id →
+  settled: capture hold (account −, psp_master +, fees_revenue +) / failed: release hold /
+  timeout or 5xx: status `sending`, `sweep_payouts` re-queries.
+- **Reconciliation**: job `reconcile_master(currency, day)` pulls the PSP statement
+  (`GET /accounts/master/statement`) and matches by provider transfer id against payins and
+  settled payouts.
+- **ERP link**: `GET /orgs/{org}/erp-link/candidate` looks up `erp_identity_index` by CUIT →
+  `POST /orgs/{org}/erp-link` with ERP credentials → ERP adapter verifies (fake) → import job
+  copies projects/buyers from the ERP adapter (fake reads `apps/api/fixtures/erp/*.json`).
+
+## 5. API surface (contract summary)
+
+Auth: `POST /auth/signup`, `/auth/verify-email`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
+`/auth/step-up/challenge`, `/auth/step-up/verify`, `POST /devices`, `GET /.well-known/jwks.json`,
+`GET /me`.
+Orgs: `GET/POST /orgs`, `GET /orgs/{org}`, `GET/POST /orgs/{org}/members`, `POST /orgs/{org}/invites`,
+`POST /invites/{token}/accept`.
+KYC: `GET/PUT /orgs/{org}/kyc`, `POST /orgs/{org}/kyc/documents`, `POST /orgs/{org}/kyc/submit`,
+`POST /internal/kyc/{case}/decision` (ops, API key).
+Accounts: `GET/POST /orgs/{org}/accounts`, `PATCH /orgs/{org}/accounts/{id}`, `GET /orgs/{org}/balances`,
+`POST /orgs/{org}/internal-transfers`.
+Payers/CVU: `GET/POST /orgs/{org}/payers`, `GET/PATCH /orgs/{org}/payers/{id}`,
+`POST /orgs/{org}/payers/{id}/cvus`, `PATCH/DELETE /orgs/{org}/cvus/{id}`.
+Payins: `POST /webhooks/psp/transfers`, `GET /orgs/{org}/payins/{id}`.
+Payouts: `POST /orgs/{org}/payouts/quote`, `POST /orgs/{org}/payouts`, `GET /orgs/{org}/payouts/{id}`,
+`POST /orgs/{org}/payouts/{id}/approve|reject|cancel`, `GET /orgs/{org}/approvals`,
+`GET /orgs/{org}/payouts/{id}/proof.pdf`, `GET /orgs/{org}/destinations/resolve?to=`.
+Movements: `GET /orgs/{org}/movements?account=&type=&status=&currency=&from=&to=&cursor=`.
+Reconciliation: `GET /orgs/{org}/reconciliation/runs`, `POST /internal/reconciliation/run`.
+ERP: `GET /orgs/{org}/erp-link/candidate`, `POST /orgs/{org}/erp-link`, `GET /orgs/{org}/erp-link`.
+Realtime/push: `GET /orgs/{org}/events` (SSE), `POST /push-tokens`.
+Errors: `{ "error": { "code": "payout.insufficient_funds", "message": "...", "details": {} } }`.
+
+## 6. Auth and security
+
+- Local IdP issues EdDSA JWT (15 min) with `sub`, `sid`; JWKS published. Org role checked per
+  request from `memberships` (default-deny route table). Step-up token: 5-minute JWT with
+  `amr=["stepup"]`, bound to `sid`, required by money mutations.
+- Device key (Ed25519, generated on device, private key in SecureStore behind biometrics)
+  signs the step-up challenge; fallback password.
+- Webhooks: HMAC-SHA256 over the raw body with a shared secret, constant-time compare,
+  timestamp tolerance 5 min.
+- Secrets only from env; `.env.example` documents them.
+
+## 7. Mobile app
+
+Expo SDK (latest stable), Expo Router (`src/app`), TanStack Query (+ persist in MMKV),
+Zustand for client state, uniwind + Tailwind v4 tokens (Lebane palette, `docs/brand.md`),
+FlashList, expo-secure-store, expo-local-authentication, expo-crypto, expo-notifications,
+react-native-sse (EventSource), i18n es-AR, Vitest. Features: `auth`, `onboarding`, `orgs`,
+`home`, `accounts`, `payers`, `payouts`, `approvals`, `movements`, `reconciliation`,
+`erp-link`, `settings`. Money is formatted with `Intl.NumberFormat('es-AR')` from minor units.
+
+## 8. Swapping fakes for real services
+
+| Port | Fake (MVP) | Real (later) |
+|---|---|---|
+| `psp.Provider` | HTTP adapter → `apps/bind-mock` | same HTTP adapter → BIND base URLs + Entra OAuth |
+| `kyc.Provider` | in-process fake | RENAPER validation vendor |
+| `erp.Directory` | JSON fixtures / dump import | CDC (Debezium) read model or ERP API |
+| `idp` | local EdDSA IdP | Cognito user pool shared with the ERP |
+| `notify.Sender` | log + dev inbox endpoint | SES / Expo push service |
