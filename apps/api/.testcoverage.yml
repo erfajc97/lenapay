@@ -1,0 +1,11 @@
+# go-test-coverage (pinned as a `tool` in go.mod): the G2 gate, kit.json "coverage": 70.
+# Run on the FULL suite: make cover (unit + router + integration, Docker up).
+profile: cover.out
+threshold:
+  total: 70
+exclude:
+  paths:
+    - \.gen\.go$        # oapi-codegen
+    - /store/           # sqlc output (its queries are proven by integration tests)
+    - ^cmd/             # wiring only
+    - /provider/fake/   # E0 stubs; lanes give them real semantics and tests

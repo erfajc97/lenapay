@@ -1,0 +1,18 @@
+{
+  "name": "@lenapay/api-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript types generated from contracts/openapi.yaml (openapi-typescript 7.13.0). Do not edit src/index.ts: run `make gen`.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": ["src"],
+  "scripts": {
+    "gen": "pnpm dlx openapi-typescript@7.13.0 ../../contracts/openapi.yaml --output src/index.ts"
+  }
+}

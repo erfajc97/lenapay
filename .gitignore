@@ -7,3 +7,4 @@ bin/
 coverage.out
 .claude/kit-seal.json
 .claude/kit-audit-state.json
+cover.out

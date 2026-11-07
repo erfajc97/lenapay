@@ -1,0 +1,12 @@
+# oapi-codegen v2 (pinned as a `tool` in go.mod): `go generate ./internal/api`.
+package: api
+output: api.gen.go
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+output-options:
+  skip-prune: true
+  # Streams and signed webhooks need the raw request: mounted by hand, still in the spec,
+  # still behind the guard (AG2, AG16).
+  exclude-operation-ids: [streamOrgEvents, receivePspTransferWebhook]

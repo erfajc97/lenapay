@@ -1,0 +1,1857 @@
+openapi: 3.0.3
+info:
+  title: Lenapay API
+  version: 0.1.0
+  description: |
+    Lenapay MVP API (docs/architecture.md §5). Money is always `{minor, currency}` with `minor`
+    an int64 in minor units (cents). Errors always use the `Error` envelope; clients branch on
+    `error.code`. Lists that can grow use cursor pagination (`{items, nextCursor}`).
+    Money mutations require a client-generated `Idempotency-Key`; step-up protected routes
+    require `X-Step-Up-Token` (5-minute token from `/auth/step-up/verify`).
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: system
+  - name: identity
+  - name: orgs
+  - name: kyc
+  - name: accounts
+  - name: payers
+  - name: payins
+  - name: payouts
+  - name: movements
+  - name: reconciliation
+  - name: erplink
+  - name: realtime
+  - name: notifications
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [system]
+      security: []
+      responses:
+        '200':
+          description: The API and its database answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- identity
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201':
+          description: User created; a 6-digit verification code was sent by email.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignupResponse' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyEmailRequest' }
+      responses:
+        '204': { description: Email verified. }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      operationId: login
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Access + refresh tokens.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: Rotated token pair (the old refresh token is consumed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [identity]
+      responses:
+        '204': { description: Session revoked. }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/step-up/challenge:
+    post:
+      operationId: createStepUpChallenge
+      tags: [identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StepUpChallengeRequest' }
+      responses:
+        '201':
+          description: Challenge to sign with the device key (or answer with the password).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StepUpChallenge' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/step-up/verify:
+    post:
+      operationId: verifyStepUp
+      tags: [identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StepUpVerifyRequest' }
+      responses:
+        '200':
+          description: Step-up token bound to the current session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StepUpToken' }
+        default: { $ref: '#/components/responses/Error' }
+  /devices:
+    post:
+      operationId: registerDevice
+      tags: [identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterDeviceRequest' }
+      responses:
+        '201':
+          description: Device key registered.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        default: { $ref: '#/components/responses/Error' }
+  /.well-known/jwks.json:
+    get:
+      operationId: getJwks
+      tags: [identity]
+      security: []
+      responses:
+        '200':
+          description: Public keys of the local identity provider.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Jwks' }
+        default: { $ref: '#/components/responses/Error' }
+  /me:
+    get:
+      operationId: getMe
+      tags: [identity]
+      responses:
+        '200':
+          description: Current user and memberships.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- orgs
+  /orgs:
+    get:
+      operationId: listOrgs
+      tags: [orgs]
+      responses:
+        '200':
+          description: Organizations the caller belongs to.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createOrg
+      tags: [orgs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrgRequest' }
+      responses:
+        '201':
+          description: Organization created; the caller is its admin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getOrg
+      tags: [orgs]
+      responses:
+        '200':
+          description: Organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/members:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listMembers
+      tags: [orgs]
+      responses:
+        '200':
+          description: Members of the organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: addMember
+      tags: [orgs]
+      description: Adds an already registered user directly with a role (admins only, never above the caller's role).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddMemberRequest' }
+      responses:
+        '201':
+          description: Member added.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/invites:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: createInvite
+      tags: [orgs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInviteRequest' }
+      responses:
+        '201':
+          description: Invite created and emailed; expires in 7 days.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        default: { $ref: '#/components/responses/Error' }
+  /invites/{token}/accept:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        description: Single-use invite token (stored hashed).
+        schema: { type: string, minLength: 16, maxLength: 128, pattern: '^[A-Za-z0-9_-]+$' }
+    post:
+      operationId: acceptInvite
+      tags: [orgs]
+      responses:
+        '200':
+          description: The caller is now a member.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Membership' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- kyc
+  /orgs/{orgId}/kyc:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getKyc
+      tags: [kyc]
+      responses:
+        '200':
+          description: The onboarding case of the organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KycCase' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateKyc
+      tags: [kyc]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateKycRequest' }
+      responses:
+        '200':
+          description: Case updated (only while `draft` or `rejected`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KycCase' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/kyc/documents:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: uploadKycDocument
+      tags: [kyc]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/KycDocumentUpload' }
+      responses:
+        '201':
+          description: Document stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KycDocument' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/kyc/submit:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: submitKyc
+      tags: [kyc]
+      responses:
+        '200':
+          description: Case submitted for review.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KycCase' }
+        default: { $ref: '#/components/responses/Error' }
+  /internal/kyc/{caseId}/decision:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: decideKyc
+      tags: [kyc]
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KycDecisionRequest' }
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KycCase' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- accounts
+  /orgs/{orgId}/accounts:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      parameters:
+        - name: includeArchived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Accounts with balances.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountRequest' }
+      responses:
+        '201':
+          description: Project account created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/AccountId'
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountRequest' }
+      responses:
+        '200':
+          description: Account renamed or archived (archive only with zero balance).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/balances:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getBalances
+      tags: [accounts]
+      responses:
+        '200':
+          description: Totals per currency and per account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Balances' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/internal-transfers:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: createInternalTransfer
+      tags: [accounts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternalTransferRequest' }
+      responses:
+        '201':
+          description: Transfer posted to the ledger (or the stored response replayed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternalTransfer' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- payers / CVU
+  /orgs/{orgId}/payers:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listPayers
+      tags: [payers]
+      parameters:
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          description: Search by name or document number.
+          schema: { type: string, maxLength: 80 }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Payers page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayerList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createPayer
+      tags: [payers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePayerRequest' }
+      responses:
+        '201':
+          description: Payer created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payer' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payers/{payerId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayerId'
+    get:
+      operationId: getPayer
+      tags: [payers]
+      responses:
+        '200':
+          description: Payer with its CVUs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payer' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updatePayer
+      tags: [payers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePayerRequest' }
+      responses:
+        '200':
+          description: Payer updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payer' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payers/{payerId}/cvus:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayerId'
+    post:
+      operationId: createCvu
+      tags: [payers]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCvuRequest' }
+      responses:
+        '201':
+          description: CVU issued at the PSP (one per payer per currency).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cvu' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/cvus/{cvuId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/CvuId'
+    patch:
+      operationId: updateCvu
+      tags: [payers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCvuRequest' }
+      responses:
+        '200':
+          description: Alias changed at the PSP.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cvu' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: disableCvu
+      tags: [payers]
+      responses:
+        '204': { description: CVU disabled at the PSP. }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- payins
+  /webhooks/psp/transfers:
+    post:
+      operationId: receivePspTransferWebhook
+      tags: [payins]
+      security: []
+      description: |
+        Signed by the PSP: `X-Signature: sha256=<hex hmac-sha256(secret, timestamp + "." + raw body)>`.
+        The body only announces the transfer; Lenapay re-reads it at the PSP before crediting.
+        Hand-mounted (excluded from code generation): the signature covers the raw body.
+      parameters:
+        - name: X-Signature
+          in: header
+          required: true
+          schema: { type: string, maxLength: 200 }
+        - name: X-Signature-Timestamp
+          in: header
+          required: true
+          description: Unix seconds; rejected outside a 5-minute tolerance.
+          schema: { type: string, maxLength: 20 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PspTransferWebhook' }
+      responses:
+        '202': { description: Event stored (or already known) and queued. }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payins/{payinId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - name: payinId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getPayin
+      tags: [payins]
+      responses:
+        '200':
+          description: Payin detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payin' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- payouts
+  /orgs/{orgId}/destinations/resolve:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: resolveDestination
+      tags: [payouts]
+      parameters:
+        - name: to
+          in: query
+          required: true
+          description: CBU, CVU (22 digits) or alias.
+          schema: { type: string, minLength: 6, maxLength: 22 }
+      responses:
+        '200':
+          description: Destination resolved at the PSP.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Destination' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/quote:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: quotePayout
+      tags: [payouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayoutQuoteRequest' }
+      responses:
+        '200':
+          description: Fee and total before confirming.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutQuote' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: createPayout
+      tags: [payouts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePayoutRequest' }
+      responses:
+        '201':
+          description: Payout created with amount + fee held (or the stored response replayed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    get:
+      operationId: getPayout
+      tags: [payouts]
+      responses:
+        '200':
+          description: Payout with its status history.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    post:
+      operationId: approvePayout
+      tags: [payouts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      responses:
+        '200':
+          description: Approved (never by its creator) and queued for dispatch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    post:
+      operationId: rejectPayout
+      tags: [payouts]
+      parameters:
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectPayoutRequest' }
+      responses:
+        '200':
+          description: Rejected; the hold is released.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    post:
+      operationId: cancelPayout
+      tags: [payouts]
+      responses:
+        '200':
+          description: Cancelled by its creator while pending approval; the hold is released.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/payouts/{payoutId}/proof.pdf:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PayoutId'
+    get:
+      operationId: getPayoutProof
+      tags: [payouts]
+      responses:
+        '200':
+          description: Proof of payment of a settled payout.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listApprovals
+      tags: [payouts]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Payouts pending approval that the caller may approve.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutList' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- movements
+  /orgs/{orgId}/movements:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listMovements
+      tags: [movements]
+      parameters:
+        - name: account
+          in: query
+          schema: { type: string, format: uuid }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/MovementType' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MovementStatus' }
+        - name: currency
+          in: query
+          schema: { $ref: '#/components/schemas/Currency' }
+        - name: from
+          in: query
+          description: Business date (inclusive), in the configured business time zone.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Business date (inclusive).
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Movements page, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MovementList' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- reconciliation
+  /orgs/{orgId}/reconciliation/runs:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: listReconciliationRuns
+      tags: [reconciliation]
+      parameters:
+        - name: currency
+          in: query
+          schema: { $ref: '#/components/schemas/Currency' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Reconciliation runs, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRunList' }
+        default: { $ref: '#/components/responses/Error' }
+  /internal/reconciliation/run:
+    post:
+      operationId: runReconciliation
+      tags: [reconciliation]
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunReconciliationRequest' }
+      responses:
+        '202':
+          description: Run queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRun' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- erp link
+  /orgs/{orgId}/erp-link/candidate:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getErpLinkCandidate
+      tags: [erplink]
+      responses:
+        '200':
+          description: Whether the organization's CUIT exists in the ERP identity index.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErpLinkCandidate' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/erp-link:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getErpLink
+      tags: [erplink]
+      responses:
+        '200':
+          description: Current link and import status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErpLink' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createErpLink
+      tags: [erplink]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateErpLinkRequest' }
+      responses:
+        '201':
+          description: Linked after the ERP credentials check; the import job is queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErpLink' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- realtime / push
+  /orgs/{orgId}/events:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: streamOrgEvents
+      tags: [realtime]
+      description: |
+        Server-sent events (`event:` is a `RealtimeEvent.type`, `data:` a `RealtimeEvent` JSON).
+        Hand-mounted (excluded from code generation).
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        default: { $ref: '#/components/responses/Error' }
+  /push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterPushTokenRequest' }
+      responses:
+        '204': { description: Token registered for the caller. }
+        default: { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    internalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Api-Key
+
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PayerId:
+      name: payerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CvuId:
+      name: cvuId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PayoutId:
+      name: payoutId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-generated (UUID recommended), persisted by the client until the action is confirmed.
+      schema: { type: string, minLength: 16, maxLength: 128, pattern: '^[A-Za-z0-9_-]+$' }
+    StepUpTokenHeader:
+      name: X-Step-Up-Token
+      in: header
+      required: true
+      description: Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes.
+      schema: { type: string, maxLength: 2048 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous page's `nextCursor`.
+      schema: { type: string, maxLength: 200 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Error:
+      description: Error envelope (status 4xx/5xx).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    # ---------- shared
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+    ErrorBody:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Stable machine code from the catalog, e.g. `ledger.insufficient_funds`.
+        message:
+          type: string
+          maxLength: 200
+          description: Developer-facing English text; never shown to users.
+        details:
+          type: object
+          additionalProperties: true
+          description: Ids and enums only (e.g. the failing field); never PII.
+        requestId:
+          type: string
+          maxLength: 64
+    Currency:
+      type: string
+      enum: [ARS, USD]
+    Money:
+      type: object
+      additionalProperties: false
+      required: [minor, currency]
+      properties:
+        minor:
+          type: integer
+          format: int64
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: Amount in minor units (cents); bounded to JS-safe integers because clients parse JSON numbers.
+        currency: { $ref: '#/components/schemas/Currency' }
+    Role:
+      type: string
+      enum: [viewer, operator, approver, admin]
+    OrgKind:
+      type: string
+      enum: [company, personal]
+    KycStatus:
+      type: string
+      enum: [draft, submitted, approved, rejected]
+    DocType:
+      type: string
+      enum: [cuit, cuil, dni]
+    Address:
+      type: object
+      additionalProperties: false
+      required: [street, number, city, province, postalCode]
+      properties:
+        street: { type: string, minLength: 1, maxLength: 120 }
+        number: { type: string, minLength: 1, maxLength: 20 }
+        floor: { type: string, maxLength: 20 }
+        city: { type: string, minLength: 1, maxLength: 80 }
+        province: { type: string, minLength: 1, maxLength: 80 }
+        postalCode: { type: string, minLength: 1, maxLength: 10 }
+        country: { type: string, minLength: 2, maxLength: 2, default: AR }
+
+    # ---------- identity
+    SignupRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 128 }
+    SignupResponse:
+      type: object
+      additionalProperties: false
+      required: [userId]
+      properties:
+        userId: { type: string, format: uuid }
+    VerifyEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email, code]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        code: { type: string, pattern: '^[0-9]{6}$', maxLength: 6 }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+        deviceId:
+          type: string
+          format: uuid
+          description: Registered device of this phone, if any.
+        totpCode:
+          type: string
+          pattern: '^[0-9]{6}$'
+          maxLength: 6
+          description: Required when the user has TOTP MFA enabled (`auth.mfa_required` otherwise).
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 16, maxLength: 512 }
+    TokenPair:
+      type: object
+      additionalProperties: false
+      required: [accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, tokenType]
+      properties:
+        accessToken: { type: string }
+        accessTokenExpiresAt: { type: string, format: date-time }
+        refreshToken: { type: string }
+        refreshTokenExpiresAt: { type: string, format: date-time }
+        tokenType:
+          type: string
+          enum: [Bearer]
+    StepUpChallengeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+          description: Device whose key will sign the nonce; omit for the password fallback.
+    StepUpChallenge:
+      type: object
+      additionalProperties: false
+      required: [challengeId, nonce, expiresAt]
+      properties:
+        challengeId: { type: string, format: uuid }
+        nonce:
+          type: string
+          description: Base64url bytes to sign with the device key.
+        expiresAt: { type: string, format: date-time }
+    StepUpVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [challengeId, method]
+      properties:
+        challengeId: { type: string, format: uuid }
+        method:
+          type: string
+          enum: [device_signature, password]
+        deviceId: { type: string, format: uuid }
+        signature:
+          type: string
+          maxLength: 200
+          description: Base64url Ed25519 signature of the nonce (method device_signature).
+        password:
+          type: string
+          maxLength: 128
+          description: Account password (method password).
+    StepUpToken:
+      type: object
+      additionalProperties: false
+      required: [stepUpToken, expiresAt]
+      properties:
+        stepUpToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+    RegisterDeviceRequest:
+      type: object
+      additionalProperties: false
+      required: [publicKey, name]
+      properties:
+        publicKey:
+          type: string
+          minLength: 43
+          maxLength: 64
+          description: Base64url Ed25519 public key (32 bytes).
+        name: { type: string, minLength: 1, maxLength: 80 }
+    Device:
+      type: object
+      additionalProperties: false
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    Jwk:
+      type: object
+      additionalProperties: false
+      required: [kty, crv, x, kid, alg, use]
+      properties:
+        kty: { type: string, enum: [OKP] }
+        crv: { type: string, enum: [Ed25519] }
+        x: { type: string }
+        kid: { type: string }
+        alg: { type: string, enum: [EdDSA] }
+        use: { type: string, enum: [sig] }
+    Jwks:
+      type: object
+      additionalProperties: false
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items: { $ref: '#/components/schemas/Jwk' }
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, emailVerified, mfaEnabled, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        emailVerified: { type: boolean }
+        mfaEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Membership:
+      type: object
+      additionalProperties: false
+      required: [orgId, orgName, orgKind, role, kycStatus]
+      properties:
+        orgId: { type: string, format: uuid }
+        orgName: { type: string }
+        orgKind: { $ref: '#/components/schemas/OrgKind' }
+        role: { $ref: '#/components/schemas/Role' }
+        kycStatus: { $ref: '#/components/schemas/KycStatus' }
+    Me:
+      type: object
+      additionalProperties: false
+      required: [user, memberships]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        memberships:
+          type: array
+          items: { $ref: '#/components/schemas/Membership' }
+
+    # ---------- orgs
+    Organization:
+      type: object
+      additionalProperties: false
+      required: [id, kind, legalName, kycStatus, role, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/OrgKind' }
+        legalName: { type: string }
+        cuit: { type: string, nullable: true }
+        kycStatus: { $ref: '#/components/schemas/KycStatus' }
+        role: { $ref: '#/components/schemas/Role' }
+        createdAt: { type: string, format: date-time }
+    OrganizationList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Organization' }
+    CreateOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, legalName]
+      properties:
+        kind: { $ref: '#/components/schemas/OrgKind' }
+        legalName: { type: string, minLength: 2, maxLength: 200 }
+        cuit: { type: string, pattern: '^[0-9]{11}$', maxLength: 11 }
+    Member:
+      type: object
+      additionalProperties: false
+      required: [userId, email, role, joinedAt]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+        joinedAt: { type: string, format: date-time }
+    MemberList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Member' }
+    AddMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        role: { $ref: '#/components/schemas/Role' }
+    CreateInviteRequest:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        role: { $ref: '#/components/schemas/Role' }
+    Invite:
+      type: object
+      additionalProperties: false
+      required: [id, email, role, expiresAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    # ---------- kyc
+    KycCaseKind:
+      type: string
+      enum: [company, person]
+    KycRepresentative:
+      type: object
+      additionalProperties: false
+      required: [fullName, dni, position]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        dni: { type: string, pattern: '^[0-9]{7,8}$', maxLength: 8 }
+        position: { type: string, minLength: 2, maxLength: 80 }
+    KycCompanyData:
+      type: object
+      additionalProperties: false
+      required: [cuit, legalName, legalAddress, representatives]
+      properties:
+        cuit: { type: string, pattern: '^[0-9]{11}$', maxLength: 11 }
+        legalName: { type: string, minLength: 2, maxLength: 200 }
+        legalAddress: { $ref: '#/components/schemas/Address' }
+        representatives:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { $ref: '#/components/schemas/KycRepresentative' }
+    KycPersonData:
+      type: object
+      additionalProperties: false
+      required: [fullName, dni, birthDate, address]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        dni: { type: string, pattern: '^[0-9]{7,8}$', maxLength: 8 }
+        birthDate: { type: string, format: date }
+        address: { $ref: '#/components/schemas/Address' }
+    UpdateKycRequest:
+      type: object
+      additionalProperties: false
+      description: Exactly one of `company` (company orgs) or `person` (personal orgs).
+      properties:
+        company: { $ref: '#/components/schemas/KycCompanyData' }
+        person: { $ref: '#/components/schemas/KycPersonData' }
+    KycDocumentKind:
+      type: string
+      enum: [bylaws, afip_constancy, dni_front, dni_back, selfie, other]
+    KycDocumentUpload:
+      type: object
+      additionalProperties: false
+      required: [kind, file]
+      properties:
+        kind: { $ref: '#/components/schemas/KycDocumentKind' }
+        representativeDni:
+          type: string
+          pattern: '^[0-9]{7,8}$'
+          maxLength: 8
+          description: For DNI and selfie documents of a company representative.
+        file:
+          type: string
+          format: binary
+          description: PDF, JPEG or PNG, at most 10 MB (the upload body limit).
+    KycDocument:
+      type: object
+      additionalProperties: false
+      required: [id, kind, fileName, contentType, sizeBytes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/KycDocumentKind' }
+        representativeDni: { type: string, nullable: true }
+        fileName: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+    KycCase:
+      type: object
+      additionalProperties: false
+      required: [id, orgId, kind, status, documents, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        orgId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/KycCaseKind' }
+        status: { $ref: '#/components/schemas/KycStatus' }
+        company: { $ref: '#/components/schemas/KycCompanyData' }
+        person: { $ref: '#/components/schemas/KycPersonData' }
+        documents:
+          type: array
+          items: { $ref: '#/components/schemas/KycDocument' }
+        decisionReason: { type: string, nullable: true }
+        submittedAt: { type: string, format: date-time, nullable: true }
+        decidedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    KycDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason: { type: string, maxLength: 500 }
+
+    # ---------- accounts
+    AccountKind:
+      type: string
+      enum: [main, project, personal]
+    CurrencyBalance:
+      type: object
+      additionalProperties: false
+      required: [currency, posted, held, available]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        posted: { $ref: '#/components/schemas/Money' }
+        held: { $ref: '#/components/schemas/Money' }
+        available: { $ref: '#/components/schemas/Money' }
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, archived, balances, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/AccountKind' }
+        name: { type: string }
+        archived: { type: boolean }
+        erpProjectRef: { type: string, nullable: true }
+        balances:
+          type: array
+          items: { $ref: '#/components/schemas/CurrencyBalance' }
+        createdAt: { type: string, format: date-time }
+    AccountList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Account' }
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+    UpdateAccountRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        archived: { type: boolean }
+    AccountBalances:
+      type: object
+      additionalProperties: false
+      required: [accountId, name, kind, balances]
+      properties:
+        accountId: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/AccountKind' }
+        balances:
+          type: array
+          items: { $ref: '#/components/schemas/CurrencyBalance' }
+    Balances:
+      type: object
+      additionalProperties: false
+      required: [totals, accounts]
+      properties:
+        totals:
+          type: array
+          items: { $ref: '#/components/schemas/CurrencyBalance' }
+        accounts:
+          type: array
+          items: { $ref: '#/components/schemas/AccountBalances' }
+    InternalTransferRequest:
+      type: object
+      additionalProperties: false
+      required: [fromAccountId, toAccountId, amount]
+      properties:
+        fromAccountId: { type: string, format: uuid }
+        toAccountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        concept: { type: string, maxLength: 140 }
+    InternalTransfer:
+      type: object
+      additionalProperties: false
+      required: [id, fromAccountId, toAccountId, amount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromAccountId: { type: string, format: uuid }
+        toAccountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        concept: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    # ---------- payers / CVU
+    CvuStatus:
+      type: string
+      enum: [active, disabled]
+    CvuShare:
+      type: object
+      additionalProperties: false
+      required: [link, qrPayload]
+      properties:
+        link: { type: string }
+        qrPayload: { type: string }
+    Cvu:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, currency, cvu, status, share, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        payerId: { type: string, format: uuid, nullable: true }
+        accountId: { type: string, format: uuid }
+        currency: { $ref: '#/components/schemas/Currency' }
+        cvu: { type: string, pattern: '^[0-9]{22}$', maxLength: 22 }
+        alias: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/CvuStatus' }
+        share: { $ref: '#/components/schemas/CvuShare' }
+        createdAt: { type: string, format: date-time }
+    Payer:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, name, docType, docNumber, cvus, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        name: { type: string }
+        docType: { $ref: '#/components/schemas/DocType' }
+        docNumber: { type: string }
+        email: { type: string, format: email, nullable: true }
+        erpRef: { type: string, nullable: true }
+        cvus:
+          type: array
+          items: { $ref: '#/components/schemas/Cvu' }
+        createdAt: { type: string, format: date-time }
+    PayerList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Payer' }
+        nextCursor: { type: string, nullable: true }
+    CreatePayerRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, name, docType, docNumber]
+      properties:
+        accountId: { type: string, format: uuid }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        docType: { $ref: '#/components/schemas/DocType' }
+        docNumber: { type: string, pattern: '^[0-9]{7,11}$', maxLength: 11 }
+        email: { type: string, format: email, maxLength: 254 }
+    UpdatePayerRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254, nullable: true }
+    CreateCvuRequest:
+      type: object
+      additionalProperties: false
+      required: [currency]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        alias: { type: string, pattern: '^[a-zA-Z0-9.-]{6,20}$', maxLength: 20 }
+    UpdateCvuRequest:
+      type: object
+      additionalProperties: false
+      required: [alias]
+      properties:
+        alias: { type: string, pattern: '^[a-zA-Z0-9.-]{6,20}$', maxLength: 20 }
+
+    # ---------- payins
+    PspTransferWebhook:
+      type: object
+      additionalProperties: false
+      required: [eventId, type, transferId, occurredAt]
+      properties:
+        eventId: { type: string, minLength: 1, maxLength: 100 }
+        type:
+          type: string
+          enum: [transfer.received]
+        transferId: { type: string, minLength: 1, maxLength: 100 }
+        occurredAt: { type: string, format: date-time }
+    PayinStatus:
+      type: string
+      enum: [received, credited, failed]
+    Counterparty:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        cbu: { type: string, nullable: true }
+    Payin:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, cvuId, gross, fee, net, origin, providerTransferId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        payerId: { type: string, format: uuid, nullable: true }
+        cvuId: { type: string, format: uuid }
+        gross: { $ref: '#/components/schemas/Money' }
+        fee: { $ref: '#/components/schemas/Money' }
+        net: { $ref: '#/components/schemas/Money' }
+        origin: { $ref: '#/components/schemas/Counterparty' }
+        providerTransferId: { type: string }
+        status: { $ref: '#/components/schemas/PayinStatus' }
+        createdAt: { type: string, format: date-time }
+        creditedAt: { type: string, format: date-time, nullable: true }
+
+    # ---------- payouts
+    DestinationType:
+      type: string
+      enum: [cbu, cvu, alias]
+    Destination:
+      type: object
+      additionalProperties: false
+      required: [type, value, accountNumber, holderName, holderCuit]
+      properties:
+        type: { $ref: '#/components/schemas/DestinationType' }
+        value:
+          type: string
+          description: What the user typed (CBU, CVU or alias).
+        accountNumber:
+          type: string
+          description: Resolved 22-digit CBU/CVU.
+        holderName: { type: string }
+        holderCuit: { type: string }
+        bankName: { type: string, nullable: true }
+    PayoutQuoteRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, amount, to]
+      properties:
+        accountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        to: { type: string, minLength: 6, maxLength: 22 }
+    PayoutQuote:
+      type: object
+      additionalProperties: false
+      required: [amount, fee, total, destination, availableAfter]
+      properties:
+        amount: { $ref: '#/components/schemas/Money' }
+        fee: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        destination: { $ref: '#/components/schemas/Destination' }
+        availableAfter: { $ref: '#/components/schemas/Money' }
+    CreatePayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, amount, to, concept]
+      properties:
+        accountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        to: { type: string, minLength: 6, maxLength: 22 }
+        concept: { type: string, minLength: 1, maxLength: 140 }
+    PayoutStatus:
+      type: string
+      enum: [pending_approval, approved, sending, settled, failed, rejected, cancelled]
+    PayoutEvent:
+      type: object
+      additionalProperties: false
+      required: [toStatus, createdAt]
+      properties:
+        fromStatus:
+          allOf:
+            - $ref: '#/components/schemas/PayoutStatus'
+          nullable: true
+        toStatus: { $ref: '#/components/schemas/PayoutStatus' }
+        actorId: { type: string, format: uuid, nullable: true }
+        reason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    Payout:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, amount, fee, total, destination, concept, status, createdBy, events, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        fee: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        destination: { $ref: '#/components/schemas/Destination' }
+        concept: { type: string }
+        status: { $ref: '#/components/schemas/PayoutStatus' }
+        createdBy: { type: string, format: uuid }
+        approvedBy: { type: string, format: uuid, nullable: true }
+        rejectReason: { type: string, nullable: true }
+        failureCode: { type: string, nullable: true }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/PayoutEvent' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        settledAt: { type: string, format: date-time, nullable: true }
+    PayoutList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Payout' }
+        nextCursor: { type: string, nullable: true }
+    RejectPayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 280 }
+
+    # ---------- movements
+    MovementType:
+      type: string
+      enum: [payin, payout, internal_transfer]
+    MovementStatus:
+      type: string
+      enum: [pending, completed, failed, cancelled]
+    MovementDirection:
+      type: string
+      enum: [in, out]
+    Movement:
+      type: object
+      additionalProperties: false
+      required: [id, type, status, direction, accountId, amount, refId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/MovementType' }
+        status: { $ref: '#/components/schemas/MovementStatus' }
+        direction: { $ref: '#/components/schemas/MovementDirection' }
+        accountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        fee:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          nullable: true
+        counterparty: { $ref: '#/components/schemas/Counterparty' }
+        concept: { type: string, nullable: true }
+        refId:
+          type: string
+          format: uuid
+          description: Id of the payin, payout or internal transfer.
+        createdAt: { type: string, format: date-time }
+    MovementList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Movement' }
+        nextCursor: { type: string, nullable: true }
+
+    # ---------- reconciliation
+    ReconciliationRunStatus:
+      type: string
+      enum: [queued, running, completed, failed]
+    ReconciliationRun:
+      type: object
+      additionalProperties: false
+      required: [id, currency, day, status, matchedCount, missingInLedgerCount, missingAtPspCount, pspTotal, ledgerTotal, difference, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        currency: { $ref: '#/components/schemas/Currency' }
+        day: { type: string, format: date }
+        status: { $ref: '#/components/schemas/ReconciliationRunStatus' }
+        matchedCount: { type: integer, format: int32 }
+        missingInLedgerCount: { type: integer, format: int32 }
+        missingAtPspCount: { type: integer, format: int32 }
+        pspTotal: { $ref: '#/components/schemas/Money' }
+        ledgerTotal: { $ref: '#/components/schemas/Money' }
+        difference: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    ReconciliationRunList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ReconciliationRun' }
+        nextCursor: { type: string, nullable: true }
+    RunReconciliationRequest:
+      type: object
+      additionalProperties: false
+      required: [currency, day]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        day: { type: string, format: date }
+
+    # ---------- erp link
+    ErpLinkCandidate:
+      type: object
+      additionalProperties: false
+      required: [found]
+      properties:
+        found: { type: boolean }
+        erpOrgId: { type: string, nullable: true }
+        displayName: { type: string, nullable: true }
+    CreateErpLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 120 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+    ErpImportStatus:
+      type: string
+      enum: [pending, running, completed, failed]
+    ErpLink:
+      type: object
+      additionalProperties: false
+      required: [id, erpOrgId, displayName, linkedBy, linkedAt, importStatus]
+      properties:
+        id: { type: string, format: uuid }
+        erpOrgId: { type: string }
+        displayName: { type: string }
+        linkedBy: { type: string, format: uuid }
+        linkedAt: { type: string, format: date-time }
+        importStatus: { $ref: '#/components/schemas/ErpImportStatus' }
+        importedAt: { type: string, format: date-time, nullable: true }
+
+    # ---------- realtime / push
+    RealtimeEventType:
+      type: string
+      enum: [payin.credited, payout.status_changed, approval.requested, balance.changed]
+    RealtimeEvent:
+      type: object
+      additionalProperties: false
+      required: [type, orgId, occurredAt, data]
+      properties:
+        type: { $ref: '#/components/schemas/RealtimeEventType' }
+        orgId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        data:
+          type: object
+          additionalProperties: true
+          description: Ids only; clients refetch through the authorized endpoints.
+    RegisterPushTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token, platform]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 200 }
+        platform:
+          type: string
+          enum: [ios, android]

@@ -1,0 +1,56 @@
+# golangci-lint v2.15.0, run pinned through Docker: `make lint` (AG19).
+version: "2"
+
+run:
+  build-tags: [integration] # lint the integration tests too
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose      # every http.Response body is closed
+    - contextcheck   # a function that has a ctx passes it on
+    - errorlint      # errors.Is / errors.As, %w
+    - exhaustive     # every enum case handled in a switch
+    - forbidigo      # the banned calls below
+    - gosec
+    - misspell
+    - nilerr         # returning nil after checking err != nil
+    - noctx          # every outbound request carries a ctx
+    - rowserrcheck
+    - sqlclosecheck  # rows and statements closed
+    - usestdlibvars
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^(fmt\.Print(f|ln)?|print|println)$
+          msg: log with log/slog (AG17)
+        - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
+          msg: log with log/slog (AG17)
+        - pattern: ^http\.DefaultClient$
+          msg: build an http.Client with timeouts in the adapter (AG8)
+        - pattern: ^http\.(Get|Head|Post|PostForm)$
+          msg: use the adapter's client with NewRequestWithContext (AG8)
+        - pattern: ^os\.(Getenv|LookupEnv|Environ)$
+          msg: read configuration through internal/platform/config (AG14)
+        - pattern: ^context\.(Background|TODO)$
+          msg: pass the caller's ctx (AG6)
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    generated: strict
+    presets: [std-error-handling]
+    rules:
+      - path: _test\.go
+        linters: [forbidigo, gosec, noctx, bodyclose]
+      - path: ^cmd/
+        text: context\.Background
+        linters: [forbidigo]
+      - path: ^internal/platform/config/
+        text: os\.
+        linters: [forbidigo]
+
+formatters:
+  enable: [gofumpt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [github.com/erfajc97/lenapay]

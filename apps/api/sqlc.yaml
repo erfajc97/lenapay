@@ -1,0 +1,82 @@
+# sqlc v1.31.1, run pinned through Docker (sqlc/sqlc:1.31.1; it needs cgo): `make gen`.
+# One entry per feature: queries in internal/<feature>/store/queries.sql, code in the same
+# store/ package. schema: migrations — sqlc reads the real goose files (AG9). A feature only
+# queries the tables it owns (P5); other data comes through service interfaces.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/identity/store/queries.sql
+    gen:
+      go: &go
+        out: internal/identity/store
+        package: store
+        sql_package: pgx/v5
+        emit_json_tags: false       # rows never reach JSON: handlers map to API types (A5)
+        emit_interface: false
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: uuid
+            nullable: true
+            go_type: { import: github.com/google/uuid, type: UUID, pointer: true }
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type: { import: time, type: Time, pointer: true }
+          - db_type: date
+            go_type: time.Time
+          - db_type: date
+            nullable: true
+            go_type: { import: time, type: Time, pointer: true }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/orgs/store/queries.sql
+    gen: { go: { <<: *go, out: internal/orgs/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/kyc/store/queries.sql
+    gen: { go: { <<: *go, out: internal/kyc/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/accounts/store/queries.sql
+    gen: { go: { <<: *go, out: internal/accounts/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/ledger/store/queries.sql
+    gen: { go: { <<: *go, out: internal/ledger/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/fees/store/queries.sql
+    gen: { go: { <<: *go, out: internal/fees/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/payers/store/queries.sql
+    gen: { go: { <<: *go, out: internal/payers/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/payins/store/queries.sql
+    gen: { go: { <<: *go, out: internal/payins/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/payouts/store/queries.sql
+    gen: { go: { <<: *go, out: internal/payouts/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/reconciliation/store/queries.sql
+    gen: { go: { <<: *go, out: internal/reconciliation/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/erplink/store/queries.sql
+    gen: { go: { <<: *go, out: internal/erplink/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/movements/store/queries.sql
+    gen: { go: { <<: *go, out: internal/movements/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/notifications/store/queries.sql
+    gen: { go: { <<: *go, out: internal/notifications/store } }
