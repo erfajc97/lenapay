@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* Folders that hold class names (ME15): a folder Tailwind misses renders at zero height. */
+@source './src/app';
+@source './src/features';
+@source './src/shared';
+
+/*
+ * Lenapay brand tokens (docs/brand.md — Lebane identity). The ONLY place with colour
+ * literals (M9). Static tokens go in @theme; light/dark colours in @layer theme below.
+ */
+@theme {
+  --font-sans: 'PlusJakartaSans_400Regular';
+  --font-sans-medium: 'PlusJakartaSans_500Medium';
+  --font-sans-semibold: 'PlusJakartaSans_600SemiBold';
+  --font-sans-bold: 'PlusJakartaSans_700Bold';
+  --font-mono: 'JetBrainsMono_400Regular';
+  --font-mono-medium: 'JetBrainsMono_500Medium';
+
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 26px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-balance: 32px;
+  --text-balance--line-height: 40px;
+
+  --radius-input: 4px;
+  --radius-chip: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+  --radius-button: 20px;
+
+  --color-currency-ars: #89CFF0;
+  --color-currency-usd: #90EE90;
+  /* Text on the fixed light currency chips and on primary buttons (not in brand.md: contrast pairs). */
+  --color-on-currency: #181A21;
+  --color-on-primary: #FFFFFF;
+}
+
+@layer theme {
+  :root {
+    @variant light {
+      --color-primary: #125BFF;
+      --color-primary-hover: #296BFE;
+      --color-primary-active: #0546D8;
+      --color-primary-soft: #F5F7FF;
+      --color-primary-bg: #E2E8FE;
+      --color-bg-page: #F4F6F8;
+      --color-bg-surface: #FFFFFF;
+      --color-text-primary: #181A21;
+      --color-text-secondary: #505664;
+      --color-text-muted: #656E83;
+      --color-text-disabled: #888E9E;
+      --color-border-default: #CCD2DB;
+      --color-border-subtle: #E6EBEF;
+      --color-border-strong: #939BAE;
+      --color-success: #0BA85C;
+      --color-success-bg: #E2FDF0;
+      --color-warning: #F5AD03;
+      --color-warning-bg: #FFF4D9;
+      --color-danger: #FE3D51;
+      --color-danger-bg: #FEE8E7;
+      --color-accent: #FC8846;
+      --color-overlay: rgba(14, 16, 21, 0.45);
+    }
+    @variant dark {
+      --color-primary: #296BFE;
+      --color-primary-hover: #4A82FF;
+      --color-primary-active: #125BFF;
+      --color-primary-soft: #10204A;
+      --color-primary-bg: #16285C;
+      --color-bg-page: #0E1015;
+      --color-bg-surface: #181A21;
+      --color-text-primary: #F4F6F8;
+      --color-text-secondary: #CCD2DB;
+      --color-text-muted: #939BAE;
+      --color-text-disabled: #656E83;
+      --color-border-default: #394050;
+      --color-border-subtle: #262A33;
+      --color-border-strong: #656E83;
+      --color-success: #0ED776;
+      --color-success-bg: #0B3322;
+      --color-warning: #F5C34D;
+      --color-warning-bg: #3A2C05;
+      --color-danger: #F9948F;
+      --color-danger-bg: #3D1216;
+      --color-accent: #F99165;
+      --color-overlay: rgba(0, 0, 0, 0.6);
+    }
+  }
+}

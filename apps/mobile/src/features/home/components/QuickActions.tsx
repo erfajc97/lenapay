@@ -1,0 +1,49 @@
+import { useTranslation } from 'react-i18next';
+import { Pressable, View } from 'react-native';
+
+import type { MoneyBlocker } from '@/shared/helpers/permissions';
+import { AppText } from '@/shared/ui/AppText';
+import { Icon, type IconName } from '@/shared/ui/Icon';
+
+import type { QuickActionsState } from '../helpers/homeRules';
+
+function Action({ icon, label, blocker, onPress }: { icon: IconName; label: string; blocker: MoneyBlocker; onPress: () => void }) {
+  const { t } = useTranslation();
+  const disabled = blocker !== null;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={disabled ? t(`blockers.${blocker}`) : undefined}
+      accessibilityState={{ disabled }}
+      className={`flex-1 items-center gap-2 ${disabled ? 'opacity-40' : ''}`}
+    >
+      <View className="h-14 w-14 items-center justify-center rounded-full bg-primary active:bg-primary-active">
+        <Icon name={icon} size={24} tone="on-primary" />
+      </View>
+      <AppText variant="label">{label}</AppText>
+    </Pressable>
+  );
+}
+
+/** Cobrar, Pagar, Mover. A blocked action stays visible, disabled, with the reason below. */
+export function QuickActions({ state, onCollect, onPay, onMove }: { state: QuickActionsState; onCollect: () => void; onPay: () => void; onMove: () => void }) {
+  const { t } = useTranslation();
+  const reason = state.pay ?? state.collect;
+  return (
+    <View className="gap-2">
+      <View className="flex-row">
+        <Action icon="qr-code-outline" label={t('home.collect')} blocker={state.collect} onPress={onCollect} />
+        <Action icon="arrow-up" label={t('home.pay')} blocker={state.pay} onPress={onPay} />
+        <Action icon="swap-horizontal" label={t('home.move')} blocker={state.move} onPress={onMove} />
+      </View>
+      {reason ? (
+        <AppText variant="caption" tone="muted" className="text-center">
+          {t(`blockers.${reason}`)}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
