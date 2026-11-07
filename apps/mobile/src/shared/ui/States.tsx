@@ -9,7 +9,7 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { Icon, type IconName } from './Icon';
 
-/** Pulsing placeholder (M6 loading state). Runs on the native driver (ME8). */
+/** Pulsing placeholder (M6 loading state). JS driver: a looping native-driven animation can stall Fabric commits on iOS. */
 export function Skeleton({ className }: { className?: string }) {
   const [opacity] = useState(() => new Animated.Value(0.5));
   useEffect(() => {
