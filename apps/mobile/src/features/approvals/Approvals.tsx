@@ -27,7 +27,7 @@ export function Approvals() {
         <FlashList
           data={screen.approvals.data ?? []}
           keyExtractor={(payout) => payout.id}
-          renderItem={({ item }) => <ApprovalCard payout={item} mine={item.createdBy.userId === screen.userId} onPress={screen.open} />}
+          renderItem={({ item }) => <ApprovalCard payout={item} mine={item.createdBy.userId === screen.userId} selfApproval={screen.selfApprovalAllowed} onPress={screen.open} />}
           contentContainerStyle={LIST_CONTENT_STYLE}
           onRefresh={pull.onRefresh}
           refreshing={pull.refreshing}

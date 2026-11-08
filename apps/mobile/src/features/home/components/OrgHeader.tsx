@@ -7,14 +7,14 @@ import { Icon } from '@/shared/ui/Icon';
 import { Avatar } from '@/shared/ui/Rows';
 import { Wordmark } from '@/shared/ui/Wordmark';
 
-/** Brand row (Lebane isotype + "Lenapay") with the profile avatar, then greeting + org name; tapping the org opens the switcher. */
-export function OrgHeader({ org, firstName, onSwitch, onProfile }: { org: Org; firstName: string | null; onSwitch: () => void; onProfile: () => void }) {
+/** Brand row (Lebane isotype + "Lenapay") with the avatar that opens the account menu, then greeting + org name; tapping the org opens the switcher. */
+export function OrgHeader({ org, firstName, menuOpen, onSwitch, onMenu }: { org: Org; firstName: string | null; menuOpen: boolean; onSwitch: () => void; onMenu: () => void }) {
   const { t } = useTranslation();
   return (
     <View className="gap-3 pt-2">
       <View className="flex-row items-center justify-between">
         <Wordmark size="small" />
-        <Pressable onPress={onProfile} accessibilityRole="button" accessibilityLabel={t('home.profile')} hitSlop={6}>
+        <Pressable onPress={onMenu} accessibilityRole="button" accessibilityLabel={t('menu.open')} accessibilityState={{ expanded: menuOpen }} hitSlop={6}>
           <Avatar name={firstName ?? org.legalName} />
         </Pressable>
       </View>

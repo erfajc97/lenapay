@@ -13,6 +13,7 @@ import { Sheet } from '@/shared/ui/Sheet';
 import { EmptyState, ErrorState, Skeleton, SkeletonList } from '@/shared/ui/States';
 import { TextField } from '@/shared/ui/TextField';
 
+import { ImportSummary } from './components/ImportSummary';
 import { useErpLinkScreen } from './hooks/useErpLinkScreen';
 
 /** Link with the Lebane ERP by CUIT, confirm with ERP credentials, import (R-ERP-1..3). */
@@ -71,6 +72,7 @@ export function ErpLink() {
       {screen.stage === 'linked' && link ? (
         <>
           <Notice tone="success" icon="checkmark-circle-outline" title={t('erp.linkedTitle')} body={t('erp.linkedBody', { name: link.displayName ?? '' })} />
+          {link.importSummary ? <ImportSummary summary={link.importSummary} /> : null}
           <Button
             label={t('erp.seeAccounts')}
             variant="secondary"

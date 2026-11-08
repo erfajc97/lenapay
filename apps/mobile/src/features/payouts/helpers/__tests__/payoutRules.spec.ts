@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildCvu } from '@/shared/helpers/cbu';
 
-import { canResolve, detailsErrors, hasErrors, payoutOutcome, readAmount, reviewBlocker } from '../payoutRules';
+import { approvalNote, canResolve, detailsErrors, hasErrors, payoutOutcome, readAmount, reviewBlocker } from '../payoutRules';
 
 // Why: this screen decides how much money leaves. `5,50` must be 550 minor units, an empty
 // field must not become $ 0, and a payout whose amount + fee exceeds the available balance
@@ -52,5 +52,28 @@ describe('payoutOutcome and canResolve', () => {
     expect(canResolve('hormigon.plata')).toBe(true);
     expect(canResolve('123')).toBe(false);
     expect(canResolve('no vale')).toBe(false);
+  });
+});
+
+// Why: the review must tell the truth before the step-up (R-OUT-7): "sale sin aprobación" for
+// a payout that then waits, or the reverse, misleads the person about when the money leaves.
+describe('approvalNote', () => {
+  const policy = { mode: 'threshold' as const, thresholdMinor: { ARS: 500_000_00, USD: null } };
+  const company = { orgKind: 'company' as const, currency: 'ARS' as const };
+
+  it('says it leaves without approval strictly below the threshold, and needs it from the threshold', () => {
+    expect(approvalNote(policy, { ...company, amount: 500_000_00 - 1 })).toEqual({ kind: 'auto', threshold: 500_000_00 });
+    expect(approvalNote(policy, { ...company, amount: 500_000_00 })).toEqual({ kind: 'required', threshold: 500_000_00 });
+  });
+
+  it('needs approval with no threshold for the currency or in always mode, and says nothing for a personal wallet', () => {
+    expect(approvalNote(policy, { ...company, currency: 'USD', amount: 1 })).toEqual({ kind: 'required', threshold: null });
+    expect(approvalNote({ ...policy, mode: 'always' }, { ...company, amount: 1 })).toEqual({ kind: 'required', threshold: null });
+    expect(approvalNote(policy, { ...company, orgKind: 'personal', amount: 900_000_00 })).toEqual({ kind: 'none' });
+  });
+
+  it('is unknown while the policy is not loaded (never a guess)', () => {
+    expect(approvalNote(undefined, { ...company, amount: 1 })).toEqual({ kind: 'unknown' });
+    expect(approvalNote(undefined, { ...company, orgKind: 'personal', amount: 1 })).toEqual({ kind: 'none' });
   });
 });

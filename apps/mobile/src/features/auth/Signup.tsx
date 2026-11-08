@@ -13,6 +13,16 @@ export function Signup() {
   const { form, submit, pending } = useSignupForm();
   return (
     <Screen title={t('signup.title')} back footer={<Button label={t('signup.submit')} onPress={submit} loading={pending} />}>
+      <FormField
+        control={form.control}
+        name="fullName"
+        label={t('fields.fullNameOptional')}
+        hint={t('signup.fullNameHint')}
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+      />
       <FormField control={form.control} name="email" label={t('fields.email')} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" returnKeyType="next" />
       <FormField
         control={form.control}

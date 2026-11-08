@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Org } from '@/shared/api/types';
 
-import { personalOrg, pickActiveOrg, verifiedPersonalOrgId, visibleOrgs } from '../orgs';
+import { defaultAccountId, personalOrg, pickActiveOrg, rememberedOrgId, verifiedPersonalOrgId, visibleOrgs } from '../orgs';
 
 // Why: every money action runs against the active org; falling back to the wrong one after
 // a switch, or showing a personal wallet without the B2C flag, moves money in the wrong place.
@@ -46,5 +46,30 @@ describe('personal wallet', () => {
     expect(personalOrg([org('a'), org('me', 'personal')])?.id).toBe('me');
     expect(personalOrg([org('a')])).toBeNull();
     expect(personalOrg(undefined)).toBeNull();
+  });
+});
+
+// Why: the default org and account follow the person across devices (R-ID-5); a switch made
+// during the session must still win, or the app jumps back to the default under their feet.
+describe('rememberedOrgId', () => {
+  it('prefers this session, then the synced default, then the last org on this device', () => {
+    expect(rememberedOrgId({ sessionOrgId: 's', defaultOrgId: 'd', lastOrgId: 'l' })).toBe('s');
+    expect(rememberedOrgId({ sessionOrgId: null, defaultOrgId: 'd', lastOrgId: 'l' })).toBe('d');
+    expect(rememberedOrgId({ sessionOrgId: null, defaultOrgId: null, lastOrgId: 'l' })).toBe('l');
+    expect(rememberedOrgId({ sessionOrgId: null, defaultOrgId: undefined, lastOrgId: null })).toBeNull();
+  });
+});
+
+describe('defaultAccountId', () => {
+  const accounts = [{ id: 'main' }, { id: 'torre' }];
+  const preferences = { defaultOrgId: 'a', defaultAccountId: 'torre' };
+
+  it('is the default account only in the default org and only while it is open', () => {
+    expect(defaultAccountId(accounts, 'a', preferences)).toBe('torre');
+    expect(defaultAccountId(accounts, 'b', preferences)).toBeNull();
+    expect(defaultAccountId([{ id: 'main' }], 'a', preferences)).toBeNull();
+    expect(defaultAccountId(accounts, 'a', { defaultOrgId: 'a', defaultAccountId: null })).toBeNull();
+    expect(defaultAccountId(accounts, 'a', undefined)).toBeNull();
+    expect(defaultAccountId(accounts, undefined, preferences)).toBeNull();
   });
 });

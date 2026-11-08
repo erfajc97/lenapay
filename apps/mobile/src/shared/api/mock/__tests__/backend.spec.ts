@@ -300,14 +300,157 @@ describe('personal wallet and on-us rail', () => {
     pending.length = 0;
     const b = backend();
     b.login({ email: 'martina@desarrollosdelsur.com.ar', password: 'secreto1' });
-    const payout = b.createPayout(ORG, { accountId: 'acc_main', currency: 'ARS', amount: 5_000_00, to: 'erick.jimenez.lnp', concept: 'Reintegro' }, creds('ou1'));
+    const payout = b.createPayout(ORG, { accountId: 'acc_main', currency: 'ARS', amount: 600_000_00, to: 'erick.jimenez.lnp', concept: 'Reintegro' }, creds('ou1'));
     expect(payout).toMatchObject({ status: 'pending_approval', rail: 'internal' });
     b.login({ email: 'erick@desarrollosdelsur.com.ar', password: 'secreto1' });
     const personalBefore = b.listAccounts('org_personal')[0]?.balances.find((item) => item.currency === 'ARS')?.posted ?? NaN;
     expect(b.approvePayout(ORG, payout.id, creds('ou2')).status).toBe('settled');
     expect(pending).toHaveLength(0);
-    expect(b.listAccounts('org_personal')[0]?.balances.find((item) => item.currency === 'ARS')?.posted).toBe(personalBefore + 5_000_00);
+    expect(b.listAccounts('org_personal')[0]?.balances.find((item) => item.currency === 'ARS')?.posted).toBe(personalBefore + 600_000_00);
     const movement = b.listMovements('org_personal', { type: 'payin' }, null).items[0];
-    expect(movement).toMatchObject({ rail: 'internal', amount: 5_000_00, counterparty: 'Desarrollos Del Sur SA' });
+    expect(movement).toMatchObject({ rail: 'internal', amount: 600_000_00, counterparty: 'Desarrollos Del Sur SA' });
+  });
+});
+
+// Why: the mock is what the owner demos; its owner ladder, policy and preferences must answer
+// the same codes as the API (R-ORG-3, R-OUT-7, R-ID-5, R-ERP-4) or the screens are validated
+// against rules that do not exist.
+describe('owner and member ladder', () => {
+  let b: MockBackend;
+  beforeEach(() => {
+    pending.length = 0;
+    b = backend();
+  });
+
+  it('makes the creator of an org its owner', () => {
+    const org = b.createOrg({ kind: 'company', legalName: 'Nueva SA' });
+    expect(org.role).toBe('owner');
+  });
+
+  it('lets an admin grant up to admin but never touch another admin or the owner', () => {
+    b.updateMember(ORG, 'u_pablo', { role: 'admin' });
+    b.login({ email: 'pablo@desarrollosdelsur.com.ar', password: 'secreto1' });
+    expect(b.updateMember(ORG, 'u_martina', { role: 'admin' }).role).toBe('admin');
+    expect(() => b.updateMember(ORG, 'u_martina', { role: 'viewer' })).toThrow(expect.objectContaining({ code: 'role.escalation_forbidden' }));
+    expect(() => b.removeMember(ORG, 'u_martina')).toThrow(expect.objectContaining({ code: 'role.escalation_forbidden' }));
+    expect(() => b.updateMember(ORG, 'u_erick', { role: 'viewer' })).toThrow(expect.objectContaining({ code: 'role.escalation_forbidden' }));
+  });
+
+  it('lets the owner demote and remove an admin, and nobody change the owner', () => {
+    b.updateMember(ORG, 'u_pablo', { role: 'admin' });
+    expect(b.updateMember(ORG, 'u_pablo', { role: 'approver' }).role).toBe('approver');
+    expect(() => b.updateMember(ORG, 'u_erick', { role: 'admin' })).toThrow(expect.objectContaining({ code: 'org.last_admin' }));
+    expect(() => b.removeMember(ORG, 'u_erick')).toThrow(expect.objectContaining({ code: 'org.last_admin' }));
+  });
+
+  it('transfers the ownership with step-up; the previous owner stays as admin', () => {
+    expect(() => b.transferOwnership(ORG, { userId: 'u_pablo' }, { stepUpToken: '' })).toThrow(expect.objectContaining({ code: 'auth.step_up_required' }));
+    expect(() => b.transferOwnership(ORG, { userId: 'u_erick' }, { stepUpToken: 'su' })).toThrow(expect.objectContaining({ code: 'validation.failed' }));
+    expect(() => b.transferOwnership(ORG, { userId: 'u_diego' }, { stepUpToken: 'su' })).toThrow(expect.objectContaining({ code: 'member.not_found' }));
+    const transfer = b.transferOwnership(ORG, { userId: 'u_pablo' }, { stepUpToken: 'su' });
+    expect(transfer).toMatchObject({ previousOwner: { userId: 'u_erick', role: 'admin' }, owner: { userId: 'u_pablo', role: 'owner' } });
+    expect(b.members(ORG).filter((member) => member.role === 'owner').map((member) => member.userId)).toEqual(['u_pablo']);
+    // Now an admin: a second transfer by the previous owner is refused (attacker).
+    expect(() => b.transferOwnership(ORG, { userId: 'u_martina' }, { stepUpToken: 'su' })).toThrow(expect.objectContaining({ code: 'auth.forbidden' }));
+  });
+});
+
+describe('approval policy', () => {
+  let b: MockBackend;
+  beforeEach(() => {
+    pending.length = 0;
+    b = backend();
+  });
+  const pay = (amount: number, key: string, currency: 'ARS' | 'USD' = 'ARS') =>
+    b.createPayout(ORG, { accountId: 'acc_main', currency, amount, to: 'hormigon.plata', concept: 'Política' }, creds(key));
+
+  it('approves at once strictly below the threshold and waits at the threshold', () => {
+    expect(pay(500_000_00 - 1, 'p1').status).toBe('approved');
+    expect(pay(500_000_00, 'p2').status).toBe('pending_approval');
+    // No USD threshold: every USD payout waits.
+    expect(pay(1_00, 'p3', 'USD').status).toBe('pending_approval');
+  });
+
+  it('lets only the owner change it, with step-up, and refuses threshold mode without a threshold', () => {
+    const body = { mode: 'always' as const, allowOwnerSelfApproval: false };
+    expect(() => b.updateApprovalPolicy(ORG, body, { stepUpToken: '' })).toThrow(expect.objectContaining({ code: 'auth.step_up_required' }));
+    expect(() => b.updateApprovalPolicy(ORG, { mode: 'threshold', allowOwnerSelfApproval: true }, { stepUpToken: 'su' })).toThrow(
+      expect.objectContaining({ code: 'validation.failed' }),
+    );
+    expect(b.updateApprovalPolicy(ORG, body, { stepUpToken: 'su' })).toMatchObject({ mode: 'always', allowOwnerSelfApproval: false, updatedBy: 'u_erick' });
+    expect(pay(1_00, 'p4').status).toBe('pending_approval');
+    b.login({ email: 'pablo@desarrollosdelsur.com.ar', password: 'secreto1' });
+    expect(b.approvalPolicy(ORG).mode).toBe('always');
+    expect(() => b.updateApprovalPolicy(ORG, body, { stepUpToken: 'su' })).toThrow(expect.objectContaining({ code: 'auth.forbidden' }));
+  });
+
+  it('lets the owner self-approve only while allowed and no other approver exists', () => {
+    const own = pay(10_00, 's1', 'USD');
+    expect(b.approvalPolicy(ORG).ownerSelfApprovalEffective).toBe(false);
+    expect(() => b.approvePayout(ORG, own.id, creds('s2'))).toThrow(expect.objectContaining({ code: 'payout.self_approval_forbidden' }));
+    b.removeMember(ORG, 'u_pablo');
+    expect(b.approvalPolicy(ORG).ownerSelfApprovalEffective).toBe(true);
+    expect(b.approvePayout(ORG, own.id, creds('s3')).status).toBe('approved');
+    b.updateApprovalPolicy(ORG, { mode: 'threshold', thresholdMinor: { ARS: 500_000_00 }, allowOwnerSelfApproval: false }, { stepUpToken: 'su' });
+    const other = pay(20_00, 's4', 'USD');
+    expect(() => b.approvePayout(ORG, other.id, creds('s5'))).toThrow(expect.objectContaining({ code: 'payout.self_approval_forbidden' }));
+  });
+});
+
+describe('profile and preferences', () => {
+  let b: MockBackend;
+  beforeEach(() => {
+    b = backend();
+  });
+
+  it('keeps the signup name, edits it (trimmed) and clears it with null', () => {
+    b.signup({ email: 'ana@persona.com', password: 'secreto1234', fullName: '  Ana Gómez ' });
+    b.verifyEmail({ email: 'ana@persona.com', code: '123456' });
+    b.login({ email: 'ana@persona.com', password: 'secreto1234' });
+    expect(b.me().fullName).toBe('Ana Gómez');
+    expect(b.updateMe({ fullName: ' Ana María ' }).fullName).toBe('Ana María');
+    expect(() => b.updateMe({ fullName: '   ' })).toThrow(expect.objectContaining({ code: 'validation.failed' }));
+    expect(() => b.updateMe({ fullName: 'x'.repeat(121) })).toThrow(expect.objectContaining({ code: 'validation.failed' }));
+    expect(b.updateMe({ fullName: 'x'.repeat(120) }).fullName).toHaveLength(120);
+    expect(b.updateMe({}).fullName).toHaveLength(120);
+    expect(b.updateMe({ fullName: null }).fullName).toBeNull();
+  });
+
+  it('validates the merged default org and account; null clears and absent keeps', () => {
+    expect(b.me().preferences).toMatchObject({ defaultOrgId: null, defaultAccountId: null, locale: null, theme: null });
+    expect(() => b.updatePreferences({ defaultAccountId: 'acc_main' })).toThrow(expect.objectContaining({ code: 'validation.failed' }));
+    expect(() => b.updatePreferences({ defaultOrgId: 'org_foreign' })).toThrow(expect.objectContaining({ code: 'org.not_found' }));
+    expect(() => b.updatePreferences({ defaultOrgId: ORG, defaultAccountId: 'acc_unknown' })).toThrow(expect.objectContaining({ code: 'account.not_found' }));
+    expect(b.updatePreferences({ defaultOrgId: ORG, defaultAccountId: 'acc_torre', theme: 'dark' })).toMatchObject({ defaultOrgId: ORG, defaultAccountId: 'acc_torre', theme: 'dark' });
+    expect(b.updatePreferences({ locale: 'en-US' })).toMatchObject({ defaultOrgId: ORG, locale: 'en-US', theme: 'dark' });
+    expect(b.updatePreferences({ theme: null })).toMatchObject({ theme: null, locale: 'en-US' });
+    expect(b.me().preferences.defaultAccountId).toBe('acc_torre');
+  });
+
+  it('reads a default org the person left as unset', () => {
+    b.login({ email: 'martina@desarrollosdelsur.com.ar', password: 'secreto1' });
+    b.updatePreferences({ defaultOrgId: ORG });
+    b.login({ email: 'erick@desarrollosdelsur.com.ar', password: 'secreto1' });
+    b.removeMember(ORG, 'u_martina');
+    b.login({ email: 'martina@desarrollosdelsur.com.ar', password: 'secreto1' });
+    expect(b.preferences().defaultOrgId).toBeNull();
+  });
+});
+
+describe('ERP users import', () => {
+  it('invites the ERP users with payments access, skips members and counts the rest', () => {
+    let now = Date.UTC(2026, 10, 7, 15);
+    const b = new MockBackend({ now: () => now, setTimeout: () => undefined });
+    b.login({ email: 'erick@desarrollosdelsur.com.ar', password: 'secreto1' });
+    b.linkErp(ORG, { username: 'erick', password: 'secreto1' });
+    expect(b.erpLink(ORG)).toMatchObject({ status: 'importing', importSummary: null });
+    now += 60_000;
+    const summary = b.erpLink(ORG).importSummary;
+    expect(summary).toMatchObject({ projects: 3, buyers: 4, usersInvited: 2, usersAlreadyMembers: 1, usersWithoutPaymentsAccess: 1 });
+    expect(summary?.invitedUsers).toEqual([
+      { email: 'obras@desarrollosdelsur.com.ar', role: 'admin' },
+      { email: 'tesoreria@desarrollosdelsur.com.ar', role: 'operator' },
+    ]);
+    expect(b.members(ORG).filter((member) => member.status === 'invited').map((member) => member.email)).toContain('obras@desarrollosdelsur.com.ar');
   });
 });

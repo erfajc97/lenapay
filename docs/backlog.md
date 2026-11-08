@@ -175,7 +175,10 @@ additive (new operations, new optional response fields, the `MemberRole` enum on
   500.000 (a payout below it settles without approval); the Andina import invites 4 ERP users and
   `tesoreria@constructoraandina.com.ar` joins by signing up; smoke steps for the policy (attacker
   403), ownership transfer, profile/preferences and the ERP invites.
-- [ ] O8 Mobile (lane M): `MemberRole` `owner` label (es-AR/en-US), team screen rules (owner badge,
+- [x] O8 Mobile (lane M): `MemberRole` `owner` label (es-AR/en-US), team screen rules (owner badge,
   hide demote/remove for admins unless owner, transfer ownership with step-up), approval policy
   screen (owner), preferences (default org/account, theme, locale), full name in profile/members,
-  ERP import summary on the ERP link screen. No new error codes.
+  ERP import summary on the ERP link screen. No new error codes. Owner feedback folded in: lower,
+  slimmer floating tab bar (gap 3 dp, height 56); avatar menu on Home (perfil, organización, cuenta
+  predeterminada, Configuración, seguridad, cerrar sesión with a second tap); "Más" holds products
+  and management, "Configuración" (avatar menu, not a tab) holds the person's preferences.

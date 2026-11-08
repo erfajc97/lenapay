@@ -18,6 +18,7 @@ import { TextField } from '@/shared/ui/TextField';
 import { BalanceCard } from './components/BalanceCard';
 import { MyCvuCard } from './components/MyCvuCard';
 import { MyPaymentsEntry } from './components/MyPaymentsEntry';
+import { AccountMenu } from './components/AccountMenu';
 import { OrgHeader } from './components/OrgHeader';
 import { QuickActions } from './components/QuickActions';
 import { useHome } from './hooks/useHome';
@@ -92,7 +93,18 @@ export function Home() {
   const { org } = home;
   return (
     <Screen inTabs onRefresh={home.refresh}>
-      <OrgHeader org={org} firstName={home.firstName} onSwitch={() => router.push('/orgs')} onProfile={() => router.push('/settings/profile')} />
+      <OrgHeader org={org} firstName={home.firstName} menuOpen={home.menu.open} onSwitch={() => router.push('/orgs')} onMenu={home.menu.show} />
+      <AccountMenu
+        visible={home.menu.open}
+        name={home.myName}
+        email={home.myEmail}
+        orgName={org.legalName}
+        confirmLogout={home.menu.confirmLogout}
+        onPick={home.menu.pick}
+        onLogout={home.menu.logout}
+        onClose={home.menu.close}
+        onDismissed={home.menu.dismissed}
+      />
       <DemoBadge />
       {home.kycNotice ? (
         <Notice

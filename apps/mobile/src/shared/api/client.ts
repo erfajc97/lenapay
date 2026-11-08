@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountCvu,
+  ApprovalPolicy,
   AuthTokens,
   CreateAccountRequest,
   CreateOrgRequest,
@@ -33,6 +34,7 @@ import type {
   MyPaymentPayin,
   Org,
   OrgBalances,
+  OwnershipTransfer,
   Page,
   PayCompanyRequest,
   Payer,
@@ -54,9 +56,14 @@ import type {
   StepUpChallengeRequest,
   StepUpToken,
   StepUpVerifyRequest,
+  TransferOwnershipRequest,
   UpdateAccountRequest,
+  UpdateApprovalPolicyRequest,
   UpdateCvuRequest,
+  UpdateMeRequest,
   UpdateMemberRequest,
+  UpdatePreferencesRequest,
+  UserPreferences,
   VerifyEmailRequest,
 } from './types';
 
@@ -66,6 +73,11 @@ import type {
  */
 export interface MoneyActionOptions {
   idempotencyKey: string;
+  stepUpToken: string;
+}
+
+/** Owner actions that decide who moves money (ownership, approval policy) need a fresh step-up. */
+export interface StepUpOptions {
   stepUpToken: string;
 }
 
@@ -98,6 +110,12 @@ export interface LenapayApi {
     registerDevice(body: RegisterDeviceRequest): Promise<Device>;
     me(): Promise<Me>;
   };
+  /** The caller's own profile and synced preferences (R-ID-5). */
+  profile: {
+    update(body: UpdateMeRequest): Promise<Me>;
+    preferences(): Promise<UserPreferences>;
+    updatePreferences(body: UpdatePreferencesRequest): Promise<UserPreferences>;
+  };
   orgs: {
     list(): Promise<Org[]>;
     create(body: CreateOrgRequest): Promise<Org>;
@@ -105,6 +123,11 @@ export interface LenapayApi {
     invite(orgId: string, body: InviteRequest): Promise<Invite>;
     updateMember(orgId: string, userId: string, body: UpdateMemberRequest): Promise<Member>;
     removeMember(orgId: string, userId: string): Promise<void>;
+    /** Owner only, step-up (R-ORG-3): the previous owner stays as admin. */
+    transferOwnership(orgId: string, body: TransferOwnershipRequest, options: StepUpOptions): Promise<OwnershipTransfer>;
+    approvalPolicy(orgId: string): Promise<ApprovalPolicy>;
+    /** Owner only, step-up (R-OUT-7). */
+    updateApprovalPolicy(orgId: string, body: UpdateApprovalPolicyRequest, options: StepUpOptions): Promise<ApprovalPolicy>;
   };
   kyc: {
     get(orgId: string): Promise<KycCase>;

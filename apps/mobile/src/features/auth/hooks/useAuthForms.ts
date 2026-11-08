@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 
 import { useSessionStore } from '@/shared/stores/useSessionStore';
 
+import { signupRequest } from '../helpers/signupRequest';
 import { useLogin, useResendCode, useSignup, useVerifyEmail } from '../mutations/useAuthMutations';
 import { loginSchema, type LoginValues, signupSchema, type SignupValues, verifySchema, type VerifyValues } from '../types';
 
@@ -18,8 +19,8 @@ export function useLoginForm() {
 
 export function useSignupForm() {
   const signup = useSignup();
-  const form = useForm<SignupValues>({ resolver: zodResolver(signupSchema), defaultValues: { email: '', password: '' } });
-  const submit = () => void form.handleSubmit((values) => signup.mutate(values))();
+  const form = useForm<SignupValues>({ resolver: zodResolver(signupSchema), defaultValues: { fullName: '', email: '', password: '' } });
+  const submit = () => void form.handleSubmit((values) => signup.mutate(signupRequest(values)))();
   return { form, submit, pending: signup.isPending };
 }
 

@@ -12,8 +12,9 @@ import { createLiveApi } from '../liveApi';
 
 /**
  * The app's live client end to end against the running stack (`pnpm test:live`): login → me →
- * orgs → balances → payers → movements → quote → payout with password step-up → approval by a
- * second person (password and device-key step-up) → realtime events over SSE.
+ * orgs → balances → payers → movements → quote → a payout below the policy threshold that leaves
+ * at once → a payout that needs approval (password step-up) → approval by a second person
+ * (device-key step-up) → realtime events over SSE.
  * Seed users from the README (`make seed`); demo password only, never a real credential.
  */
 const BASE_URL = process.env.LIVE_API_URL ?? 'http://localhost:18080';
@@ -21,6 +22,9 @@ const PASSWORD = 'Lenapay2026!';
 const DEMO = 'demo@lenapay.app';
 const APPROVER = 'approver@lenapay.app';
 const DESTINATION = 'hormigonera.sur';
+/** Seed: demo@ owns Desarrollos Del Sur with the threshold policy ARS 500.000 (no USD threshold). */
+const DEMO_NAME = 'Ricardo Benítez';
+const APPROVER_NAME = 'Carolina Méndez';
 
 /**
  * react-native-sse rides on XMLHttpRequest, which node lacks: the same contract (headers,
@@ -126,12 +130,13 @@ describe(`live client against ${BASE_URL}`, () => {
   it('logs in and reads the profile and the organizations', async () => {
     await signIn(api, DEMO);
     const me = await api.auth.me();
-    expect(me).toMatchObject({ email: DEMO, fullName: null });
+    expect(me).toMatchObject({ email: DEMO, fullName: DEMO_NAME });
+    expect(Object.keys(me.preferences).sort()).toEqual(['defaultAccountId', 'defaultOrgId', 'locale', 'theme', 'updatedAt']);
     // With PERSONAL_MODE_ENABLED the API opens a personal wallet at signup: personal mode follows it.
     expect(me.personalModeEnabled).toBe(me.memberships.some((membership) => membership.orgKind === 'personal'));
     const orgs = await api.orgs.list();
     const found = orgs.find((item) => item.legalName === 'Desarrollos Del Sur SA');
-    expect(found).toMatchObject({ kind: 'company', kycStatus: 'approved', role: 'admin' });
+    expect(found).toMatchObject({ kind: 'company', kycStatus: 'approved', role: 'owner' });
     org = found as Org;
     expect(me.memberships.map((item) => item.orgId)).toContain(org.id);
   });
@@ -152,6 +157,7 @@ describe(`live client against ${BASE_URL}`, () => {
     expect(searched.some((payer) => payer.id === payers[0]?.id)).toBe(true);
     const members = await api.orgs.members(org.id);
     expect(members.map((member) => member.email).sort()).toEqual([APPROVER, DEMO]);
+    expect(members.find((member) => member.email === DEMO)).toMatchObject({ fullName: DEMO_NAME, role: 'owner' });
   });
 
   it('pages movements, filters them and reads one by id', async () => {
@@ -184,26 +190,35 @@ describe(`live client against ${BASE_URL}`, () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
   });
 
-  it('resolves the destination, quotes and creates a payout with a password step-up', async () => {
+  it('sends a payout below the policy threshold without approval (R-OUT-7)', async () => {
     const destination = await api.payouts.resolveDestination(org.id, DESTINATION);
     expect(destination).toMatchObject({ type: 'alias', value: DESTINATION });
     expect(destination.accountNumber).toMatch(/^\d{22}$/);
+    const policy = await api.orgs.approvalPolicy(org.id);
+    expect(policy).toMatchObject({ mode: 'threshold', thresholdMinor: { ARS: 500_000_00, USD: null } });
     const quote = await api.payouts.quote(org.id, { accountId, currency: 'ARS', amount: 1_000_00, to: DESTINATION });
     expect(quote.total).toBe(quote.amount + quote.fee);
     expect(quote.availableAfter).toBeGreaterThanOrEqual(0);
-    const body = { accountId, currency: 'ARS' as const, amount: 1_000_00, to: DESTINATION, concept: `Prueba live ${new Date().toISOString().slice(0, 19)}` };
+    const body = { accountId, currency: 'ARS' as const, amount: 1_000_00, to: DESTINATION, concept: `Live bajo umbral ${new Date().toISOString().slice(0, 19)}` };
+    const below = await api.payouts.create(org.id, body, { idempotencyKey: randomUUID(), stepUpToken: await stepUpWithPassword(api) });
+    expect(['approved', 'sending', 'settled']).toContain(below.status);
+  });
+
+  it('creates a payout that needs approval (no USD threshold) with a password step-up', async () => {
+    const body = { accountId, currency: 'USD' as const, amount: 10_00, to: DESTINATION, concept: `Prueba live ${new Date().toISOString().slice(0, 19)}` };
     const idempotencyKey = randomUUID();
     payout = await api.payouts.create(org.id, body, { idempotencyKey, stepUpToken: await stepUpWithPassword(api) });
-    expect(payout).toMatchObject({ status: 'pending_approval', amount: 1_000_00, currency: 'ARS', accountName: 'Torre Palermo' });
-    expect(payout.createdBy.label).toBe(DEMO);
+    expect(payout).toMatchObject({ status: 'pending_approval', amount: 10_00, currency: 'USD', accountName: 'Torre Palermo' });
+    // Names, not emails, where the API knows them (R-ID-5).
+    expect(payout.createdBy.label).toBe(DEMO_NAME);
     // Same key + same body replays the payout instead of paying twice (R-OUT-3).
     expect((await api.payouts.create(org.id, body, { idempotencyKey, stepUpToken: await stepUpWithPassword(api) })).id).toBe(payout.id);
-    await expect(api.payouts.create(org.id, { ...body, amount: 1_000_01 }, { idempotencyKey, stepUpToken: await stepUpWithPassword(api) })).rejects.toMatchObject({ code: 'idempotency.key_reused' });
+    await expect(api.payouts.create(org.id, { ...body, amount: 10_01 }, { idempotencyKey, stepUpToken: await stepUpWithPassword(api) })).rejects.toMatchObject({ code: 'idempotency.key_reused' });
   });
 
   it('receives approval.requested for the new payout over SSE', async () => {
     const event = await waitFor(events, (item) => item.type === 'approval.requested' && item.payout.id === payout.id);
-    expect(event).toMatchObject({ type: 'approval.requested', payout: { id: payout.id, status: 'pending_approval', accountName: 'Torre Palermo' } });
+    expect(event).toMatchObject({ type: 'approval.requested', payout: { id: payout.id, status: 'pending_approval', accountName: 'Torre Palermo', createdBy: { label: DEMO_NAME } } });
   });
 
   it('refuses the creator as approver', async () => {
@@ -221,7 +236,7 @@ describe(`live client against ${BASE_URL}`, () => {
     const token = await verifyStepUp({ method: 'device_key' }, { auth: api.auth, readDeviceKey: async () => ({ deviceId: device.id, secretKey: pair.secretKey }) });
     const approved = await api.payouts.approve(org.id, payout.id, { idempotencyKey: randomUUID(), stepUpToken: token.stepUpToken });
     expect(approved.status).toBe('approved');
-    expect(approved.approvedBy?.label).toBe(APPROVER);
+    expect(approved.approvedBy?.label).toBe(APPROVER_NAME);
     // A forged signature never passes: the challenge burns and the app falls back to the password.
     const forged = { deviceId: device.id, secretKey: generateDeviceKey().secretKey };
     await expect(verifyStepUp({ method: 'device_key' }, { auth: api.auth, readDeviceKey: async () => forged })).rejects.toMatchObject({ code: 'stepup.device_key_unavailable' });

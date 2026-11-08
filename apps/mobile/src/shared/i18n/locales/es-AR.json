@@ -22,12 +22,13 @@
   "tabs": { "home": "Inicio", "accounts": "Cuentas", "payers": "Pagadores", "movements": "Movimientos", "more": "Más" },
   "currency": { "ARS": "Pesos", "USD": "Dólares" },
   "docType": { "cuit": "CUIT", "dni": "DNI", "cuil": "CUIL" },
-  "roles": { "viewer": "Lectura", "operator": "Operador", "approver": "Aprobador", "admin": "Administrador" },
+  "roles": { "viewer": "Lectura", "operator": "Operador", "approver": "Aprobador", "admin": "Administrador", "owner": "Propietario" },
   "roleHelp": {
     "viewer": "Ve saldos y movimientos.",
     "operator": "Crea pagos, pagadores y CVU.",
     "approver": "Aprueba o rechaza pagos.",
-    "admin": "Todo, más equipo y verificación."
+    "admin": "Todo, más equipo y verificación.",
+    "owner": "Todo, más la política de aprobación y transferir la propiedad. Hay uno solo."
   },
   "blockers": {
     "kyc": "Vas a poder operar cuando aprobemos la verificación de la empresa.",
@@ -75,6 +76,7 @@
     "docType": "Tipo de documento",
     "email": "Email",
     "emailOptional": "Email (opcional)",
+    "fullNameOptional": "Nombre y apellido (opcional)",
     "fullName": "Nombre y apellido",
     "lebaneUser": "Usuario de Lebane",
     "legalAddress": "Domicilio legal",
@@ -120,7 +122,9 @@
     "postalCode": "Ingresá el código postal.",
     "birthDate": "Ingresá la fecha como DD/MM/AAAA.",
     "position": "Ingresá el cargo.",
-    "payConcept": "Usá hasta {{max}} caracteres en el concepto."
+    "payConcept": "Usá hasta {{max}} caracteres en el concepto.",
+    "fullNameLength": "Usá hasta 120 caracteres.",
+    "thresholdRequired": "Poné al menos un monto para aprobar según el monto."
   },
   "errors": {
     "generic": "Algo no salió bien. Probá de nuevo en un momento.",
@@ -162,8 +166,8 @@
     "user_not_found": "No hay una cuenta con ese email.",
     "invite_not_found": "No encontramos esa invitación.",
     "invite_expired": "La invitación venció. Pedí una nueva.",
-    "role_escalation_forbidden": "No podés dar un rol más alto que el tuyo.",
-    "org_last_admin": "La organización necesita al menos un administrador.",
+    "role_escalation_forbidden": "No podés hacer ese cambio: solo el propietario cambia a un administrador, y nadie da un rol más alto que el suyo.",
+    "org_last_admin": "Al propietario no se lo puede quitar ni cambiar de rol: primero transferí la propiedad.",
     "org_personal_mode_disabled": "El modo personal no está habilitado para tu cuenta.",
     "kyc_case_not_found": "No encontramos la verificación de esta organización.",
     "kyc_invalid_state": "La verificación ya fue enviada: no se puede modificar ahora.",
@@ -226,7 +230,8 @@
     "title": "Crear cuenta",
     "submit": "Crear cuenta",
     "passwordHint": "8 caracteres o más, con al menos un número.",
-    "haveAccount": "Ya tengo cuenta"
+    "haveAccount": "Ya tengo cuenta",
+    "fullNameHint": "Así te va a ver tu equipo. Podés cambiarlo después."
   },
   "verify": {
     "title": "Verificá tu email",
@@ -262,7 +267,6 @@
     "greeting": "Hola, {{name}}",
     "greetingAnonymous": "Hola",
     "switchOrg": "Organización {{name}}. Tocá para cambiar.",
-    "profile": "Tu perfil",
     "currency": "Moneda del saldo",
     "available": "Disponible",
     "held": "Retenido",
@@ -408,7 +412,14 @@
     "total": "Total a debitar",
     "availableAfter": "Disponible después del pago",
     "confirm": "Confirmar pago",
-    "approvalNote": "Otra persona de tu equipo tiene que aprobarlo antes de que se envíe.",
+    "approval": {
+      "auto": "Sale sin aprobación (debajo de {{amount}})",
+      "autoBody": "La política de la empresa deja salir los pagos de este monto sin esperar a otra persona.",
+      "required": "Requiere aprobación",
+      "requiredBody": "Otra persona de tu equipo tiene que aprobarlo antes de que se envíe.",
+      "requiredAbove": "Desde {{amount}}, otra persona de tu equipo tiene que aprobarlo antes de que se envíe.",
+      "unknown": "Según la política de la empresa, puede necesitar la aprobación de otra persona."
+    },
     "done": "Listo",
     "seeApprovals": "Ver aprobaciones",
     "result": {
@@ -442,7 +453,11 @@
       "creator": "Vos creaste este pago: lo tiene que aprobar otra persona.",
       "role": "Tu rol no puede aprobar pagos."
     },
-    "unknownPerson": "Alguien del equipo"
+    "unknownPerson": "Alguien del equipo",
+    "approveSelf": "Aprobar (aprobación propia)",
+    "mineSelf": "Aprobación propia",
+    "selfWarningTitle": "Vas a aprobar tu propio pago",
+    "selfWarningBody": "La política lo permite porque no hay otro aprobador en el equipo. Queda registrado como aprobación propia."
   },
   "transfer": {
     "title": "Mover entre cuentas",
@@ -563,7 +578,16 @@
     "importingBody": "Estamos trayendo los proyectos y compradores de {{name}}.",
     "failedTitle": "La importación falló",
     "failedBody": "Escribinos y la reintentamos desde Lebane.",
-    "linkedBody": "{{name}} quedó vinculada: tus proyectos ya son cuentas y tus compradores, pagadores."
+    "linkedBody": "{{name}} quedó vinculada: tus proyectos ya son cuentas y tus compradores, pagadores.",
+    "summaryTitle": "Qué importamos",
+    "summaryProjects": "Proyectos como cuentas",
+    "summaryBuyers": "Compradores como pagadores",
+    "invitedTitle": "Usuarios de Lebane invitados",
+    "invitedBody": "Les llega un email y entran con el rol que les corresponde por sus permisos en Lebane.",
+    "invitedA11y": "{{email}}, {{role}}",
+    "noneInvited": "No había usuarios nuevos para invitar.",
+    "alreadyMembers": "Ya estaban en el equipo",
+    "withoutAccess": "Sin acceso a pagos en Lebane (no los invitamos)"
   },
   "orgs": {
     "title": "Tus organizaciones",
@@ -578,13 +602,25 @@
     "invited": "Invitamos a {{email}}",
     "expires": "La invitación vence en 7 días.",
     "pendingInvite": "Invitación pendiente",
-    "readOnly": "Solo los administradores pueden invitar y cambiar roles.",
+    "readOnly": "Solo el propietario y los administradores pueden invitar y cambiar roles.",
     "empty": "Todavía no hay nadie más en el equipo",
-    "roleChanged": "Cambiamos el rol de {{email}}",
-    "removed": "Quitamos a {{email}} del equipo",
+    "roleChanged": "Cambiamos el rol de {{name}}",
+    "removed": "Quitamos a {{name}} del equipo",
     "memberTitle": "Persona del equipo",
     "remove": "Quitar del equipo",
-    "confirmRemove": "Tocá de nuevo para quitar"
+    "confirmRemove": "Tocá de nuevo para quitar",
+    "you": "Vos",
+    "ownerNote": "Al propietario no se lo puede quitar ni cambiar de rol: la propiedad solo se transfiere.",
+    "adminNote": "Solo el propietario cambia o quita a un administrador.",
+    "transfer": "Transferir la propiedad",
+    "transferRowBody": "Le pasás la organización a otra persona del equipo",
+    "transferBody": "Elegí quién va a ser el nuevo propietario de {{org}}.",
+    "transferEmpty": "Primero sumá a alguien al equipo: la propiedad pasa a otra persona de la organización.",
+    "transferWarningTitle": "Vas a dejar de ser el propietario",
+    "transferWarningBody": "{{name}} va a poder cambiar la política de aprobación, cambiar o quitar administradores y transferir la propiedad. Vos quedás como administrador y solo {{name}} puede devolvértela.",
+    "transferPick": "Elegí a una persona para ver qué cambia.",
+    "transferConfirm": "Transferir a {{name}}",
+    "transferred": "{{name}} es el nuevo propietario"
   },
   "onboarding": {
     "title": "Abrí tu cuenta",
@@ -664,7 +700,13 @@
       "unavailable": "Las notificaciones no están disponibles en este dispositivo"
     }
   },
-  "profile": { "title": "Tu perfil", "memberships": "Organizaciones" },
+  "profile": {
+    "title": "Tu perfil",
+    "memberships": "Organizaciones",
+    "nameHint": "Así te ven en tu equipo y en los pagos que creás. Vacío, mostramos tu email.",
+    "saveName": "Guardar nombre",
+    "nameSaved": "Guardamos tu nombre"
+  },
   "settings": {
     "title": "Más",
     "organization": "Organización",
@@ -676,11 +718,9 @@
     "erp": "Vincular con Lebane ERP",
     "erpLinked": "Vinculada",
     "kyc": "Verificación",
-    "app": "App",
     "security": "Seguridad",
     "personalPreview": "Modo personal (vista previa)",
     "personalPreviewBody": "Muestra tu billetera personal junto a tus empresas.",
-    "version": "Versión {{version}}",
     "logout": "Cerrar sesión",
     "appearance": "Apariencia",
     "appearanceBody": "Elegí cómo se ve Lenapay. Sistema sigue el modo de tu teléfono.",
@@ -688,7 +728,9 @@
     "language": "Idioma",
     "languageBody": "Sistema sigue el idioma de tu teléfono. Los montos siguen en pesos o dólares.",
     "languages": { "system": "Sistema", "esAR": "Español (Argentina)", "enUS": "English (US)" },
-    "personal": "Personal"
+    "personal": "Personal",
+    "accountPermissions": "Permisos por cuenta",
+    "defaultAccountNone": "La app abre en la última organización que usaste"
   },
   "developer": {
     "title": "Desarrollador",
@@ -770,9 +812,61 @@
     "paidTitle": "Pago enviado",
     "paidBody": "Le pagaste a {{name}}."
   },
+  "config": {
+    "title": "Configuración",
+    "account": "Tu cuenta",
+    "preferences": "Preferencias",
+    "securityBody": "Biometría, verificación en dos pasos y confirmación de pagos",
+    "notifications": "Notificaciones",
+    "notificationsBody": "Avisos de cobros y aprobaciones en este teléfono",
+    "about": "Acerca de",
+    "aboutBody": "Lenapay by Lebane · {{version}}"
+  },
+  "menu": {
+    "label": "Menú de tu cuenta",
+    "open": "Abrir el menú de tu cuenta",
+    "profile": "Mi perfil",
+    "switchOrg": "Cambiar organización",
+    "settings": "Configuración",
+    "security": "Seguridad",
+    "logout": "Cerrar sesión",
+    "confirmLogout": "Tocá de nuevo para cerrar sesión"
+  },
+  "policy": {
+    "title": "Política de aprobación",
+    "intro": "Decide qué pagos de la empresa esperan la aprobación de otra persona antes de salir.",
+    "readOnly": "Solo el propietario puede cambiar la política.",
+    "modeLabel": "Cuándo se aprueba",
+    "mode": { "always": "Siempre", "threshold": "Según el monto" },
+    "alwaysBody": "Todo pago de la empresa espera la aprobación de otra persona.",
+    "thresholdBody": "Los pagos por debajo del monto salen sin aprobación; desde ese monto esperan a otra persona. El monto no incluye la comisión.",
+    "thresholdLabel": "{{currency}}: sin aprobación por debajo de",
+    "thresholdHint": "Vacío: en esta moneda todo pago necesita aprobación.",
+    "thresholdPreview": "Debajo de {{amount}} sale sin aprobación.",
+    "noThreshold": "Todo pago en {{currency}} necesita aprobación.",
+    "selfLabel": "El propietario puede aprobar sus propios pagos",
+    "selfBody": "Solo si no hay otro aprobador en el equipo. Con un aprobador o un administrador más, siempre aprueba otra persona.",
+    "selfEffective": "Hoy aplica: no hay otro aprobador en el equipo.",
+    "selfBlocked": "Hoy no aplica: hay otro aprobador en el equipo.",
+    "save": "Guardar política",
+    "saved": "Guardamos la política de aprobación",
+    "updatedAt": "Última modificación: {{date}}",
+    "summaryAlways": "Todo pago necesita aprobación",
+    "summaryThreshold": "Sin aprobación debajo de {{amounts}}"
+  },
+  "defaultAccount": {
+    "title": "Cuenta predeterminada",
+    "intro": "Cuando abrís Lenapay empezás en esta organización, y Pagar y Mover arrancan con esta cuenta.",
+    "orgLabel": "Organización",
+    "accountLabel": "Cuenta",
+    "none": "Sin predeterminada",
+    "noneBody": "La app abre en la última organización que usaste.",
+    "noAccounts": "Esta organización todavía no tiene cuentas abiertas.",
+    "saved": "Guardamos tu cuenta predeterminada",
+    "current": "{{org}} · {{account}}"
+  },
   "proposal": {
     "ribbon": "Próximamente · propuesta",
-    "short": "Propuesta",
     "disabledHint": "Todavía no se puede editar: es una propuesta.",
     "maxPerApproval": "Monto máximo por aprobación",
     "maxPerApprovalHint": "Por encima de este monto, el pago necesita otro aprobador.",
@@ -783,16 +877,10 @@
       "body": "Así elegirías en qué cuentas puede operar esta persona y sus límites. Todavía no se guarda.",
       "accountA11y": "Puede operar en {{name}}"
     },
-    "policies": {
-      "title": "Políticas de aprobación (Propuesta)",
-      "body": "Así configurarías cuántas aprobaciones necesita cada pago según el monto y la cuenta. Todavía no se guarda.",
-      "general": "Regla general",
-      "oneApprover": "Con un aprobador hasta",
-      "oneApproverHint": "Entre el monto sin aprobación y este, alcanza con una persona.",
-      "above": "Por encima:",
-      "twoApprovers": "Dos aprobadores",
-      "perAccount": "Límites por cuenta",
-      "footnote": "Los montos son un ejemplo. Hoy todo pago de empresa necesita una aprobación de otra persona."
+    "accountLimits": {
+      "title": "Límites por cuenta (Propuesta)",
+      "body": "Así se verían límites por cuenta además de la política de arriba. Todavía no se guarda.",
+      "footnote": "Los montos son un ejemplo: hoy rige solo la política de aprobación."
     }
   }
 }

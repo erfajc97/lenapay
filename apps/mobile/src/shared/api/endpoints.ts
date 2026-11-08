@@ -18,6 +18,7 @@ export const endpoints = {
     stepUpVerify: '/auth/step-up/verify',
   },
   me: '/me',
+  preferences: '/me/preferences',
   devices: '/devices',
   pushTokens: '/push-tokens',
   orgs: {
@@ -25,6 +26,8 @@ export const endpoints = {
     members: (orgId: string) => `${org(orgId)}/members`,
     member: (orgId: string, userId: string) => `${org(orgId)}/members/${id(userId)}`,
     invites: (orgId: string) => `${org(orgId)}/invites`,
+    ownershipTransfer: (orgId: string) => `${org(orgId)}/ownership-transfer`,
+    approvalPolicy: (orgId: string) => `${org(orgId)}/approval-policy`,
   },
   kyc: {
     case: (orgId: string) => `${org(orgId)}/kyc`,

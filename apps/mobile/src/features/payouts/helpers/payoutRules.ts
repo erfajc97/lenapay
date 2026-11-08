@@ -1,4 +1,5 @@
-import type { Payout, PayoutQuote } from '@/shared/api/types';
+import type { ApprovalPolicy, Currency, OrgKind, Payout, PayoutQuote } from '@/shared/api/types';
+import { approvalThreshold, needsApproval } from '@/shared/helpers/approvalPolicy';
 import { classifyDestination } from '@/shared/helpers/cbu';
 import { parseAmountInput } from '@/shared/money/parse';
 
@@ -47,4 +48,21 @@ export function payoutOutcome(payout: Pick<Payout, 'status'>): 'pending_approval
 export function canResolve(input: string): boolean {
   const kind = classifyDestination(input);
   return kind === 'cbu' || kind === 'cvu' || kind === 'alias';
+}
+
+type ApprovalNote = { kind: 'none' } | { kind: 'unknown' } | { kind: 'auto'; threshold: number } | { kind: 'required'; threshold: number | null };
+
+/**
+ * What the review says about approval (R-OUT-7), decided like the API: a personal wallet never
+ * waits; a company payout leaves at once only strictly below its currency's threshold.
+ */
+export function approvalNote(
+  policy: Pick<ApprovalPolicy, 'mode' | 'thresholdMinor'> | undefined,
+  payout: { orgKind: OrgKind; currency: Currency; amount: number },
+): ApprovalNote {
+  if (payout.orgKind === 'personal') return { kind: 'none' };
+  if (!policy) return { kind: 'unknown' };
+  const threshold = approvalThreshold(policy, payout.currency);
+  if (!needsApproval(policy, payout) && threshold !== null) return { kind: 'auto', threshold };
+  return { kind: 'required', threshold };
 }

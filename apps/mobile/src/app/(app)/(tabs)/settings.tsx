@@ -1,5 +1,6 @@
-import { Settings } from '@/features/settings/Settings';
+import { More } from '@/features/more/More';
 
-export default function SettingsRoute() {
-  return <Settings />;
+/** The "Más" tab (route kept as /settings so existing links still land here). */
+export default function MoreRoute() {
+  return <More />;
 }

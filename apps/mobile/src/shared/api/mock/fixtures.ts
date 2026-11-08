@@ -445,13 +445,13 @@ export function createSeed(now: number): MockState {
       { id: PERSONAL_ORG_ID, kind: 'personal', legalName: 'Erick Jiménez', cuit: null, kycStatus: 'approved', createdAt: at(now, 60, 9) },
     ],
     memberships: [
-      { orgId: DEMO_ORG_ID, userId: 'u_erick', role: 'admin' },
+      { orgId: DEMO_ORG_ID, userId: 'u_erick', role: 'owner' },
       { orgId: DEMO_ORG_ID, userId: 'u_martina', role: 'operator' },
       { orgId: DEMO_ORG_ID, userId: 'u_pablo', role: 'approver' },
       { orgId: DEMO_ORG_ID, userId: 'u_sofia', role: 'viewer' },
       { orgId: ANDINA_ORG_ID, userId: 'u_erick', role: 'approver' },
-      { orgId: ANDINA_ORG_ID, userId: 'u_diego', role: 'admin' },
-      { orgId: PERSONAL_ORG_ID, userId: 'u_erick', role: 'admin' },
+      { orgId: ANDINA_ORG_ID, userId: 'u_diego', role: 'owner' },
+      { orgId: PERSONAL_ORG_ID, userId: 'u_erick', role: 'owner' },
     ],
     invites: [{ id: 'inv_1', orgId: DEMO_ORG_ID, email: 'contador@estudiogarcia.com.ar', role: 'viewer', expiresAt: new Date(now + 5 * DAY).toISOString(), createdAt: at(now, 2, 10) }],
     kyc: {
@@ -476,21 +476,41 @@ export function createSeed(now: number): MockState {
           { name: 'Grupo Inversor Norte SA', docType: 'cuit', docNumber: '30705556667', project: 'Complejo Pilar Norte' },
           { name: 'Martín Romero', docType: 'dni', docNumber: '35111222', project: 'Torre Palermo' },
         ],
+        // ERP users with their Lebane permissions mapped to a role (R-ERP-4); Martina already is a member.
+        users: [
+          { email: 'obras@desarrollosdelsur.com.ar', role: 'admin' },
+          { email: 'tesoreria@desarrollosdelsur.com.ar', role: 'operator' },
+          { email: 'martina@desarrollosdelsur.com.ar', role: 'operator' },
+          { email: 'ventas@desarrollosdelsur.com.ar', role: null },
+        ],
         linkStartedAt: null,
+        linkedBy: null,
         linkedAt: null,
+        importSummary: null,
       },
       // Already linked to its ERP: the source of Erick's installments in "Mis pagos".
       [ANDINA_ORG_ID]: {
         candidate: { found: true, erpOrgId: 'erp-org-002', displayName: 'Constructora Andina S.R.L.' },
         projects: [],
         payers: [],
+        users: [],
         linkStartedAt: now - 90 * DAY,
+        linkedBy: 'u_diego',
         linkedAt: at(now, 90, 10),
+        importSummary: {
+          projects: 2, buyers: 5, skippedBuyers: 0, usersInvited: 1, usersAlreadyMembers: 0, usersWithoutPaymentsAccess: 1,
+          invitedUsers: [{ email: 'tesoreria@constructoraandina.com.ar', role: 'operator' }],
+        },
       },
     },
     verifiedDni: { [PERSONAL_ORG_ID]: PERSONAL_DNI },
     payerLinks: [],
     installments: { pay_erick_andina: seedInstallments(now) },
     idempotency: {},
+    // Like the API seed: below ARS 500.000 a company payout leaves without approval (R-OUT-7).
+    policies: {
+      [DEMO_ORG_ID]: { mode: 'threshold', thresholdMinor: { ARS: 500_000_00, USD: null }, allowOwnerSelfApproval: true, updatedBy: 'u_erick', updatedAt: at(now, 7, 10) },
+    },
+    preferences: {},
   };
 }

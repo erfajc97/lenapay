@@ -8,9 +8,11 @@ import {
   toErpLink,
   toInstallmentList,
   toMe,
+  toMember,
   toMovement,
   toMyPaymentCompany,
   toMyPaymentPayin,
+  toOwnershipTransfer,
   toPayin,
   toPayout,
   toQuote,
@@ -111,11 +113,28 @@ describe('contract → view model', () => {
   });
 
   it('derives personal mode from a personal membership (the contract has no flag)', () => {
-    const user = { id: 'u', email: 'persona@lenapay.app', emailVerified: true, mfaEnabled: false, createdAt: '2026-11-01T00:00:00Z' };
-    const personal = { orgId: 'o', orgName: 'Lucía', orgKind: 'personal' as const, role: 'admin' as const, kycStatus: 'approved' as const };
+    const user = { id: 'u', email: 'persona@lenapay.app', fullName: null, emailVerified: true, mfaEnabled: false, createdAt: '2026-11-01T00:00:00Z' };
+    const personal = { orgId: 'o', orgName: 'Lucía', orgKind: 'personal' as const, role: 'owner' as const, kycStatus: 'approved' as const };
     expect(toMe({ user, memberships: [personal] })).toMatchObject({ id: 'u', fullName: null, personalModeEnabled: true });
     expect(toMe({ user, memberships: [{ ...personal, orgKind: 'company' }] }).personalModeEnabled).toBe(false);
     expect(toMe({ user, memberships: [] }).personalModeEnabled).toBe(false);
+  });
+
+  // Why: names replace emails on Home, Team and approvals (R-ID-5), and the default org/account
+  // decides where the app opens; a dropped field shows the email or the wrong org.
+  it('carries the full name and the synced preferences, with nothing set when absent', () => {
+    const user = { id: 'u', email: 'demo@lenapay.app', fullName: 'Ricardo Benítez', emailVerified: true, mfaEnabled: false, createdAt: 'c' };
+    const preferences = { defaultOrgId: 'o', defaultAccountId: 'a', locale: 'en-US' as const, theme: 'dark' as const, updatedAt: 'u' };
+    expect(toMe({ user, memberships: [], preferences })).toMatchObject({ fullName: 'Ricardo Benítez', preferences });
+    expect(toMe({ user, memberships: [] }).preferences).toEqual({ defaultOrgId: null, defaultAccountId: null, locale: null, theme: null, updatedAt: null });
+  });
+
+  it('maps members with their name and the owner role, and both sides of a transfer', () => {
+    const member = { userId: 'u', email: 'demo@lenapay.app', fullName: 'Ricardo Benítez', role: 'owner' as const, joinedAt: 'j' };
+    expect(toMember(member)).toEqual({ userId: 'u', email: 'demo@lenapay.app', fullName: 'Ricardo Benítez', role: 'owner', status: 'active' });
+    expect(toMember({ ...member, fullName: null }).fullName).toBeNull();
+    const transfer = toOwnershipTransfer({ previousOwner: { ...member, role: 'admin' }, owner: { ...member, userId: 'v', role: 'owner' } });
+    expect(transfer).toMatchObject({ previousOwner: { userId: 'u', role: 'admin' }, owner: { userId: 'v', role: 'owner' } });
   });
 
   it('maps reconciliation runs and items, with an absent side as null', () => {
@@ -133,7 +152,19 @@ describe('contract → view model', () => {
     expect(toErpLink({ ...link, importStatus: 'pending' }).status).toBe('importing');
     expect(toErpLink({ ...link, importStatus: 'running' }).status).toBe('importing');
     expect(toErpLink({ ...link, importStatus: 'completed' }).status).toBe('linked');
-    expect(toErpLink({ ...link, importStatus: 'failed' })).toEqual({ status: 'failed', displayName: 'DDS', linkedAt: 'a', importedAt: null });
+    expect(toErpLink({ ...link, importStatus: 'failed' })).toEqual({ status: 'failed', displayName: 'DDS', linkedAt: 'a', importedAt: null, importSummary: null });
+  });
+
+  // Why: the ERP screen lists who was invited and with which role (R-ERP-4); losing the summary
+  // hides that people were invited on the owner's behalf.
+  it('keeps the import summary once the import ran', () => {
+    const importSummary = {
+      projects: 2, buyers: 5, skippedBuyers: 0, usersInvited: 1, usersAlreadyMembers: 0, usersWithoutPaymentsAccess: 1,
+      invitedUsers: [{ email: 'tesoreria@constructoraandina.com.ar', role: 'operator' as const }],
+    };
+    const link = { id: 'l', erpOrgId: 'erp-2', displayName: 'Andina', linkedBy: 'u', linkedAt: 'a', importedAt: 'i', importStatus: 'completed' as const };
+    expect(toErpLink({ ...link, importSummary }).importSummary).toEqual(importSummary);
+    expect(toErpLink({ ...link, importSummary: null }).importSummary).toBeNull();
   });
 });
 

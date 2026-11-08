@@ -7,6 +7,7 @@ import { AppText } from '@/shared/ui/AppText';
 import { AccountPicker } from '@/shared/ui/AccountPicker';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
+import { formatMoney } from '@/shared/money/format';
 import { Money } from '@/shared/ui/Money';
 import { isInstantLenapay } from '@/shared/helpers/rail';
 import { RailBadge } from '@/shared/ui/RailBadge';
@@ -184,9 +185,29 @@ export function Payout() {
         <Field label={t('fields.concept')} value={flow.concept.trim()} />
         {flow.attachmentName ? <Field label={t('fields.attachment')} value={flow.attachmentName} /> : null}
       </Card>
-      {flow.org?.kind === 'company' ? (
+      {flow.approval.kind === 'auto' ? (
+        <Notice
+          tone="success"
+          icon="flash-outline"
+          title={t('payout.approval.auto', { amount: formatMoney(flow.approval.threshold, flow.currency) })}
+          body={t('payout.approval.autoBody')}
+        />
+      ) : null}
+      {flow.approval.kind === 'required' ? (
+        <Notice
+          tone="info"
+          icon="people-outline"
+          title={t('payout.approval.required')}
+          body={
+            flow.approval.threshold === null
+              ? t('payout.approval.requiredBody')
+              : t('payout.approval.requiredAbove', { amount: formatMoney(flow.approval.threshold, flow.currency) })
+          }
+        />
+      ) : null}
+      {flow.approval.kind === 'unknown' ? (
         <AppText variant="caption" tone="muted">
-          {t('payout.approvalNote')}
+          {t('payout.approval.unknown')}
         </AppText>
       ) : null}
     </Screen>

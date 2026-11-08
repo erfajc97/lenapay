@@ -49,6 +49,11 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
       registerDevice: (body) => respond(() => backend.registerDevice(body)),
       me: () => respond(() => backend.me()),
     },
+    profile: {
+      update: (body) => respond(() => backend.updateMe(body)),
+      preferences: () => respond(() => backend.preferences()),
+      updatePreferences: (body) => respond(() => backend.updatePreferences(body)),
+    },
     orgs: {
       list: () => respond(() => backend.listOrgs()),
       create: (body) => respond(() => backend.createOrg(body)),
@@ -56,6 +61,9 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
       invite: (orgId, body) => respond(() => backend.invite(orgId, body)),
       updateMember: (orgId, userId, body) => respond(() => backend.updateMember(orgId, userId, body)),
       removeMember: (orgId, userId) => respond(() => backend.removeMember(orgId, userId)),
+      transferOwnership: (orgId, body, options) => respond(() => backend.transferOwnership(orgId, body, options)),
+      approvalPolicy: (orgId) => respond(() => backend.approvalPolicy(orgId)),
+      updateApprovalPolicy: (orgId, body, options) => respond(() => backend.updateApprovalPolicy(orgId, body, options)),
     },
     kyc: {
       get: (orgId) => respond(() => backend.getKyc(orgId)),

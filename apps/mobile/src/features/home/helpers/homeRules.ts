@@ -1,5 +1,5 @@
 import type { Account, AccountCvu, Balance, Currency, ErpLinkStatus, Org } from '@/shared/api/types';
-import { type MoneyBlocker, moneyActionBlocker } from '@/shared/helpers/permissions';
+import { type MoneyBlocker, moneyActionBlocker, roleAtLeast } from '@/shared/helpers/permissions';
 
 /** The org-wide balance of one currency, or null while it is not known (never a fake 0, M6). */
 export function balanceFor(totals: Balance[] | undefined, currency: Currency): Balance | null {
@@ -24,9 +24,9 @@ export function kycNotice(org: Pick<Org, 'kycStatus'>): KycNotice {
   return org.kycStatus === 'approved' ? null : org.kycStatus;
 }
 
-/** Who may link the ERP (R-ERP-2): an admin of a verified company. */
+/** Who may link the ERP (R-ERP-2): an admin or the owner of a verified company. */
 export function canLinkErp(org: Pick<Org, 'kind' | 'kycStatus' | 'role'>): boolean {
-  return org.kind === 'company' && org.kycStatus === 'approved' && org.role === 'admin';
+  return org.kind === 'company' && org.kycStatus === 'approved' && roleAtLeast(org.role, 'admin');
 }
 
 /** The "¿Usás Lebane ERP?" card: only for who can link, and only once we know it is not linked. */

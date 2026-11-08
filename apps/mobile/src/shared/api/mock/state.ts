@@ -1,11 +1,14 @@
 import type {
   AccountCvu,
   AccountKind,
+  ApprovalPolicy,
   Currency,
   ErpCandidate,
+  ErpImportSummary,
   Installment,
   Invite,
   KycCase,
+  MemberRole,
   Org,
   Payer,
   Payin,
@@ -14,6 +17,7 @@ import type {
   ReconciliationItem,
   ReconciliationRun,
   Role,
+  UserPreferences,
 } from '../types';
 
 /** Internal records of the in-memory backend. Never leave `mock/`: the API returns view models. */
@@ -29,8 +33,11 @@ type MockOrg = Omit<Org, 'role'>;
 interface MockMembership {
   orgId: string;
   userId: string;
-  role: Role;
+  role: MemberRole;
 }
+
+/** The stored policy; `ownerSelfApprovalEffective` is derived from the members on read. */
+export type MockApprovalPolicy = Omit<ApprovalPolicy, 'ownerSelfApprovalEffective'>;
 
 export interface MockAccount {
   id: string;
@@ -75,12 +82,22 @@ export interface MockErpPayer {
   project: string;
 }
 
+/** An ERP user: `role` is mapped from their Lebane permissions; null = no payments access. */
+export interface MockErpUser {
+  email: string;
+  role: Role | null;
+}
+
 interface MockErp {
   candidate: ErpCandidate;
   projects: string[];
   payers: MockErpPayer[];
+  users: MockErpUser[];
   linkStartedAt: number | null;
+  /** The admin or owner who linked: invites are capped at their role (never owner). */
+  linkedBy: string | null;
   linkedAt: string | null;
+  importSummary: ErpImportSummary | null;
 }
 
 /** "Mis pagos": a verified person (their personal org) ↔ a company's payer with their DNI. */
@@ -99,7 +116,7 @@ export interface MockReconRun {
 export interface MockState {
   seq: number;
   currentUserId: string | null;
-  pendingSignup: { email: string } | null;
+  pendingSignup: { email: string; fullName: string | null } | null;
   users: MockUser[];
   devices: { id: string; userId: string; publicKey: string }[];
   orgs: MockOrg[];
@@ -120,4 +137,8 @@ export interface MockState {
   /** ERP installments (cuotas) per payer id, for ERP-linked companies. */
   installments: Record<string, Installment[]>;
   idempotency: Record<string, { hash: string; response: unknown }>;
+  /** Approval policy per org (R-OUT-7); an org without one has the API's default. */
+  policies: Record<string, MockApprovalPolicy>;
+  /** Synced preferences per user id (R-ID-5). */
+  preferences: Record<string, UserPreferences>;
 }

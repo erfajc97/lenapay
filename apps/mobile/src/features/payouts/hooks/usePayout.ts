@@ -5,12 +5,14 @@ import { useState } from 'react';
 import type { Currency, LocalUpload, Payout } from '@/shared/api/types';
 import { classifyDestination } from '@/shared/helpers/cbu';
 import { toUpload } from '@/shared/helpers/files';
+import { defaultAccountId } from '@/shared/helpers/orgs';
 import { moneyActionBlocker } from '@/shared/helpers/permissions';
 import { useAccounts } from '@/shared/queries/accounts';
-import { useActiveOrg } from '@/shared/queries/orgs';
+import { useActiveOrg, useApprovalPolicy } from '@/shared/queries/orgs';
 import { usePayoutQuote, useResolveDestination } from '@/shared/queries/payouts';
+import { useMe } from '@/shared/queries/session';
 
-import { canResolve, detailsErrors, hasErrors, readAmount, reviewBlocker } from '../helpers/payoutRules';
+import { approvalNote, canResolve, detailsErrors, hasErrors, readAmount, reviewBlocker } from '../helpers/payoutRules';
 import { useCreatePayout } from '../mutations/useCreatePayout';
 
 type PayoutStep = 'destination' | 'details' | 'review' | 'result';
@@ -31,8 +33,10 @@ export function usePayout() {
   const [result, setResult] = useState<Payout | null>(null);
 
   const destination = useResolveDestination(org?.id, submittedTo);
+  const policy = useApprovalPolicy(org?.kind === 'company' ? org.id : undefined);
   const openAccounts = (accounts.data ?? []).filter((account) => !account.archived);
-  const selectedAccountId = accountId ?? openAccounts.find((account) => account.kind !== 'project')?.id ?? openAccounts[0]?.id ?? null;
+  const me = useMe();
+  const selectedAccountId = accountId ?? defaultAccountId(openAccounts, org?.id, me.data?.preferences) ?? openAccounts.find((account) => account.kind !== 'project')?.id ?? openAccounts[0]?.id ?? null;
   const errors = detailsErrors({ amountText, accountId: selectedAccountId, concept });
   const amount = readAmount(amountText).minor;
   const quoteRequest = step === 'review' && selectedAccountId && amount && submittedTo ? { accountId: selectedAccountId, currency, amount, to: submittedTo } : null;
@@ -80,6 +84,7 @@ export function usePayout() {
     },
     quote,
     blockedByBalance: quote.data ? reviewBlocker(quote.data) : null,
+    approval: org && amount ? approvalNote(policy.data, { orgKind: org.kind, currency, amount }) : ({ kind: 'none' } as const),
     confirm: () => {
       if (!selectedAccountId || !amount || !submittedTo) return;
       create.mutate({ body: { accountId: selectedAccountId, currency, amount, to: submittedTo, concept: concept.trim() }, attachment });

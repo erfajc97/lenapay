@@ -117,7 +117,7 @@ export function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: B
 
 const styles = StyleSheet.create({
   host: { position: 'absolute' },
-  row: { height: TAB_BAR.height, paddingTop: 6, paddingBottom: 6 },
+  row: { height: TAB_BAR.height, paddingTop: 5, paddingBottom: 5 },
   iconSlot: { height: TAB_BAR.pillHeight, alignItems: 'center', justifyContent: 'center' },
   pill: { position: 'absolute', top: 6, height: TAB_BAR.pillHeight },
 });

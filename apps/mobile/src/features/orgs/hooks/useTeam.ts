@@ -2,15 +2,42 @@ import { useState } from 'react';
 import { z } from 'zod';
 
 import type { Member, Role } from '@/shared/api/types';
-import { canEditMember, canManageTeam } from '@/shared/helpers/permissions';
+import { displayName } from '@/shared/helpers/people';
+import { canEditMember, canManageTeam, canTransferOwnership, grantableRoles, ownershipCandidates } from '@/shared/helpers/permissions';
 import { useAccounts } from '@/shared/queries/accounts';
 import { useActiveOrg, useMembers } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 
 import { useInvite } from '../mutations/useInvite';
 import { useRemoveMember, useUpdateMember } from '../mutations/useMemberMutations';
+import { useTransferOwnership } from '../mutations/useTransferOwnership';
 
 const emailSchema = z.email();
+
+/** Ownership transfer (R-ORG-3): owner only, pick another active member, explicit warning, step-up. */
+function useOwnershipTransfer(orgId: string | undefined, members: Member[], myUserId: string | null) {
+  const [open, setOpen] = useState(false);
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const close = () => {
+    setOpen(false);
+    setTargetId(null);
+  };
+  const transfer = useTransferOwnership(orgId, close);
+  const candidates = ownershipCandidates(members, myUserId);
+  const target = candidates.find((member) => member.userId === targetId) ?? null;
+  return {
+    open,
+    openSheet: () => setOpen(true),
+    close,
+    candidates,
+    target,
+    pick: (member: Member) => setTargetId(member.userId),
+    confirm: () => {
+      if (target) transfer.mutate(target);
+    },
+    pending: transfer.isPending,
+  };
+}
 
 export function useTeam() {
   const { org } = useActiveOrg();
@@ -27,6 +54,7 @@ export function useTeam() {
   });
   const emailValid = emailSchema.safeParse(email.trim()).success;
   const me = useMe();
+  const myUserId = me.data?.id ?? null;
   const [editing, setEditing] = useState<Member | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const closeMember = () => {
@@ -35,12 +63,21 @@ export function useTeam() {
   };
   const updateMember = useUpdateMember(org?.id, closeMember);
   const removeMember = useRemoveMember(org?.id, closeMember);
+  const myRole = org?.role ?? 'viewer';
+  const transfer = useOwnershipTransfer(org?.id, members.data ?? [], myUserId);
 
   return {
     org,
     members,
     accounts: accounts.data ?? [],
-    canManage: org ? canManageTeam(org.role) : false,
+    canManage: canManageTeam(myRole),
+    isOwner: myRole === 'owner',
+    canTransfer: canTransferOwnership(myRole),
+    // The ladder note each manager needs: the owner learns they cannot be changed, an admin that admins are the owner's.
+    ladderNote: myRole === 'owner' ? 'team.ownerNote' : canManageTeam(myRole) ? 'team.adminNote' : null,
+    grantable: grantableRoles(myRole),
+    isMe: (member: Member) => member.userId === myUserId,
+    nameOf: displayName,
     sheetOpen,
     openSheet: () => setSheetOpen(true),
     closeSheet: () => setSheetOpen(false),
@@ -57,12 +94,12 @@ export function useTeam() {
       if (emailValid) invite.mutate({ email: email.trim().toLowerCase(), role });
     },
     inviting: invite.isPending,
-    canEdit: (member: Member) => (org ? canEditMember({ role: org.role, myUserId: me.data?.id ?? null, member }) : false),
+    canEdit: (member: Member) => canEditMember({ role: myRole, myUserId, member }),
     editing,
     openMember: (member: Member) => setEditing(member),
     closeMember,
-    changeRole: (role: Role) => {
-      if (editing && role !== editing.role) updateMember.mutate({ member: editing, role });
+    changeRole: (next: Role) => {
+      if (editing && next !== editing.role) updateMember.mutate({ member: editing, role: next });
     },
     confirmRemove,
     // Removing someone is not undoable from the app: the first tap asks, the second removes.
@@ -72,5 +109,6 @@ export function useTeam() {
       else setConfirmRemove(true);
     },
     savingMember: updateMember.isPending || removeMember.isPending,
+    transfer,
   };
 }

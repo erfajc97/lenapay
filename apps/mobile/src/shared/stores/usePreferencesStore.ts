@@ -11,11 +11,16 @@ import { isThemePreference, type ThemePreference } from '@/shared/theme/themePre
  * personal-mode preview flag, the theme and the language. Never tokens (M4).
  */
 interface PreferencesState {
+  /** The org used last on this device (persisted). */
   activeOrgId: string | null;
+  /** The org picked during this run of the app (not persisted): it beats the synced default. */
+  sessionOrgId: string | null;
   personalModePreview: boolean;
   themePreference: ThemePreference;
   languagePreference: LanguagePreference;
   setActiveOrgId(orgId: string | null): void;
+  /** A new sign-in starts again from the person's default org. */
+  resetSessionOrg(): void;
   setPersonalModePreview(enabled: boolean): void;
   setThemePreference(theme: ThemePreference): void;
   setLanguagePreference(language: LanguagePreference): void;
@@ -25,10 +30,12 @@ export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
       activeOrgId: null,
+      sessionOrgId: null,
       personalModePreview: false,
       themePreference: 'system',
       languagePreference: 'system',
-      setActiveOrgId: (activeOrgId) => set({ activeOrgId }),
+      setActiveOrgId: (activeOrgId) => set({ activeOrgId, sessionOrgId: activeOrgId }),
+      resetSessionOrg: () => set({ sessionOrgId: null }),
       setPersonalModePreview: (personalModePreview) => set({ personalModePreview }),
       setThemePreference: (themePreference) => set({ themePreference }),
       setLanguagePreference: (languagePreference) => set({ languagePreference }),

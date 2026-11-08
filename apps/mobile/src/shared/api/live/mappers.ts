@@ -15,6 +15,7 @@ import type {
   MyPaymentPayin,
   Payer,
   Payin,
+  OwnershipTransfer,
   Payout,
   PayoutQuote,
   ReconciliationItem,
@@ -30,7 +31,7 @@ type Schemas = components['schemas'];
 
 export interface OrgDirectory {
   accountName(accountId: string): string;
-  /** Email of a member, or null when the user is not (or no longer) a member. */
+  /** Name (else email) of a member, or null when the user is not (or no longer) a member. */
   memberLabel(userId: string): string | null;
 }
 
@@ -52,19 +53,27 @@ export function toAccount(dto: Schemas['Account']): Account {
   };
 }
 
+const NO_PREFERENCES: Schemas['UserPreferences'] = { defaultOrgId: null, defaultAccountId: null, locale: null, theme: null, updatedAt: null };
+
 export function toMe(dto: Schemas['Me']): Me {
   return {
     id: dto.user.id,
     email: dto.user.email,
-    fullName: null,
+    fullName: dto.user.fullName ?? null,
     mfaEnabled: dto.user.mfaEnabled,
     personalModeEnabled: dto.memberships.some((membership) => membership.orgKind === 'personal'),
     memberships: dto.memberships,
+    // Always present per the contract; an older API without it reads as "nothing set".
+    preferences: dto.preferences ?? NO_PREFERENCES,
   };
 }
 
 export function toMember(dto: Schemas['Member']): Member {
-  return { userId: dto.userId, email: dto.email, fullName: null, role: dto.role, status: 'active' };
+  return { userId: dto.userId, email: dto.email, fullName: dto.fullName ?? null, role: dto.role, status: 'active' };
+}
+
+export function toOwnershipTransfer(dto: Schemas['OwnershipTransfer']): OwnershipTransfer {
+  return { previousOwner: toMember(dto.previousOwner), owner: toMember(dto.owner) };
 }
 
 export function toPayer(dto: Schemas['Payer'], directory: OrgDirectory): Payer {
@@ -215,8 +224,14 @@ const IMPORT_TO_LINK: Record<Schemas['ErpImportStatus'], ErpLink['status']> = {
 
 /** `null` is the contract's 404 `erp_link.not_found`: the org is not linked yet. */
 export function toErpLink(dto: Schemas['ErpLink'] | null): ErpLink {
-  if (!dto) return { status: 'not_linked', displayName: null, linkedAt: null, importedAt: null };
-  return { status: IMPORT_TO_LINK[dto.importStatus], displayName: dto.displayName, linkedAt: dto.linkedAt, importedAt: dto.importedAt };
+  if (!dto) return { status: 'not_linked', displayName: null, linkedAt: null, importedAt: null, importSummary: null };
+  return {
+    status: IMPORT_TO_LINK[dto.importStatus],
+    displayName: dto.displayName,
+    linkedAt: dto.linkedAt,
+    importedAt: dto.importedAt,
+    importSummary: dto.importSummary ?? null,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

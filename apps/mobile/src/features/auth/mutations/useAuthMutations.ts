@@ -6,10 +6,12 @@ import { ApiError } from '@/shared/api/errors';
 import type { LoginRequest, ResendCodeRequest, SignupRequest, VerifyEmailRequest } from '@/shared/api/types';
 import { authenticateWithBiometrics, biometricsAvailable } from '@/shared/biometrics/biometrics';
 import { notifyError, notifySuccess } from '@/shared/feedback/mutationFeedback';
+import { localFromServer } from '@/shared/helpers/preferences';
 import { i18n } from '@/shared/i18n';
 import { captureException } from '@/shared/reporting/reporting';
 import { clearSession, readBiometricsEnabled, readRefreshToken, saveTokens } from '@/shared/session/session';
 import { registerThisDevice } from '@/shared/stepup/registerThisDevice';
+import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
 import { useSessionStore } from '@/shared/stores/useSessionStore';
 
 /** The device key is an upgrade of step-up: registering it never delays or fails the sign-in. */
@@ -22,9 +24,18 @@ export function useLogin() {
   const setStatus = useSessionStore((state) => state.setStatus);
   const setPendingEmail = useSessionStore((state) => state.setPendingEmail);
   return useMutation({
-    mutationFn: (body: LoginRequest) => api.auth.login(body),
-    onSuccess: async (tokens) => {
-      await saveTokens(tokens);
+    mutationFn: async (body: LoginRequest) => {
+      await saveTokens(await api.auth.login(body));
+      // The synced language and theme win on sign-in (R-ID-5); unreachable, this phone's stay.
+      return api.profile.preferences().catch(() => null);
+    },
+    onSuccess: (preferences) => {
+      const synced = localFromServer(preferences);
+      const store = usePreferencesStore.getState();
+      if (synced.language) store.setLanguagePreference(synced.language);
+      if (synced.theme) store.setThemePreference(synced.theme);
+      // A new sign-in opens in the person's default org, not the previous session's pick.
+      store.resetSessionOrg();
       queryClient.clear();
       setPendingEmail(null);
       setStatus('active');

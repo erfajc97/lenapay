@@ -1,13 +1,15 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountCvu, Currency, Movement } from '@/shared/api/types';
 import { notifyInfo } from '@/shared/feedback/mutationFeedback';
 import { aliasError } from '@/shared/helpers/cbu';
 import { verifiedPersonalOrgId } from '@/shared/helpers/orgs';
+import { displayName, firstName } from '@/shared/helpers/people';
 import type { MoneyBlocker } from '@/shared/helpers/permissions';
 import { useCopy, useShareText } from '@/shared/mutations/useDeviceActions';
+import { useLogout } from '@/shared/mutations/useLogout';
 import { useAccounts, useBalances } from '@/shared/queries/accounts';
 import { useErpLink } from '@/shared/queries/erp';
 import { useMovements } from '@/shared/queries/movements';
@@ -17,6 +19,7 @@ import { useMe } from '@/shared/queries/session';
 import { useMovementFiltersStore } from '@/shared/stores/useMovementFiltersStore';
 
 import { balanceFor, canLinkErp, kycActionRoute, kycNotice, personalCvus, quickActions, showErpInvite } from '../helpers/homeRules';
+import type { AccountMenuTarget } from '../components/AccountMenu';
 import { useUpdateAccountCvuAlias } from '../mutations/useUpdateAccountCvuAlias';
 
 const RECENT_COUNT = 5;
@@ -59,6 +62,45 @@ function usePersonalWallet(orgId: string | undefined) {
   };
 }
 
+const MENU_ROUTES: Record<AccountMenuTarget, '/settings/profile' | '/orgs' | '/settings/default-account' | '/settings/configuration' | '/settings/security'> = {
+  profile: '/settings/profile',
+  switchOrg: '/orgs',
+  defaultAccount: '/settings/default-account',
+  settings: '/settings/configuration',
+  security: '/settings/security',
+};
+
+/** The avatar menu: navigation waits until the menu is off screen; logout asks for a second tap. */
+function useAccountMenu() {
+  const [open, setOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const next = useRef<AccountMenuTarget | null>(null);
+  const logout = useLogout();
+  const close = () => {
+    setOpen(false);
+    setConfirmLogout(false);
+  };
+  return {
+    open,
+    confirmLogout,
+    show: () => setOpen(true),
+    close,
+    pick: (target: AccountMenuTarget) => {
+      next.current = target;
+      close();
+    },
+    dismissed: () => {
+      const target = next.current;
+      next.current = null;
+      if (target) router.push(MENU_ROUTES[target]);
+    },
+    logout: () => {
+      if (confirmLogout) logout.mutate();
+      else setConfirmLogout(true);
+    },
+  };
+}
+
 export function useHome() {
   const { query: orgsQuery, org } = useActiveOrg();
   const me = useMe();
@@ -74,7 +116,10 @@ export function useHome() {
   return {
     orgsQuery,
     org,
-    firstName: me.data?.fullName?.split(' ')[0] ?? null,
+    firstName: firstName(me.data?.fullName),
+    myName: me.data ? displayName(me.data) : '',
+    myEmail: me.data?.email ?? '',
+    menu: useAccountMenu(),
     erpInvite: org ? showErpInvite(org, erpLink.data?.status) : false,
     noOrgs: orgsQuery.isSuccess && org === null,
     currency,

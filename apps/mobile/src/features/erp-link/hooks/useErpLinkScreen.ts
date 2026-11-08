@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { ACCOUNTS_KEY } from '@/shared/queries/accounts';
 import { useErpCandidate, useErpLink } from '@/shared/queries/erp';
+import { roleAtLeast } from '@/shared/helpers/permissions';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { PAYERS_KEY } from '@/shared/queries/payers';
 
@@ -13,7 +14,7 @@ export function useErpLinkScreen() {
   const queryClient = useQueryClient();
   const { org } = useActiveOrg();
   const link = useErpLink(org?.id);
-  const stage = erpStage({ kycApproved: org?.kycStatus === 'approved', isAdmin: org?.role === 'admin', linkStatus: link.data?.status });
+  const stage = erpStage({ kycApproved: org?.kycStatus === 'approved', isAdmin: org ? roleAtLeast(org.role, 'admin') : false, linkStatus: link.data?.status });
   const candidate = useErpCandidate(stage === 'candidate' ? org?.id : undefined);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [username, setUsername] = useState('');

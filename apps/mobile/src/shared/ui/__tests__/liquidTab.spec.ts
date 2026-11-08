@@ -34,4 +34,12 @@ describe('liquid tab indicator', () => {
     expect(tabBarSpace(34)).toBe(34 + TAB_BAR.gap + TAB_BAR.height + 16);
     expect(tabBarSpace(0)).toBe(TAB_BAR.gap + TAB_BAR.height + 16);
   });
+
+  // Why: owner feedback — the capsule floats low, 2–4 dp above the home indicator, still inset from the sides.
+  it('floats close to the home indicator with side insets', () => {
+    expect(TAB_BAR.gap).toBeGreaterThanOrEqual(2);
+    expect(TAB_BAR.gap).toBeLessThanOrEqual(4);
+    expect(TAB_BAR.height).toBeLessThan(60);
+    expect(TAB_BAR.side).toBeGreaterThan(0);
+  });
 });

@@ -22,12 +22,13 @@
   "tabs": { "home": "Home", "accounts": "Accounts", "payers": "Payers", "movements": "Activity", "more": "More" },
   "currency": { "ARS": "Pesos", "USD": "Dollars" },
   "docType": { "cuit": "CUIT", "dni": "DNI", "cuil": "CUIL" },
-  "roles": { "viewer": "Viewer", "operator": "Operator", "approver": "Approver", "admin": "Admin" },
+  "roles": { "viewer": "Viewer", "operator": "Operator", "approver": "Approver", "admin": "Admin", "owner": "Owner" },
   "roleHelp": {
     "viewer": "Sees balances and activity.",
     "operator": "Creates payments, payers and CVUs.",
     "approver": "Approves or rejects payments.",
-    "admin": "Everything, plus team and verification."
+    "admin": "Everything, plus team and verification.",
+    "owner": "Everything, plus the approval policy and handing over ownership. There is only one."
   },
   "blockers": {
     "kyc": "You'll be able to operate once we approve the company's verification.",
@@ -75,6 +76,7 @@
     "docType": "Document type",
     "email": "Email",
     "emailOptional": "Email (optional)",
+    "fullNameOptional": "Full name (optional)",
     "fullName": "Full name",
     "lebaneUser": "Lebane username",
     "legalAddress": "Legal address",
@@ -120,7 +122,9 @@
     "postalCode": "Enter the postal code.",
     "birthDate": "Enter the date as DD/MM/YYYY.",
     "position": "Enter the position.",
-    "payConcept": "Use up to {{max}} characters for the concept."
+    "payConcept": "Use up to {{max}} characters for the concept.",
+    "fullNameLength": "Use up to 120 characters.",
+    "thresholdRequired": "Enter at least one amount to approve by amount."
   },
   "errors": {
     "generic": "Something went wrong. Try again in a moment.",
@@ -162,8 +166,8 @@
     "user_not_found": "There's no account with that email.",
     "invite_not_found": "We couldn't find that invitation.",
     "invite_expired": "The invitation expired. Ask for a new one.",
-    "role_escalation_forbidden": "You can't grant a role above your own.",
-    "org_last_admin": "The organization needs at least one admin.",
+    "role_escalation_forbidden": "You can't make that change: only the owner changes an admin, and nobody grants a role above their own.",
+    "org_last_admin": "The owner can't be removed or change role: transfer the ownership first.",
     "org_personal_mode_disabled": "Personal mode isn't enabled for your account.",
     "kyc_case_not_found": "We couldn't find this organization's verification.",
     "kyc_invalid_state": "The verification was already submitted: it can't be changed now.",
@@ -226,7 +230,8 @@
     "title": "Create account",
     "submit": "Create account",
     "passwordHint": "8 characters or more, with at least one number.",
-    "haveAccount": "I have an account"
+    "haveAccount": "I have an account",
+    "fullNameHint": "This is how your team will see you. You can change it later."
   },
   "verify": {
     "title": "Verify your email",
@@ -262,7 +267,6 @@
     "greeting": "Hi, {{name}}",
     "greetingAnonymous": "Hi",
     "switchOrg": "Organization {{name}}. Tap to switch.",
-    "profile": "Your profile",
     "currency": "Balance currency",
     "available": "Available",
     "held": "Held",
@@ -408,7 +412,14 @@
     "total": "Total to debit",
     "availableAfter": "Available after the payment",
     "confirm": "Confirm payment",
-    "approvalNote": "Someone else on your team has to approve it before it's sent.",
+    "approval": {
+      "auto": "Goes out without approval (below {{amount}})",
+      "autoBody": "The company policy lets payments of this amount go out without waiting for someone else.",
+      "required": "Needs approval",
+      "requiredBody": "Someone else on your team has to approve it before it's sent.",
+      "requiredAbove": "From {{amount}}, someone else on your team has to approve it before it's sent.",
+      "unknown": "Depending on the company policy, it may need someone else's approval."
+    },
     "done": "Done",
     "seeApprovals": "See approvals",
     "result": {
@@ -442,7 +453,11 @@
       "creator": "You created this payment: someone else has to approve it.",
       "role": "Your role can't approve payments."
     },
-    "unknownPerson": "Someone on the team"
+    "unknownPerson": "Someone on the team",
+    "approveSelf": "Approve (self-approval)",
+    "mineSelf": "Self-approval",
+    "selfWarningTitle": "You are approving your own payment",
+    "selfWarningBody": "The policy allows it because there is no other approver on the team. It is recorded as a self-approval."
   },
   "transfer": {
     "title": "Move between accounts",
@@ -563,7 +578,16 @@
     "importingBody": "We're bringing in {{name}}'s projects and buyers.",
     "failedTitle": "The import failed",
     "failedBody": "Contact us and we'll retry it from Lebane.",
-    "linkedBody": "{{name}} is linked: your projects are now accounts and your buyers, payers."
+    "linkedBody": "{{name}} is linked: your projects are now accounts and your buyers, payers.",
+    "summaryTitle": "What we imported",
+    "summaryProjects": "Projects as accounts",
+    "summaryBuyers": "Buyers as payers",
+    "invitedTitle": "Lebane users invited",
+    "invitedBody": "They get an email and join with the role their Lebane permissions map to.",
+    "invitedA11y": "{{email}}, {{role}}",
+    "noneInvited": "There were no new users to invite.",
+    "alreadyMembers": "Already on the team",
+    "withoutAccess": "Without payments access in Lebane (not invited)"
   },
   "orgs": {
     "title": "Your organizations",
@@ -578,13 +602,25 @@
     "invited": "We invited {{email}}",
     "expires": "The invitation expires in 7 days.",
     "pendingInvite": "Invitation pending",
-    "readOnly": "Only admins can invite people and change roles.",
+    "readOnly": "Only the owner and admins can invite people and change roles.",
     "empty": "No one else on the team yet",
-    "roleChanged": "We changed {{email}}'s role",
-    "removed": "We removed {{email}} from the team",
+    "roleChanged": "We changed {{name}}'s role",
+    "removed": "We removed {{name}} from the team",
     "memberTitle": "Team member",
     "remove": "Remove from the team",
-    "confirmRemove": "Tap again to remove"
+    "confirmRemove": "Tap again to remove",
+    "you": "You",
+    "ownerNote": "The owner can't be removed or change role: ownership can only be transferred.",
+    "adminNote": "Only the owner changes or removes an admin.",
+    "transfer": "Transfer ownership",
+    "transferRowBody": "Hand the organization over to someone else on the team",
+    "transferBody": "Pick who will be the new owner of {{org}}.",
+    "transferEmpty": "Add someone to the team first: ownership goes to another member of the organization.",
+    "transferWarningTitle": "You will no longer be the owner",
+    "transferWarningBody": "{{name}} will be able to change the approval policy, change or remove admins and transfer the ownership. You stay as an admin and only {{name}} can give it back.",
+    "transferPick": "Pick a person to see what changes.",
+    "transferConfirm": "Transfer to {{name}}",
+    "transferred": "{{name}} is the new owner"
   },
   "onboarding": {
     "title": "Open your account",
@@ -664,7 +700,13 @@
       "unavailable": "Notifications aren't available on this device"
     }
   },
-  "profile": { "title": "Your profile", "memberships": "Organizations" },
+  "profile": {
+    "title": "Your profile",
+    "memberships": "Organizations",
+    "nameHint": "This is how your team and the payments you create show you. Empty, we show your email.",
+    "saveName": "Save name",
+    "nameSaved": "We saved your name"
+  },
   "settings": {
     "title": "More",
     "organization": "Organization",
@@ -676,11 +718,9 @@
     "erp": "Link with Lebane ERP",
     "erpLinked": "Linked",
     "kyc": "Verification",
-    "app": "App",
     "security": "Security",
     "personalPreview": "Personal mode (preview)",
     "personalPreviewBody": "Shows your personal wallet next to your companies.",
-    "version": "Version {{version}}",
     "logout": "Log out",
     "appearance": "Appearance",
     "appearanceBody": "Choose how Lenapay looks. System follows your phone's mode.",
@@ -688,7 +728,9 @@
     "language": "Language",
     "languageBody": "System follows your phone's language. Amounts stay in pesos or dollars.",
     "languages": { "system": "System", "esAR": "Español (Argentina)", "enUS": "English (US)" },
-    "personal": "Personal"
+    "personal": "Personal",
+    "accountPermissions": "Per-account permissions",
+    "defaultAccountNone": "The app opens in the organization you used last"
   },
   "developer": {
     "title": "Developer",
@@ -770,9 +812,61 @@
     "paidTitle": "Payment sent",
     "paidBody": "You paid {{name}}."
   },
+  "config": {
+    "title": "Settings",
+    "account": "Your account",
+    "preferences": "Preferences",
+    "securityBody": "Biometrics, two-step verification and payment confirmation",
+    "notifications": "Notifications",
+    "notificationsBody": "Alerts for incoming money and approvals on this phone",
+    "about": "About",
+    "aboutBody": "Lenapay by Lebane · {{version}}"
+  },
+  "menu": {
+    "label": "Your account menu",
+    "open": "Open your account menu",
+    "profile": "My profile",
+    "switchOrg": "Switch organization",
+    "settings": "Settings",
+    "security": "Security",
+    "logout": "Log out",
+    "confirmLogout": "Tap again to log out"
+  },
+  "policy": {
+    "title": "Approval policy",
+    "intro": "Decides which company payments wait for someone else's approval before going out.",
+    "readOnly": "Only the owner can change the policy.",
+    "modeLabel": "When approval is needed",
+    "mode": { "always": "Always", "threshold": "By amount" },
+    "alwaysBody": "Every company payment waits for someone else to approve it.",
+    "thresholdBody": "Payments below the amount go out without approval; from that amount they wait for someone else. The amount does not include the fee.",
+    "thresholdLabel": "{{currency}}: no approval below",
+    "thresholdHint": "Empty: every payment in this currency needs approval.",
+    "thresholdPreview": "Below {{amount}} it goes out without approval.",
+    "noThreshold": "Every payment in {{currency}} needs approval.",
+    "selfLabel": "The owner can approve their own payments",
+    "selfBody": "Only when there is no other approver on the team. With one more approver or admin, someone else always approves.",
+    "selfEffective": "Applies today: there is no other approver on the team.",
+    "selfBlocked": "Does not apply today: there is another approver on the team.",
+    "save": "Save policy",
+    "saved": "We saved the approval policy",
+    "updatedAt": "Last changed: {{date}}",
+    "summaryAlways": "Every payment needs approval",
+    "summaryThreshold": "No approval below {{amounts}}"
+  },
+  "defaultAccount": {
+    "title": "Default account",
+    "intro": "When you open Lenapay you start in this organization, and Pay and Move start with this account.",
+    "orgLabel": "Organization",
+    "accountLabel": "Account",
+    "none": "No default",
+    "noneBody": "The app opens in the organization you used last.",
+    "noAccounts": "This organization has no open accounts yet.",
+    "saved": "We saved your default account",
+    "current": "{{org}} · {{account}}"
+  },
   "proposal": {
     "ribbon": "Coming soon · proposal",
-    "short": "Proposal",
     "disabledHint": "Can't be edited yet: it's a proposal.",
     "maxPerApproval": "Maximum amount per approval",
     "maxPerApprovalHint": "Above this amount the payment needs another approver.",
@@ -783,16 +877,10 @@
       "body": "This is how you would pick which accounts this person can operate and their limits. It isn't saved yet.",
       "accountA11y": "Can operate in {{name}}"
     },
-    "policies": {
-      "title": "Approval policies (Proposal)",
-      "body": "This is how you would set how many approvals each payment needs by amount and account. It isn't saved yet.",
-      "general": "General rule",
-      "oneApprover": "One approver up to",
-      "oneApproverHint": "Between the no-approval amount and this one, one person is enough.",
-      "above": "Above that:",
-      "twoApprovers": "Two approvers",
-      "perAccount": "Limits per account",
-      "footnote": "Amounts are an example. Today every company payment needs another person to approve it."
+    "accountLimits": {
+      "title": "Limits per account (Proposal)",
+      "body": "This is how per-account limits would look on top of the policy above. It isn't saved yet.",
+      "footnote": "Amounts are an example: today only the approval policy applies."
     }
   }
 }

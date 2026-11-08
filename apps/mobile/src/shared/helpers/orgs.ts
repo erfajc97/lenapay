@@ -1,4 +1,4 @@
-import type { Me, Org } from '@/shared/api/types';
+import type { Account, Me, Org, UserPreferences } from '@/shared/api/types';
 
 /** Personal wallets show only with the B2C flag or its preview (PRD §2). */
 export function visibleOrgs(orgs: Org[], personalMode: boolean): Org[] {
@@ -25,4 +25,25 @@ export function verifiedPersonalOrgId(memberships: Me['memberships'] | undefined
 /** The person's own personal wallet (signup opens it; the app never creates a second one). */
 export function personalOrg(orgs: Org[] | undefined): Org | null {
   return orgs?.find((org) => org.kind === 'personal') ?? null;
+}
+
+/**
+ * Which org the app opens in (R-ID-5): the one picked during this session, else the person's
+ * default org (synced across devices), else the one used last on this device.
+ */
+export function rememberedOrgId(params: { sessionOrgId: string | null; defaultOrgId: string | null | undefined; lastOrgId: string | null }): string | null {
+  return params.sessionOrgId ?? params.defaultOrgId ?? params.lastOrgId;
+}
+
+/**
+ * The account Pagar / Mover start with: the default account when this is the default org and the
+ * account is still open; null otherwise (the flow keeps its own fallback).
+ */
+export function defaultAccountId(
+  openAccounts: Pick<Account, 'id'>[],
+  orgId: string | undefined,
+  preferences: Pick<UserPreferences, 'defaultOrgId' | 'defaultAccountId'> | undefined,
+): string | null {
+  if (!orgId || !preferences || preferences.defaultOrgId !== orgId) return null;
+  return openAccounts.find((account) => account.id === preferences.defaultAccountId)?.id ?? null;
 }

@@ -20,8 +20,15 @@ function enumValues<T extends string>() {
 // ── Contract enums ──────────────────────────────────────────────────────────────────────
 export type Currency = Schemas['Currency'];
 export const CURRENCIES = enumValues<Currency>()(['ARS', 'USD']);
+/** A role that can be granted (invites, role changes); `owner` is never one of them. */
 export type Role = Schemas['Role'];
 export const ROLES = enumValues<Role>()(['viewer', 'operator', 'approver', 'admin']);
+/** A member's role, least to most privileged; exactly one `owner` per organization (R-ORG-3). */
+export type MemberRole = Schemas['MemberRole'];
+export const MEMBER_ROLES = enumValues<MemberRole>()(['viewer', 'operator', 'approver', 'admin', 'owner']);
+export type ApprovalMode = Schemas['ApprovalMode'];
+export type Locale = Schemas['Locale'];
+export type Theme = Schemas['Theme'];
 export type OrgKind = Schemas['OrgKind'];
 export type KycStatus = Schemas['KycStatus'];
 export type DocType = Schemas['DocType'];
@@ -83,27 +90,44 @@ export type RejectPayoutRequest = Schemas['RejectPayoutRequest'];
 export type ErpCandidate = Schemas['ErpLinkCandidate'];
 export type ErpLinkRequest = Schemas['CreateErpLinkRequest'];
 export type RunReconciliationRequest = Schemas['RunReconciliationRequest'];
+export type UpdateMeRequest = Schemas['UpdateMeRequest'];
+export type UserPreferences = Schemas['UserPreferences'];
+export type UpdatePreferencesRequest = Schemas['UpdatePreferencesRequest'];
+export type TransferOwnershipRequest = Schemas['TransferOwnershipRequest'];
+/** The org's payout approval policy (R-OUT-7); thresholds per currency in minor units. */
+export type ApprovalPolicy = Schemas['ApprovalPolicy'];
+export type UpdateApprovalPolicyRequest = Schemas['UpdateApprovalPolicyRequest'];
+export type ErpImportSummary = Schemas['ErpImportSummary'];
+export type ErpInvitedUser = Schemas['ErpInvitedUser'];
 
 // ── View models (mapped from the contract in live/mappers.ts) ─────────────────────────────
 export interface Me {
   id: string;
   email: string;
-  /** Not in the contract yet: null in live mode (screens fall back to the email). */
+  /** Null until the person sets one (screens fall back to the email). */
   fullName: string | null;
   mfaEnabled: boolean;
   /** The person owns a personal wallet (a `personal` membership). */
   personalModeEnabled: boolean;
   memberships: Membership[];
+  /** Synced across devices (R-ID-5): every field null until set. */
+  preferences: UserPreferences;
 }
 
 export interface Member {
   userId: string;
   email: string;
-  /** Not in the contract yet: null in live mode. */
+  /** Null when the person has not set one. */
   fullName: string | null;
-  role: Role;
+  role: MemberRole;
   /** Live lists members only; the mock also lists pending invites. */
   status: 'active' | 'invited';
+}
+
+/** `POST /ownership-transfer`: the previous owner (now admin) and the new owner. */
+export interface OwnershipTransfer {
+  previousOwner: Member;
+  owner: Member;
 }
 
 /** A file picked on the device, ready for a multipart upload. */
@@ -310,6 +334,8 @@ export interface ErpLink {
   displayName: string | null;
   linkedAt: string | null;
   importedAt: string | null;
+  /** What the import brought (R-ERP-4); null until it ran. */
+  importSummary: ErpImportSummary | null;
 }
 
 // ── Mis pagos (payer view) ──────────────────────────────────────────────────────────────

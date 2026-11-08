@@ -9,14 +9,31 @@ import { PressableCard } from '@/shared/ui/Card';
 import { Chip, CurrencyChip } from '@/shared/ui/Chip';
 import { Money } from '@/shared/ui/Money';
 
-/** A payout waiting for a second person. "Creado por vos" marks the ones you cannot approve. */
-export const ApprovalCard = memo(function ApprovalCard({ payout, mine, onPress }: { payout: Payout; mine: boolean; onPress: (payout: Payout) => void }) {
+/**
+ * A payout waiting for a second person. "Creado por vos" marks the ones you cannot approve;
+ * "Aprobación propia" the owner's own ones while self-approval applies (R-OUT-7).
+ */
+export const ApprovalCard = memo(function ApprovalCard({
+  payout,
+  mine,
+  selfApproval,
+  onPress,
+}: {
+  payout: Payout;
+  mine: boolean;
+  selfApproval: boolean;
+  onPress: (payout: Payout) => void;
+}) {
   const { t } = useTranslation();
   return (
     <PressableCard onPress={() => onPress(payout)} accessibilityLabel={t('approvals.cardA11y', { name: payout.destination.holderName })} className="mb-3 gap-2">
       <View className="flex-row items-center justify-between">
         <CurrencyChip currency={payout.currency} />
-        {mine ? <Chip label={t('approvals.mine')} tone="neutral" /> : <Chip label={t('status.payout.pending_approval')} tone="warning" />}
+        {mine ? (
+          <Chip label={t(selfApproval ? 'approvals.mineSelf' : 'approvals.mine')} tone={selfApproval ? 'warning' : 'neutral'} />
+        ) : (
+          <Chip label={t('status.payout.pending_approval')} tone="warning" />
+        )}
       </View>
       <Money minor={payout.amount} currency={payout.currency} variant="heading" />
       <AppText variant="bodyStrong" numberOfLines={1}>

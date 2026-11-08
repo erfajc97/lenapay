@@ -1,12 +1,14 @@
+import { DEFAULT_APPROVAL_POLICY, needsApproval, ownerMaySelfApprove } from '@/shared/helpers/approvalPolicy';
 import { buildCvu, classifyDestination } from '@/shared/helpers/cbu';
 import { isValidCuit } from '@/shared/helpers/cuit';
-import { approvalBlocker, moneyActionBlocker } from '@/shared/helpers/permissions';
+import { approvalBlocker, canManageTeam, moneyActionBlocker, roleAtLeast } from '@/shared/helpers/permissions';
 
-import type { MoneyActionOptions, PayerQuery } from '../client';
+import type { MoneyActionOptions, PayerQuery, StepUpOptions } from '../client';
 import { ApiError } from '../errors';
 import type {
   Account,
   AccountCvu,
+  ApprovalPolicy,
   AuthTokens,
   Balance,
   CreateAccountRequest,
@@ -40,6 +42,7 @@ import type {
   MyPaymentPayin,
   Org,
   OrgBalances,
+  OwnershipTransfer,
   Page,
   PayCompanyRequest,
   Payer,
@@ -53,6 +56,7 @@ import type {
   ReconciliationItem,
   ReconciliationRun,
   RegisterDeviceRequest,
+  Role,
   RunReconciliationRequest,
   SignupRequest,
   SignupResponse,
@@ -60,8 +64,13 @@ import type {
   StepUpChallengeRequest,
   StepUpToken,
   StepUpVerifyRequest,
+  TransferOwnershipRequest,
   UpdateAccountRequest,
+  UpdateApprovalPolicyRequest,
+  UpdateMeRequest,
   UpdateMemberRequest,
+  UpdatePreferencesRequest,
+  UserPreferences,
   VerifyEmailRequest,
 } from '../types';
 import { CURRENCIES } from '../types';
@@ -86,6 +95,9 @@ const MAX_PAY_CONCEPT = 120;
 const MAX_ATTACHMENTS = 10;
 const ATTACHMENT_TYPES: readonly PayoutAttachment['contentType'][] = ['application/pdf', 'image/jpeg', 'image/png'];
 const IDENTITY_DOCS: readonly KycDocument['kind'][] = ['dni_front', 'dni_back', 'selfie'];
+/** Contract cap of `fullName` (signup and PATCH /me), after trimming. */
+const MAX_FULL_NAME = 120;
+const NO_PREFERENCES: UserPreferences = { defaultOrgId: null, defaultAccountId: null, locale: null, theme: null, updatedAt: null };
 
 /** One live payin per tick, rotating payers and amounts (deterministic: no Math.random). */
 const LIVE_AMOUNTS: { currency: Currency; minor: number }[] = [
@@ -129,8 +141,9 @@ export class MockBackend {
   // ── Auth ───────────────────────────────────────────────────────────────────────────────
   signup(body: SignupRequest): SignupResponse {
     const email = body.email.trim().toLowerCase();
+    const fullName = body.fullName === undefined ? null : cleanFullName(body.fullName);
     if (this.state.users.some((user) => user.email === email)) throw new ApiError('auth.email_taken', 409);
-    this.state.pendingSignup = { email };
+    this.state.pendingSignup = { email, fullName };
     return { userId: 'pending' };
   }
 
@@ -141,7 +154,7 @@ export class MockBackend {
       throw new ApiError('auth.code_invalid', 422);
     }
     const userId = this.nextId('u');
-    this.state.users.push({ id: userId, email: pending.email, fullName: null, mfaEnabled: false });
+    this.state.users.push({ id: userId, email: pending.email, fullName: pending.fullName, mfaEnabled: false });
     this.state.pendingSignup = null;
     this.openPersonalWallet(userId, pending.email);
   }
@@ -202,7 +215,42 @@ export class MockBackend {
       });
     // Like the live mapper: personal mode follows owning a personal wallet.
     const personalModeEnabled = memberships.some((item) => item.orgKind === 'personal');
-    return { id: user.id, email: user.email, fullName: user.fullName, mfaEnabled: user.mfaEnabled, personalModeEnabled, memberships };
+    return { id: user.id, email: user.email, fullName: user.fullName, mfaEnabled: user.mfaEnabled, personalModeEnabled, memberships, preferences: this.preferences() };
+  }
+
+  /** PATCH /me: a string sets the name (trimmed, 1–120), null clears it, absent keeps it. */
+  updateMe(body: UpdateMeRequest): Me {
+    const user = this.requireUser();
+    if (body.fullName !== undefined) user.fullName = body.fullName === null ? null : cleanFullName(body.fullName);
+    return this.me();
+  }
+
+  /** Stored preferences; an org the person left (and its account) reads as unset, like the API. */
+  preferences(): UserPreferences {
+    const userId = this.requireUserId();
+    const stored = this.state.preferences[userId] ?? NO_PREFERENCES;
+    const member = stored.defaultOrgId !== null && this.state.memberships.some((item) => item.orgId === stored.defaultOrgId && item.userId === userId);
+    return member ? { ...stored } : { ...stored, defaultOrgId: null, defaultAccountId: null };
+  }
+
+  /** Partial update (a value sets, null clears, absent keeps); the MERGED state is validated. */
+  updatePreferences(body: UpdatePreferencesRequest): UserPreferences {
+    const userId = this.requireUserId();
+    const merged: UserPreferences = { ...this.preferences() };
+    if (body.defaultOrgId !== undefined) merged.defaultOrgId = body.defaultOrgId;
+    if (body.defaultAccountId !== undefined) merged.defaultAccountId = body.defaultAccountId;
+    if (body.locale !== undefined) merged.locale = body.locale;
+    if (body.theme !== undefined) merged.theme = body.theme;
+    if (merged.defaultOrgId !== null && !this.state.memberships.some((item) => item.orgId === merged.defaultOrgId && item.userId === userId)) {
+      throw new ApiError('org.not_found', 404);
+    }
+    if (merged.defaultAccountId !== null) {
+      if (merged.defaultOrgId === null) throw new ApiError('validation.failed', 422);
+      if (this.account(merged.defaultOrgId, merged.defaultAccountId).archived) throw new ApiError('account.archived', 409);
+    }
+    merged.updatedAt = this.iso();
+    this.state.preferences[userId] = merged;
+    return { ...merged };
   }
 
   private requireUserId(): string {
@@ -217,8 +265,10 @@ export class MockBackend {
     return user;
   }
 
+  /** Like the live directory: the member's name, else their email. */
   private personRef(userId: string) {
-    return { userId, label: this.state.users.find((item) => item.id === userId)?.fullName ?? null };
+    const user = this.state.users.find((item) => item.id === userId);
+    return { userId, label: user ? (user.fullName ?? user.email) : null };
   }
 
   // ── Orgs and team ──────────────────────────────────────────────────────────────────────
@@ -242,7 +292,15 @@ export class MockBackend {
 
   private requireAdmin(orgId: string): Org {
     const org = this.orgFor(orgId);
-    if (org.role !== 'admin') throw new ApiError('auth.forbidden', 403);
+    if (!canManageTeam(org.role)) throw new ApiError('auth.forbidden', 403);
+    return org;
+  }
+
+  /** Owner-only actions (ownership, approval policy): the role first, then the step-up. */
+  private requireOwner(orgId: string, options: StepUpOptions): Org {
+    const org = this.orgFor(orgId);
+    if (org.role !== 'owner') throw new ApiError('auth.forbidden', 403);
+    if (!options.stepUpToken) throw new ApiError('auth.step_up_required', 403);
     return org;
   }
 
@@ -262,12 +320,14 @@ export class MockBackend {
   private insertOrg(userId: string, body: CreateOrgRequest): string {
     const id = this.nextId('org');
     this.state.orgs.push({ id, kind: body.kind, legalName: body.legalName.trim(), cuit: null, kycStatus: 'draft', createdAt: this.iso() });
-    this.state.memberships.push({ orgId: id, userId, role: 'admin' });
+    this.state.memberships.push({ orgId: id, userId, role: 'owner' });
     this.state.kyc[id] = {
       id: `kyc_${id}`, orgId: id, kind: body.kind === 'company' ? 'company' : 'person', status: 'draft',
       documents: [], decisionReason: null, submittedAt: null, decidedAt: null, updatedAt: this.iso(),
     };
-    this.state.erp[id] = { candidate: { found: false, erpOrgId: null, displayName: null }, projects: [], payers: [], linkStartedAt: null, linkedAt: null };
+    this.state.erp[id] = {
+      candidate: { found: false, erpOrgId: null, displayName: null }, projects: [], payers: [], users: [], linkStartedAt: null, linkedBy: null, linkedAt: null, importSummary: null,
+    };
     return id;
   }
 
@@ -286,7 +346,8 @@ export class MockBackend {
   }
 
   invite(orgId: string, body: InviteRequest): Invite {
-    this.requireAdmin(orgId);
+    const org = this.requireAdmin(orgId);
+    if (!roleAtLeast(org.role, body.role)) throw new ApiError('role.escalation_forbidden', 403);
     const invite = { id: this.nextId('inv'), orgId, email: body.email.trim().toLowerCase(), role: body.role, expiresAt: this.iso(7 * 86_400_000), createdAt: this.iso() };
     this.state.invites.push(invite);
     const { orgId: _orgId, ...dto } = invite;
@@ -299,15 +360,21 @@ export class MockBackend {
     return found;
   }
 
-  private isLastAdmin(orgId: string, userId: string): boolean {
-    const admins = this.state.memberships.filter((item) => item.orgId === orgId && item.role === 'admin');
-    return admins.length === 1 && admins[0]?.userId === userId;
+  /**
+   * The member ladder (R-ORG-3), like the API's lockMember: nobody touches a member above their own
+   * role, only the owner touches an admin, and nobody changes the owner (`org.last_admin`).
+   */
+  private ladder(org: Org, orgId: string, userId: string) {
+    const membership = this.membership(orgId, userId);
+    if (!roleAtLeast(org.role, membership.role) || (membership.role === 'admin' && org.role !== 'owner')) throw new ApiError('role.escalation_forbidden', 403);
+    if (membership.role === 'owner') throw new ApiError('org.last_admin', 409);
+    return membership;
   }
 
   updateMember(orgId: string, userId: string, body: UpdateMemberRequest): Member {
-    this.requireAdmin(orgId);
-    const membership = this.membership(orgId, userId);
-    if (membership.role === 'admin' && body.role !== 'admin' && this.isLastAdmin(orgId, userId)) throw new ApiError('org.last_admin', 409);
+    const org = this.requireAdmin(orgId);
+    if (!roleAtLeast(org.role, body.role)) throw new ApiError('role.escalation_forbidden', 403);
+    const membership = this.ladder(org, orgId, userId);
     membership.role = body.role;
     const member = this.members(orgId).find((item) => item.userId === userId);
     if (!member) throw new ApiError('member.not_found', 404);
@@ -315,10 +382,62 @@ export class MockBackend {
   }
 
   removeMember(orgId: string, userId: string): void {
-    this.requireAdmin(orgId);
-    this.membership(orgId, userId);
-    if (this.isLastAdmin(orgId, userId)) throw new ApiError('org.last_admin', 409);
+    const org = this.requireAdmin(orgId);
+    this.ladder(org, orgId, userId);
     this.state.memberships = this.state.memberships.filter((item) => !(item.orgId === orgId && item.userId === userId));
+  }
+
+  /** The owner (step-up) hands the org to another member and stays as admin (R-ORG-3). */
+  transferOwnership(orgId: string, body: TransferOwnershipRequest, options: StepUpOptions): OwnershipTransfer {
+    this.requireOwner(orgId, options);
+    const callerId = this.requireUserId();
+    if (body.userId === callerId) throw new ApiError('validation.failed', 422);
+    const target = this.membership(orgId, body.userId);
+    const caller = this.membership(orgId, callerId);
+    caller.role = 'admin';
+    target.role = 'owner';
+    const find = (userId: string) => {
+      const member = this.members(orgId).find((item) => item.userId === userId);
+      if (!member) throw new ApiError('member.not_found', 404);
+      return member;
+    };
+    return { previousOwner: find(callerId), owner: find(body.userId) };
+  }
+
+  // ── Approval policy ────────────────────────────────────────────────────────────────────
+  private storedPolicy(orgId: string) {
+    return this.state.policies[orgId] ?? DEFAULT_APPROVAL_POLICY;
+  }
+
+  /** Any member reads it; `ownerSelfApprovalEffective` follows who else can approve (R-OUT-7). */
+  approvalPolicy(orgId: string): ApprovalPolicy {
+    this.orgFor(orgId);
+    const stored = this.storedPolicy(orgId);
+    const others = this.state.memberships.filter((item) => item.orgId === orgId && item.role !== 'owner');
+    return {
+      mode: stored.mode,
+      thresholdMinor: { ...stored.thresholdMinor },
+      allowOwnerSelfApproval: stored.allowOwnerSelfApproval,
+      ownerSelfApprovalEffective: ownerMaySelfApprove(stored, others),
+      updatedBy: stored.updatedBy,
+      updatedAt: stored.updatedAt,
+    };
+  }
+
+  updateApprovalPolicy(orgId: string, body: UpdateApprovalPolicyRequest, options: StepUpOptions): ApprovalPolicy {
+    this.requireOwner(orgId, options);
+    const thresholds = body.thresholdMinor ?? {};
+    const values = CURRENCIES.map((currency) => thresholds[currency]).filter((value): value is number => value !== undefined);
+    if (values.some((value) => !Number.isSafeInteger(value) || value < 1)) throw new ApiError('validation.failed', 422);
+    if (body.mode === 'threshold' && values.length === 0) throw new ApiError('validation.failed', 422);
+    this.state.policies[orgId] = {
+      mode: body.mode,
+      thresholdMinor: { ARS: thresholds.ARS ?? null, USD: thresholds.USD ?? null },
+      allowOwnerSelfApproval: body.allowOwnerSelfApproval,
+      updatedBy: this.requireUserId(),
+      updatedAt: this.iso(),
+    };
+    return this.approvalPolicy(orgId);
   }
 
   // ── KYC ────────────────────────────────────────────────────────────────────────────────
@@ -672,7 +791,9 @@ export class MockBackend {
       if (balance.posted - balance.held < body.amount + fee) throw new ApiError('ledger.insufficient_funds', 422);
       balance.held += body.amount + fee;
       const user = this.requireUser();
-      const status: PayoutStatus = org.kind === 'personal' ? 'approved' : 'pending_approval';
+      // The policy decides with the amount (fee not included): strictly below the threshold leaves at once.
+      const waits = needsApproval(this.storedPolicy(orgId), { orgKind: org.kind, currency: body.currency, amount: body.amount });
+      const status: PayoutStatus = waits ? 'pending_approval' : 'approved';
       const payout: MockPayout = {
         id: this.nextId('po'), orgId, accountId: account.id, accountName: account.name, currency: body.currency, amount: body.amount, fee, total: body.amount + fee,
         destination, concept: body.concept.trim(), attachments: [], status, rail, createdBy: this.personRef(user.id), approvedBy: null, rejectReason: null,
@@ -702,7 +823,8 @@ export class MockBackend {
       const org = this.orgFor(orgId);
       requireStepUp(credentials);
       const payout = this.payout(orgId, payoutId);
-      const blocker = approvalBlocker({ payout, userId: this.requireUserId(), role: org.role });
+      const ownerMay = this.approvalPolicy(orgId).ownerSelfApprovalEffective;
+      const blocker = approvalBlocker({ payout, userId: this.requireUserId(), role: org.role, ownerMaySelfApprove: ownerMay });
       if (blocker === 'status') throw new ApiError('payout.invalid_state', 409);
       if (blocker === 'creator') throw new ApiError('payout.self_approval_forbidden', 403);
       if (blocker === 'role') throw new ApiError('auth.forbidden', 403);
@@ -937,14 +1059,21 @@ export class MockBackend {
     if (!erp.candidate.found) throw new ApiError('erp_link.no_candidate', 404);
     if (erp.linkStartedAt !== null) throw new ApiError('erp_link.already_linked', 409);
     erp.linkStartedAt = this.clock.now();
+    erp.linkedBy = this.requireUserId();
     return this.erpLink(orgId);
   }
 
   erpLink(orgId: string): ErpLink {
     this.orgFor(orgId);
     const erp = this.erp(orgId);
-    if (erp.linkStartedAt === null) return { status: 'not_linked', displayName: null, linkedAt: null, importedAt: null };
-    return { status: erp.linkedAt ? 'linked' : 'importing', displayName: erp.candidate.displayName, linkedAt: new Date(erp.linkStartedAt).toISOString(), importedAt: erp.linkedAt };
+    if (erp.linkStartedAt === null) return { status: 'not_linked', displayName: null, linkedAt: null, importedAt: null, importSummary: null };
+    return {
+      status: erp.linkedAt ? 'linked' : 'importing',
+      displayName: erp.candidate.displayName,
+      linkedAt: new Date(erp.linkStartedAt).toISOString(),
+      importedAt: erp.linkedAt,
+      importSummary: erp.importSummary,
+    };
   }
 
   /** Import finishes after ERP_IMPORT_MS: projects become accounts, buyers become payers (R-ERP-3). */
@@ -966,7 +1095,34 @@ export class MockBackend {
       });
       this.state.payers.push({ id, orgId, accountId: account.id, name: imported.name, docType: imported.docType, docNumber: imported.docNumber, email: null, erpRef: `ERP-${imported.docNumber}`, createdAt: this.iso(), cvus: [cvu] });
     }
+    erp.importSummary = { projects: erp.projects.length, buyers: erp.payers.length, skippedBuyers: 0, ...this.inviteErpUsers(orgId, erp) };
     erp.linkedAt = this.iso();
+  }
+
+  /**
+   * ERP users with payments access are invited (R-ERP-4): capped at the linker's role and never
+   * owner, members skipped; users without payments access are only counted.
+   */
+  private inviteErpUsers(orgId: string, erp: { users: { email: string; role: Role | null }[]; linkedBy: string | null }) {
+    const linkerRole = this.state.memberships.find((item) => item.orgId === orgId && item.userId === erp.linkedBy)?.role ?? 'viewer';
+    const cap: Role = linkerRole === 'owner' ? 'admin' : linkerRole;
+    // Read from the state: members() would settle this same import again.
+    const memberIds = new Set(this.state.memberships.filter((item) => item.orgId === orgId).map((item) => item.userId));
+    const memberEmails = new Set(this.state.users.filter((user) => memberIds.has(user.id)).map((user) => user.email));
+    const invitedUsers: { email: string; role: Role }[] = [];
+    let usersAlreadyMembers = 0;
+    for (const user of erp.users) {
+      if (user.role === null) continue;
+      if (memberEmails.has(user.email)) {
+        usersAlreadyMembers += 1;
+        continue;
+      }
+      const role = roleAtLeast(cap, user.role) ? user.role : cap;
+      this.state.invites.push({ id: this.nextId('inv'), orgId, email: user.email, role, expiresAt: this.iso(7 * 86_400_000), createdAt: this.iso() });
+      invitedUsers.push({ email: user.email, role });
+    }
+    const usersWithoutPaymentsAccess = erp.users.filter((user) => user.role === null).length;
+    return { usersInvited: invitedUsers.length, usersAlreadyMembers, usersWithoutPaymentsAccess, invitedUsers };
   }
 
   // ── Realtime ───────────────────────────────────────────────────────────────────────────
@@ -1025,6 +1181,13 @@ function toPayout(record: MockPayout): Payout {
 
 function requireStepUp(credentials: MoneyActionOptions): void {
   if (!credentials.stepUpToken) throw new ApiError('auth.step_up_required', 403);
+}
+
+/** The contract's `fullName`: trimmed, 1–120 characters; blank is `validation.failed`. */
+function cleanFullName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 1 || trimmed.length > MAX_FULL_NAME) throw new ApiError('validation.failed', 422);
+  return trimmed;
 }
 
 function normalize(value: string): string {

@@ -3,10 +3,11 @@ import { File, Paths } from 'expo-file-system';
 import EventSource from 'react-native-sse';
 
 import { config } from '@/shared/config/env';
+import { displayName } from '@/shared/helpers/people';
 import { getAccessToken, readRefreshToken, saveTokens } from '@/shared/session/session';
 import { useSessionStore } from '@/shared/stores/useSessionStore';
 
-import type { LenapayApi, MoneyActionOptions } from '../client';
+import type { LenapayApi, MoneyActionOptions, StepUpOptions } from '../client';
 import { endpoints } from '../endpoints';
 import { ApiError } from '../errors';
 import type { AuthTokens, Currency, LocalUpload, MovementFilters, PayCompanyRequest } from '../types';
@@ -24,6 +25,7 @@ import {
   toMovement,
   toMyPaymentCompany,
   toMyPaymentPayin,
+  toOwnershipTransfer,
   toPayer,
   toPayin,
   toPayout,
@@ -46,6 +48,10 @@ const DIRECTORY_TTL_MS = 30_000;
 /** Contract headers of money mutations (R-ID-3, R-OUT-3). */
 function moneyHeaders(options: MoneyActionOptions): Record<string, string> {
   return { 'Idempotency-Key': options.idempotencyKey, 'X-Step-Up-Token': options.stepUpToken };
+}
+
+function stepUpHeader(options: StepUpOptions): Record<string, string> {
+  return { 'X-Step-Up-Token': options.stepUpToken };
 }
 
 function money(minor: number, currency: Currency): Schemas['Money'] {
@@ -71,19 +77,19 @@ async function orNull<T>(request: Promise<T>, code: string): Promise<T | null> {
   }
 }
 
-/** Per-org names the contract does not embed (account names, member emails), cached briefly. */
+/** Per-org names the contract does not embed (account names, member names), cached briefly. */
 function createDirectory(http: Http) {
   const cache = new Map<string, { loadedAt: number; directory: Promise<OrgDirectory> }>();
 
   async function load(orgId: string): Promise<OrgDirectory> {
     const [accounts, members] = await Promise.all([
       http<List<Schemas['Account']>>('GET', endpoints.accounts.list(orgId)),
-      // A member list the role cannot read only costs the creator's email on payouts.
+      // A member list the role cannot read only costs the creator's name on payouts.
       http<List<Schemas['Member']>>('GET', endpoints.orgs.members(orgId)).catch(() => ({ items: [] })),
     ]);
     const names = new Map(accounts.items.map((account) => [account.id, account.name]));
-    const emails = new Map(members.items.map((member) => [member.userId, member.email]));
-    return { accountName: (id) => names.get(id) ?? '', memberLabel: (id) => emails.get(id) ?? null };
+    const people = new Map(members.items.map((member) => [member.userId, displayName(toMember(member))]));
+    return { accountName: (id) => names.get(id) ?? '', memberLabel: (id) => people.get(id) ?? null };
   }
 
   return {
@@ -208,6 +214,11 @@ export function createLiveApi(options: { baseUrl: string }): LenapayApi {
       registerDevice: (body) => http('POST', endpoints.devices, { body }),
       me: async () => toMe(await http<Schemas['Me']>('GET', endpoints.me)),
     },
+    profile: {
+      update: async (body) => toMe(await http<Schemas['Me']>('PATCH', endpoints.me, { body })),
+      preferences: () => http('GET', endpoints.preferences),
+      updatePreferences: (body) => http('PATCH', endpoints.preferences, { body }),
+    },
     orgs: {
       list: async () => (await http<List<Schemas['Organization']>>('GET', endpoints.orgs.list)).items,
       create: (body) => http('POST', endpoints.orgs.list, { body }),
@@ -221,6 +232,12 @@ export function createLiveApi(options: { baseUrl: string }): LenapayApi {
         directories.forget(orgId);
         return http('DELETE', endpoints.orgs.member(orgId, userId));
       },
+      transferOwnership: async (orgId, body, options) => {
+        directories.forget(orgId);
+        return toOwnershipTransfer(await http<Schemas['OwnershipTransfer']>('POST', endpoints.orgs.ownershipTransfer(orgId), { body, headers: stepUpHeader(options) }));
+      },
+      approvalPolicy: (orgId) => http('GET', endpoints.orgs.approvalPolicy(orgId)),
+      updateApprovalPolicy: (orgId, body, options) => http('PUT', endpoints.orgs.approvalPolicy(orgId), { body, headers: stepUpHeader(options) }),
     },
     kyc: {
       get: (orgId) => http('GET', endpoints.kyc.case(orgId)),

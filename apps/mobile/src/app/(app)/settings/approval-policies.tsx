@@ -1,5 +1,5 @@
-import { ApprovalPolicies } from '@/features/settings/ApprovalPolicies';
+import { ApprovalPolicy } from '@/features/approval-policy/ApprovalPolicy';
 
-export default function ApprovalPoliciesRoute() {
-  return <ApprovalPolicies />;
+export default function ApprovalPolicyRoute() {
+  return <ApprovalPolicy />;
 }

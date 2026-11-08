@@ -55,7 +55,13 @@ export function ApprovalDetail() {
                 <Button label={t('approvals.reject')} variant="danger" onPress={detail.openReject} disabled={!canDecide || detail.deciding} />
               </View>
               <View className="flex-1">
-                <Button label={t('approvals.approve')} icon="finger-print" onPress={detail.approve} loading={detail.deciding} disabled={!canDecide} />
+                <Button
+                  label={t(detail.selfApproval ? 'approvals.approveSelf' : 'approvals.approve')}
+                  icon="finger-print"
+                  onPress={detail.approve}
+                  loading={detail.deciding}
+                  disabled={!canDecide}
+                />
               </View>
             </View>
           </View>
@@ -83,6 +89,7 @@ export function ApprovalDetail() {
         ))}
         <Field label={t('approvals.createdByLabel')} value={`${payout.createdBy.label ?? t('approvals.unknownPerson')} · ${formatDateTime(payout.createdAt)}`} />
       </Card>
+      {detail.selfApproval ? <Notice tone="warning" icon="warning-outline" title={t('approvals.selfWarningTitle')} body={t('approvals.selfWarningBody')} /> : null}
       {payout.rejectReason ? <Notice tone="danger" icon="close-circle-outline" title={t('approvals.rejectionReason')} body={payout.rejectReason} /> : null}
 
       <Sheet visible={detail.rejecting} title={t('approvals.rejectTitle')} onClose={detail.closeReject} onDismissed={detail.rejectSheetDismissed}>

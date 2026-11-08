@@ -59,6 +59,7 @@ describe('ERP invite', () => {
 
   it('invites an admin of a verified company that is not linked', () => {
     expect(canLinkErp(admin)).toBe(true);
+    expect(canLinkErp({ ...admin, role: 'owner' })).toBe(true);
     expect(showErpInvite(admin, 'not_linked')).toBe(true);
   });
 

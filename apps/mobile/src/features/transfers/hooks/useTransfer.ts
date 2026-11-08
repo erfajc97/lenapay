@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
 import type { Currency } from '@/shared/api/types';
+import { defaultAccountId } from '@/shared/helpers/orgs';
 import { moneyActionBlocker } from '@/shared/helpers/permissions';
 import { parseAmountInput } from '@/shared/money/parse';
 import { useAccounts } from '@/shared/queries/accounts';
 import { useActiveOrg } from '@/shared/queries/orgs';
+import { useMe } from '@/shared/queries/session';
 
 import { transferBlocker } from '../helpers/transferRules';
 import { useCreateTransfer } from '../mutations/useCreateTransfer';
@@ -13,7 +15,10 @@ export function useTransfer() {
   const { org } = useActiveOrg();
   const accounts = useAccounts(org?.id);
   const open = (accounts.data ?? []).filter((account) => !account.archived);
-  const [fromId, setFromId] = useState<string | null>(null);
+  const me = useMe();
+  const [pickedFromId, setFromId] = useState<string | null>(null);
+  // Mover starts from the default account (R-ID-5) until the person picks another.
+  const fromId = pickedFromId ?? defaultAccountId(open, org?.id, me.data?.preferences);
   const [toId, setToId] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>('ARS');
   const [amountText, setAmountText] = useState('');

@@ -6,9 +6,9 @@
  */
 export const TAB_BAR = {
   /** Height of the floating capsule (icons + small labels). */
-  height: 60,
-  /** Gap between the capsule and the home indicator / screen bottom. */
-  gap: 8,
+  height: 56,
+  /** Gap above the home indicator / screen bottom: small, so the capsule sits low (owner feedback). */
+  gap: 3,
   /** Side inset from the screen edges. */
   side: 16,
   /** Width of the pill behind the selected icon (narrower slots shrink it). */
