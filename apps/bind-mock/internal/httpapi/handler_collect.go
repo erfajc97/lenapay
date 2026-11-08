@@ -18,13 +18,19 @@ type toJSON struct {
 	Alias string `json:"alias,omitempty"`
 }
 
+// originDebitJSON is BIND's origin_debit: the client CVU the money leaves from (optional).
+type originDebitJSON struct {
+	CVU string `json:"cvu"`
+}
+
 type sendTransferBody struct {
-	OriginID    string    `json:"origin_id"`
-	To          toJSON    `json:"to"`
-	Value       valueJSON `json:"value"`
-	Description string    `json:"description"`
-	Concept     string    `json:"concept"`
-	Emails      []string  `json:"emails"`
+	OriginID    string           `json:"origin_id"`
+	OriginDebit *originDebitJSON `json:"origin_debit,omitempty"`
+	To          toJSON           `json:"to"`
+	Value       valueJSON        `json:"value"`
+	Description string           `json:"description"`
+	Concept     string           `json:"concept"`
+	Emails      []string         `json:"emails"`
 }
 
 type detailsJSON struct {
@@ -83,8 +89,12 @@ func (a *api) sendTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, codeInvalid, "emails es obligatorio")
 		return
 	}
+	var originCVU string
+	if body.OriginDebit != nil {
+		originCVU = body.OriginDebit.CVU
+	}
 	res, err := a.Bank.SendTransfer(bank.SendInput{
-		OriginID: body.OriginID, ToAccount: body.To.CBU, ToAlias: body.To.Alias, Currency: body.Value.Currency,
+		OriginID: body.OriginID, ToAccount: body.To.CBU, ToAlias: body.To.Alias, OriginCVU: originCVU, Currency: body.Value.Currency,
 		Amount: int64(body.Value.Amount), Concept: body.Concept, Description: body.Description,
 	})
 	if err != nil {

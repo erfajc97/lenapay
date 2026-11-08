@@ -59,6 +59,21 @@ func (s *service) Dispatch(ctx context.Context, payoutID uuid.UUID) error {
 	return s.applyOutcome(ctx, a, res, err)
 }
 
+// originCVU is the paying account's own active CVU in the currency ("" when it has none, as
+// company accounts that only receive through payers' CVUs).
+func (s *service) originCVU(ctx context.Context, orgID, accountID uuid.UUID, currency money.Currency) (string, error) {
+	account, err := s.deps.Accounts.Get(ctx, orgID, accountID)
+	if err != nil {
+		return "", err
+	}
+	for _, c := range account.CVUs {
+		if c.Active && c.Currency == currency {
+			return c.Number, nil
+		}
+	}
+	return "", nil
+}
+
 // startAttempt records the attempt reference BEFORE the network call (its own transaction),
 // so a crash after sending can never lose the reference the sweep re-reads by. A retried job
 // finds the payout already `sending` and only re-reads it: the money is never sent twice.
@@ -73,6 +88,9 @@ func (s *service) startAttempt(ctx context.Context, payoutID uuid.UUID) (attempt
 		}
 		if err != nil {
 			return fmt.Errorf("payouts: dispatch lock: %w", err)
+		}
+		if Rail(row.Rail) == RailInternal {
+			return s.settleInternal(ctx, tx, q, row) // on-us: never sent; settles if still approved
 		}
 		switch Status(row.Status) {
 		case StatusSending:
@@ -102,8 +120,13 @@ func (s *service) startAttempt(ctx context.Context, payoutID uuid.UUID) (attempt
 			return err
 		}
 		c := money.Currency(row.Currency)
+		origin, err := s.originCVU(ctx, row.OrgID, row.AccountID, c)
+		if err != nil {
+			return err
+		}
 		a = attempt{payoutID: payoutID, reference: ref, startedAt: now, send: true, request: psp.SendTransferRequest{
 			Reference: ref, AccountNumber: row.DestinationAccount, Amount: money.New(row.AmountMinor, c), Concept: row.Concept,
+			OriginCVU: origin,
 		}}
 		ok = true
 		return nil
@@ -189,7 +212,7 @@ func (s *service) settle(ctx context.Context, a attempt, providerID string) erro
 		if rows != 1 {
 			return invalidState(row)
 		}
-		return s.finish(ctx, tx, q, po, StatusSettled, nil)
+		return s.finish(ctx, tx, q, po, StatusSending, StatusSettled, nil)
 	})
 }
 
@@ -233,7 +256,7 @@ func (s *service) fail(ctx context.Context, a attempt, code string) error {
 		if rows != 1 {
 			return invalidState(row)
 		}
-		return s.finish(ctx, tx, q, fromRow(row, nil), StatusFailed, &code)
+		return s.finish(ctx, tx, q, fromRow(row, nil), StatusSending, StatusFailed, &code)
 	})
 }
 
@@ -254,8 +277,7 @@ func lockAttempt(ctx context.Context, q *store.Queries, a attempt) (store.Payout
 }
 
 // finish writes the history, audit, creator notification and realtime events of a final state.
-func (s *service) finish(ctx context.Context, tx pgx.Tx, q *store.Queries, po Payout, to Status, reason *string) error {
-	from := StatusSending
+func (s *service) finish(ctx context.Context, tx pgx.Tx, q *store.Queries, po Payout, from, to Status, reason *string) error {
 	if err := s.event(ctx, q, po.ID, po.OrgID, &from, to, nil, reason); err != nil {
 		return err
 	}

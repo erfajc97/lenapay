@@ -171,6 +171,14 @@ func TestSendTransfer(t *testing.T) {
 			t.Fatalf("request %s lacks %s", sent, want)
 		}
 	}
+	if strings.Contains(sent, "origin_debit") {
+		t.Fatalf("no origin CVU, no origin_debit: %s", sent)
+	}
+	withOrigin := req
+	withOrigin.OriginCVU = "0000322800000001000017"
+	if _, err := c.SendTransfer(t.Context(), withOrigin); err != nil || !strings.Contains(sent, `"origin_debit":{"cvu":"0000322800000001000017"}`) {
+		t.Fatalf("origin_debit: %s %v", sent, err)
+	}
 	// A different echoed amount is not trusted either way.
 	c, _ = server(t, func(w http.ResponseWriter, _ *http.Request, _ []byte) {
 		reply(w, http.StatusOK, `{"id":"trf-9","status":"COMPLETED","charge":{"value":{"currency":"ARS","amount":1500.24}}}`)

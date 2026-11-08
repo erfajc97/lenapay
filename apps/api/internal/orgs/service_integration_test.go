@@ -5,6 +5,7 @@ package orgs_test
 import (
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -417,4 +418,47 @@ func TestApplyVerifiedIdentity(t *testing.T) {
 	tx, _ := e.pool.Begin(ctx)
 	defer func() { _ = tx.Rollback(ctx) }()
 	wantCode(t, e.orgs.ApplyVerifiedIdentity(ctx, tx, ids.New(), orgs.VerifiedIdentity{LegalName: "Nadie SA", DocType: orgs.DocTypeCUIT, DocNumber: "30712345678"}), apperr.CodeOrgNotFound)
+}
+
+// The signup hook's door: personal mode on → one personal org per user, legal name = the
+// email, admin membership and a draft KYC case; personal mode off → nothing.
+func TestCreatePersonalForUser(t *testing.T) {
+	t.Parallel()
+	for _, personal := range []bool{true, false} {
+		e := newEnv(t, personal)
+		u := e.user(t, fmt.Sprintf("hook-%v@persona.test", personal))
+		var orgID uuid.UUID
+		var created bool
+		err := pgx.BeginFunc(t.Context(), e.pool, func(tx pgx.Tx) error {
+			var err error
+			orgID, created, err = e.orgs.CreatePersonalForUser(t.Context(), tx, u.UserID, fmt.Sprintf("hook-%v@persona.test", personal))
+			return err
+		})
+		if err != nil || created != personal {
+			t.Fatalf("personal=%v: created %v, %v", personal, created, err)
+		}
+		list, err := e.orgs.List(t.Context(), u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !personal {
+			if len(list) != 0 {
+				t.Fatalf("mode off created %v", list)
+			}
+			continue
+		}
+		if len(list) != 1 || list[0].ID != orgID || list[0].Kind != orgs.KindPersonal || list[0].Role != auth.RoleAdmin ||
+			list[0].KYCStatus != auth.KYCDraft || list[0].LegalName != "hook-true@persona.test" {
+			t.Fatalf("personal org = %+v", list)
+		}
+		var cases int
+		if err := e.pool.QueryRow(t.Context(), `SELECT count(*) FROM kyc_cases WHERE org_id = $1 AND status = 'draft'`, orgID).Scan(&cases); err != nil || cases != 1 {
+			t.Fatalf("kyc cases = %d, %v", cases, err)
+		}
+		err = pgx.BeginFunc(t.Context(), e.pool, func(tx pgx.Tx) error {
+			_, _, err := e.orgs.CreatePersonalForUser(t.Context(), tx, u.UserID, "otra@persona.test")
+			return err
+		})
+		wantCode(t, err, apperr.CodeConflict)
+	}
 }

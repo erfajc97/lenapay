@@ -190,6 +190,20 @@ func (sd *seeder) orgNamed(ctx context.Context, userID uuid.UUID, name string) (
 	return orgs.Organization{}, false, nil
 }
 
+// personalOrg returns the user's personal org: signup creates it in personal mode.
+func (sd *seeder) personalOrg(ctx context.Context, userID uuid.UUID) (orgs.Organization, error) {
+	list, err := sd.s.Orgs.List(ctx, auth.Principal{UserID: userID})
+	if err != nil {
+		return orgs.Organization{}, err
+	}
+	for _, o := range list {
+		if o.Kind == orgs.KindPersonal {
+			return o, nil
+		}
+	}
+	return orgs.Organization{}, fmt.Errorf("seed: user %s has no personal org (is PERSONAL_MODE_ENABLED on?)", userID)
+}
+
 func pdf(name string) kyc.DocumentUpload {
 	return kyc.DocumentUpload{FileName: name + ".pdf", Content: strings.NewReader("%PDF-1.7 demo " + name)}
 }
@@ -520,14 +534,9 @@ func (sd *seeder) persona(ctx context.Context) error {
 		return err
 	}
 	const name = personaName
-	o, found, err := sd.orgNamed(ctx, userID, name)
+	o, err := sd.personalOrg(ctx, userID) // created at signup (personal mode)
 	if err != nil {
 		return err
-	}
-	if !found {
-		if o, err = sd.s.Orgs.Create(ctx, auth.Principal{UserID: userID}, orgs.CreateInput{Kind: orgs.KindPersonal, LegalName: name}); err != nil {
-			return err
-		}
 	}
 	if o.KYCStatus == auth.KYCApproved {
 		return nil

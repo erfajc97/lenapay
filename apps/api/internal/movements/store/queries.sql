@@ -3,11 +3,12 @@
 -- payouts tables of other features without writing them: a read model, never a writer (P4).
 -- Every branch filters by org first and uses that table's (org_id, created_at DESC) index;
 -- the internal-transfer branch comes first so sqlc types the nullable columns as nullable;
--- counterparty_name is '' when unknown (the service maps it to null).
+-- counterparty_name is '' when unknown (the service maps it to null). rail: 'bank' for PSP
+-- payins/payouts, 'internal' for on-us ones and for internal transfers (ledger only).
 
 -- name: ListMovements :many
 SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
-       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at, m.rail
 FROM (
     SELECT p.id,
            'internal_transfer'::text AS type,
@@ -26,7 +27,8 @@ FROM (
            NULL::text AS counterparty_cbu,
            t.memo AS concept,
            t.ref_id,
-           t.created_at
+           t.created_at,
+           'internal'::text AS rail
     FROM ledger_transactions t
     JOIN ledger_postings p ON p.transaction_id = t.id
     JOIN ledger_accounts la ON la.id = p.ledger_account_id
@@ -55,7 +57,8 @@ FROM (
            pi.origin_cbu,
            NULL,
            pi.id,
-           pi.created_at
+           pi.created_at,
+           pi.rail
     FROM payins pi
     WHERE pi.org_id = sqlc.arg(org_id)
       AND (sqlc.narg(type)::text IS NULL OR sqlc.narg(type)::text = 'payin')
@@ -82,7 +85,8 @@ FROM (
            po.destination_account::text,
            po.concept,
            po.id,
-           po.created_at
+           po.created_at,
+           po.rail
     FROM payouts po
     WHERE po.org_id = sqlc.arg(org_id)
       AND (sqlc.narg(type)::text IS NULL OR sqlc.narg(type)::text = 'payout')
@@ -101,7 +105,7 @@ LIMIT sqlc.arg(page_limit);
 -- One movement by its id (the posting id of an internal-transfer leg, the payin id or the
 -- payout id), same columns and mapping as ListMovements; each branch is a primary-key probe.
 SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
-       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at, m.rail
 FROM (
     SELECT p.id,
            'internal_transfer'::text AS type,
@@ -120,7 +124,8 @@ FROM (
            NULL::text AS counterparty_cbu,
            t.memo AS concept,
            t.ref_id,
-           t.created_at
+           t.created_at,
+           'internal'::text AS rail
     FROM ledger_postings p
     JOIN ledger_transactions t ON t.id = p.transaction_id
     JOIN ledger_accounts la ON la.id = p.ledger_account_id
@@ -131,7 +136,7 @@ FROM (
     SELECT pi.id, 'payin',
            CASE pi.status WHEN 'credited' THEN 'completed' WHEN 'failed' THEN 'failed' ELSE 'pending' END,
            'in', pi.account_id, pi.currency::text, pi.gross_minor, pi.fee_minor,
-           COALESCE(pi.origin_name, ''), pi.origin_cuit, pi.origin_cbu, NULL, pi.id, pi.created_at
+           COALESCE(pi.origin_name, ''), pi.origin_cuit, pi.origin_cbu, NULL, pi.id, pi.created_at, pi.rail
     FROM payins pi
     WHERE pi.id = sqlc.arg(id) AND pi.org_id = sqlc.arg(org_id)
 
@@ -142,7 +147,7 @@ FROM (
                           WHEN 'rejected' THEN 'cancelled' WHEN 'cancelled' THEN 'cancelled' ELSE 'pending' END,
            'out', po.account_id, po.currency::text, po.amount_minor, po.fee_minor,
            po.destination_holder_name, po.destination_holder_cuit, po.destination_account::text,
-           po.concept, po.id, po.created_at
+           po.concept, po.id, po.created_at, po.rail
     FROM payouts po
     WHERE po.id = sqlc.arg(id) AND po.org_id = sqlc.arg(org_id)
 ) m

@@ -1,6 +1,7 @@
 // Package simulator plays the payers of the demo: it credits a CVU at the fake bank and
 // delivers the signed webhook to the API, once on demand (/_mock/incoming-transfer) or every N
-// seconds with random amounts and payers (/_mock/auto-payins).
+// seconds with random amounts and payers (/_mock/auto-payins). It also delivers the webhook of
+// every on-us credit the bank books (an outgoing transfer to one of our own CVUs).
 package simulator
 
 import (
@@ -34,12 +35,34 @@ type Simulator struct {
 	cancel  context.CancelFunc
 	every   time.Duration
 	stopped chan struct{}
+
+	// onUs counts the on-us webhooks in flight (Wait drains them); they run on base, the
+	// process context, since no request waits for them.
+	onUs sync.WaitGroup
+	base context.Context
 }
 
-// New returns a simulator.
-func New(b *bank.Bank, sender WebhookSender, now func() time.Time) *Simulator {
-	return &Simulator{bank: b, sender: sender, now: now}
+// New returns a simulator and makes it the bank's credit listener. ctx is the process context
+// the on-us webhooks are delivered on (detached from its cancellation: an in-flight delivery
+// finishes during shutdown).
+func New(ctx context.Context, b *bank.Bank, sender WebhookSender, now func() time.Time) *Simulator {
+	s := &Simulator{bank: b, sender: sender, now: now, base: context.WithoutCancel(ctx)}
+	b.SetCreditListener(s.onCredit)
+	return s
 }
+
+// onCredit delivers the webhook of an on-us credit. The bank calls it while locked, so the
+// delivery runs on its own goroutine, after the outgoing transfer's answer, as at the bank.
+func (s *Simulator) onCredit(t bank.Transfer) {
+	s.onUs.Add(1)
+	go func() {
+		defer s.onUs.Done()
+		s.deliver(s.base, t)
+	}()
+}
+
+// Wait blocks until the on-us webhooks started so far were attempted (shutdown and tests).
+func (s *Simulator) Wait() { s.onUs.Wait() }
 
 // Receive credits a CVU and delivers its webhook. The transfer stands even when the webhook
 // fails (the API can be down): the delivery is recorded and can be repeated with Redeliver.

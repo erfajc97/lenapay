@@ -315,3 +315,73 @@ func TestStatePersists(t *testing.T) {
 		t.Fatal("reset kept cajas")
 	}
 }
+
+// On-us: a debit to one of our CVUs settles AND credits that CVU (master nets to zero), the
+// credit names the debited CVU's holder and the listener hears it once.
+func TestSendTransferToOwnCVUIsCreditedOnUs(t *testing.T) {
+	t.Parallel()
+	b, _ := newBank(t, "")
+	var heard []Transfer
+	b.SetCreditListener(func(tr Transfer) { heard = append(heard, tr) })
+	company := caja(t, b, "ref-company", "ARS")
+	person, _, err := b.CreateCaja(CreateCajaInput{Reference: "ref-person", Currency: "ARS", Holder: Holder{Name: "Ana Gómez", CUIT: "27111111110"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := b.SendTransfer(SendInput{OriginID: "o-1", ToAccount: company.CVU, OriginCVU: person.CVU, Currency: "ARS", Amount: 1_000_00, Concept: "VAR", Description: "Cuota 1"})
+	if err != nil || res.Transfer.Status != StatusCompleted || res.Transfer.RelatedID == "" {
+		t.Fatalf("send = %+v %v", res, err)
+	}
+	if bal, _ := b.Balance("ARS"); bal != 1_000_000_00 {
+		t.Fatalf("master balance %d: on-us must net to zero", bal)
+	}
+	credits, _ := b.ListTransfers(TransferFilter{Type: TypeCredit, CVU: company.CVU, Length: 10})
+	if len(credits) != 1 || len(heard) != 1 || heard[0].ID != credits[0].ID || credits[0].RelatedID != res.Transfer.ID ||
+		credits[0].Amount != 1_000_00 || credits[0].Concept != "Cuota 1" ||
+		credits[0].Counterparty.Name != "Ana Gómez" || credits[0].Counterparty.AccountNumber != person.CVU {
+		t.Fatalf("credits %+v heard %+v", credits, heard)
+	}
+	// The replay of the same origin_id moves nothing and credits nothing again.
+	if _, err := b.SendTransfer(SendInput{OriginID: "o-1", ToAccount: company.CVU, Currency: "ARS", Amount: 1_000_00}); err != nil || len(heard) != 1 {
+		t.Fatalf("replay credited again: %d %v", len(heard), err)
+	}
+	// By alias, without origin_debit: the master account holder is the origin.
+	if res, _ := b.SendTransfer(SendInput{OriginID: "o-2", ToAlias: company.Alias, Currency: "ARS", Amount: 5_00}); res.Transfer.Status != StatusCompleted ||
+		len(heard) != 2 || heard[1].Counterparty.Name != MasterHolder().Name || !ValidAccountNumber(heard[1].Counterparty.AccountNumber) {
+		t.Fatalf("by alias %+v heard %+v", res.Transfer, heard)
+	}
+	// Wrong currency for the CVU: rejected, nothing credited.
+	if res, _ := b.SendTransfer(SendInput{OriginID: "o-3", ToAccount: company.CVU, Currency: "USD", Amount: 1_00}); res.Transfer.FailureCode != FailureRejected || len(heard) != 2 {
+		t.Fatalf("currency mismatch %+v", res.Transfer)
+	}
+}
+
+// A pending on-us debit whose CVU is disabled before it settles fails and credits nothing; one
+// that settles later credits then.
+func TestPendingOnUsDebitCreditsWhenItSettles(t *testing.T) {
+	t.Parallel()
+	b, clk := newBank(t, "")
+	var heard int
+	b.SetCreditListener(func(Transfer) { heard++ })
+	c := caja(t, b, "ref-1", "ARS")
+	b.SetNextOutcome(OutcomePending)
+	ok, _ := b.SendTransfer(SendInput{OriginID: "o-1", ToAccount: c.CVU, Currency: "ARS", Amount: 10_00})
+	if ok.Transfer.Status != StatusInProgress || heard != 0 {
+		t.Fatalf("pending %+v heard %d", ok.Transfer, heard)
+	}
+	clk.Advance(20 * time.Second)
+	if got, _ := b.GetTransfer("o-1"); got.Status != StatusCompleted || heard != 1 {
+		t.Fatalf("settled %+v heard %d", got, heard)
+	}
+	b.SetNextOutcome(OutcomePending)
+	_, _ = b.SendTransfer(SendInput{OriginID: "o-2", ToAccount: c.CVU, Currency: "ARS", Amount: 10_00})
+	if err := b.DisableCaja(c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := b.CompleteTransfer("o-2", StatusCompleted); err != nil || got.FailureCode != FailureNoSuchTarget || heard != 1 {
+		t.Fatalf("disabled meanwhile %+v %v heard %d", got, err, heard)
+	}
+	if bal, _ := b.Balance("ARS"); bal != 1_000_000_00 {
+		t.Fatalf("balance %d", bal)
+	}
+}

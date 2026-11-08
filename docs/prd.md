@@ -57,12 +57,21 @@ domain code.
   0, minor units int64). Available = posted − held.
 - R-ACC-3 Create, rename and archive project accounts (archive only with zero balance).
 - R-ACC-4 Internal transfer between own accounts, same currency, immediate (ledger only).
+- R-ACC-5 Personal account by default: with personal mode on (`PERSONAL_MODE_ENABLED`, on in
+  dev/compose, a flag in production) every user gets, at signup and in the same transaction, a
+  personal organization (legal name = the email until the person KYC is approved, KYC `draft`,
+  the user its admin) with its personal account. A second personal org is `conflict`.
 
 ### Payers and CVU
 - R-CVU-1 Create a payer (name, CUIT/DNI, email) under a project account and issue a unique CVU
   (and alias) for that payer through the PSP adapter; one CVU per payer per currency.
 - R-CVU-2 Edit alias, disable CVU, share CVU/alias (link + QR payload).
-- R-CVU-3 A person in personal mode gets one CVU + alias per currency.
+- R-CVU-3 A person in personal mode gets one CVU + alias per currency, issued automatically when
+  the person KYC is approved.
+- R-CVU-4 The person sees her own CVUs (currency, CVU, alias, status, share link/QR) on her personal
+  account (`GET /orgs/{org}/accounts` → `cvus`; a project account lists its own receiving CVU there
+  if it ever has one, never payers' CVUs) and changes their alias
+  (`PATCH /orgs/{org}/accounts/{accountId}/cvus/{cvuId}`; a payer's or another org's CVU is 404).
 
 ### Payins (cash-in)
 - R-IN-1 The PSP notifies incoming transfers by a signed webhook; Lenapay verifies the signature
@@ -84,6 +93,31 @@ domain code.
   rejected | cancelled`; an uncertain PSP answer is re-checked by a sweep, never marked failed
   blindly.
 - R-OUT-6 Proof of payment (PDF) for settled payouts.
+
+### Mis pagos — payer view, B2C bridge (owner's brief 2026-11-07)
+- R-MP-1 Matching: a person whose personal org passed KYC is linked to every company payer whose
+  document is her verified DNI, or a CUIT **or CUIL** whose middle 8 digits are that DNI (7-digit
+  DNIs left-padded). Linked at approval (same transaction) and lazily on read for payers created
+  later. Never from unverified (draft) KYC data, never a company's CUIT. Another person's link is
+  404 on every door.
+- R-MP-2 She lists the companies (company name, project, her CVUs there, totals paid per
+  currency, last payment, ERP flag, hidden) and each company's payins to her CVUs (cursor
+  paginated), and can hide/show a company. Nothing else of the company is exposed.
+- R-MP-3 For an ERP-linked company she sees her installment plan (number, due date, amount and
+  currency, status pending|paid|overdue, CAC/UVA index); `erpLinked=false` and `[]` otherwise.
+- R-MP-4 She pays a company from her personal wallet: a payout to her CVU at that company in the
+  amount's currency (Idempotency-Key + step-up, no approval), optionally naming an existing
+  installment in the concept (`Cuota N - …`).
+- R-MP-5 On-us payments: transfers between Lenapay CVUs/aliases never go through the bank. When a
+  payout's destination CVU or alias is a Lenapay one (looked up in our CVUs before the PSP), it is
+  routed on the internal rail: same rules as any payout (Idempotency-Key, step-up, hold, 4-eyes
+  for company payouts), then settled instantly — as soon as it is approved — as ONE ledger entry
+  from the paying account to the receiving account (fee per plan, on-us rates default 0), with no
+  PSP call. The payout is `settled` with `rail: internal`; the receiver gets a credited payin of
+  the same rail (movements, "Mis pagos" history, realtime `payin.credited`, push). Covers
+  person → company, company → company and company → person. Reconciliation ignores the internal
+  rail (it never touches the master account). `rail: bank|internal` is on Payout, Quote and
+  Movement.
 
 ### Fees
 - R-FEE-1 Fee plans per organization (payin %, payout fixed + %), defaults per currency; fees are

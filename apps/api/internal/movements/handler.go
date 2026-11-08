@@ -76,7 +76,7 @@ func toAPIMovement(m Movement) api.Movement {
 		Id: m.ID, Type: api.MovementType(m.Type), Status: api.MovementStatus(m.Status),
 		Direction: api.MovementDirection(m.Direction), AccountId: m.AccountID,
 		Amount:  api.Money{Minor: m.Amount.Minor, Currency: api.Currency(m.Amount.Currency)},
-		Concept: m.Concept, RefId: m.RefID, CreatedAt: m.CreatedAt,
+		Concept: m.Concept, RefId: m.RefID, Rail: api.Rail(m.Rail), CreatedAt: m.CreatedAt,
 		Counterparty: api.Counterparty{Name: m.Counterparty.Name, Cuit: m.Counterparty.CUIT, Cbu: m.Counterparty.CBU},
 	}
 	if m.Fee != nil {

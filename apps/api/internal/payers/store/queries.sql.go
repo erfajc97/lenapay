@@ -31,6 +31,31 @@ func (q *Queries) DisableCVU(ctx context.Context, arg DisableCVUParams) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const getActiveCVUByAlias = `-- name: GetActiveCVUByAlias :one
+SELECT id, org_id, account_id, payer_id, currency, cvu, alias, psp_ref, status, created_at, updated_at, disabled_at FROM cvus WHERE lower(alias) = lower($1::text) AND status = 'active'
+`
+
+// System lookup of an on-us payout destination by alias (aliases are unique case-insensitively).
+func (q *Queries) GetActiveCVUByAlias(ctx context.Context, alias string) (Cvu, error) {
+	row := q.db.QueryRow(ctx, getActiveCVUByAlias, alias)
+	var i Cvu
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.AccountID,
+		&i.PayerID,
+		&i.Currency,
+		&i.Cvu,
+		&i.Alias,
+		&i.PspRef,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const getActiveCVUForPayer = `-- name: GetActiveCVUForPayer :one
 SELECT id, org_id, account_id, payer_id, currency, cvu, alias, psp_ref, status, created_at, updated_at, disabled_at FROM cvus
 WHERE org_id = $1 AND payer_id = $2 AND currency = $3 AND status = 'active'
@@ -232,6 +257,44 @@ func (q *Queries) InsertPayer(ctx context.Context, arg InsertPayerParams) error 
 		arg.ErpRef,
 	)
 	return err
+}
+
+const listAccountCVUsForOrg = `-- name: ListAccountCVUsForOrg :many
+SELECT id, org_id, account_id, payer_id, currency, cvu, alias, psp_ref, status, created_at, updated_at, disabled_at FROM cvus WHERE org_id = $1 AND payer_id IS NULL ORDER BY created_at, id
+`
+
+// The org's account-owned CVUs (personal CVUs): no payer.
+func (q *Queries) ListAccountCVUsForOrg(ctx context.Context, orgID uuid.UUID) ([]Cvu, error) {
+	rows, err := q.db.Query(ctx, listAccountCVUsForOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Cvu{}
+	for rows.Next() {
+		var i Cvu
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.AccountID,
+			&i.PayerID,
+			&i.Currency,
+			&i.Cvu,
+			&i.Alias,
+			&i.PspRef,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DisabledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCVUsForAccount = `-- name: ListCVUsForAccount :many

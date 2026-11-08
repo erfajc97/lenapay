@@ -34,7 +34,22 @@ type Account struct {
 	Archived      bool
 	ERPProjectRef *string
 	Balances      []CurrencyBalance
-	CreatedAt     time.Time
+	// CVUs are the account's own receiving CVUs (no payer): a personal account's ARS and USD
+	// CVUs (R-CVU-3). Empty for accounts that only receive through payers' CVUs.
+	CVUs      []ReceivingCVU
+	CreatedAt time.Time
+}
+
+// ReceivingCVU is a CVU that belongs to an account itself, not to a payer of it.
+type ReceivingCVU struct {
+	ID        uuid.UUID
+	AccountID uuid.UUID
+	Currency  money.Currency
+	Number    string
+	Alias     *string
+	Active    bool
+	ShareLink string
+	QRPayload string
 }
 
 // CreateInput creates a project account.

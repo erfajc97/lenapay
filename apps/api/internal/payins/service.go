@@ -40,8 +40,12 @@ type Service interface {
 	ProcessTransfer(ctx context.Context, eventID uuid.UUID, providerTransferID string) error
 	// Get returns a payin of p.OrgID (payin.not_found when missing or foreign).
 	Get(ctx context.Context, p auth.Principal, payinID uuid.UUID) (Payin, error)
-	// CreditedBetween lists credited payins of a currency in [from, to) (reconciliation).
+	// CreditedBetween lists credited bank-rail payins of a currency in [from, to) (reconciliation).
 	CreditedBetween(ctx context.Context, currency money.Currency, from, to time.Time) ([]Payin, error)
+	// CreditInternal records the receiving side of an on-us payout inside its settlement
+	// transaction (the ledger entry is the payout's): a credited payin of rail internal, the
+	// receivers' notification, the realtime payin.credited and the audit entry.
+	CreditInternal(ctx context.Context, tx pgx.Tx, in InternalCredit) error
 }
 
 // Deps are the collaborators of the payins service.
@@ -102,6 +106,7 @@ func (s *service) ReceiveWebhook(ctx context.Context, d WebhookDelivery) error {
 type credit struct {
 	payinID  uuid.UUID
 	eventID  uuid.UUID
+	payoutID *uuid.UUID // on-us: the payout this payin receives (rail internal)
 	transfer psp.IncomingTransfer
 	cvu      payers.CVU
 	fee      money.Amount
@@ -201,7 +206,6 @@ func (s *service) creditTx(ctx context.Context, tx pgx.Tx, c credit) error {
 	} else if !db.IsNoRows(err) {
 		return fmt.Errorf("payin by transfer: %w", err)
 	}
-	payinID, orgID, now := c.payinID, c.cvu.OrgID, s.deps.Clock.Now()
 	legs := []ledger.Leg{
 		{AccountID: c.master, Amount: money.New(-c.transfer.Amount.Minor, c.transfer.Amount.Currency)},
 		{AccountID: c.cvu.AccountID, Amount: c.net},
@@ -213,18 +217,40 @@ func (s *service) creditTx(ctx context.Context, tx pgx.Tx, c credit) error {
 		}
 		legs = append(legs, ledger.Leg{AccountID: feesAccount, Amount: c.fee})
 	}
+	orgID := c.cvu.OrgID
 	ledgerTx, err := s.deps.Ledger.Post(ctx, tx, ledger.Entry{
-		Kind: ledger.KindPayin, RefType: "payin", RefID: payinID, OrgID: &orgID,
+		Kind: ledger.KindPayin, RefType: "payin", RefID: c.payinID, OrgID: &orgID,
 		IdempotencyKey: "payin:" + c.transfer.ID, Memo: "payin " + c.transfer.ID, Legs: legs,
 	})
 	if err != nil {
 		return fmt.Errorf("post payin: %w", err)
 	}
-	err = q.InsertPayin(ctx, store.InsertPayinParams{
+	if err := s.record(ctx, tx, c, ledgerTx, audit.ActorPSP); err != nil {
+		return err
+	}
+	return s.settleEventTx(ctx, q, c.eventID, "")
+}
+
+// Rails of a payin (DB CHECK payins.rail).
+const (
+	railBank     = "bank"
+	railInternal = "internal"
+)
+
+// record writes the credited payin row, the notification outbox, the realtime event and the
+// audit entry of a payin whose ledger entry ledgerTx is already posted (in tx).
+func (s *service) record(ctx context.Context, tx pgx.Tx, c credit, ledgerTx uuid.UUID, actor audit.ActorKind) error {
+	payinID, orgID, now := c.payinID, c.cvu.OrgID, s.deps.Clock.Now()
+	rail := railBank
+	if c.payoutID != nil {
+		rail = railInternal
+	}
+	err := store.New(tx).InsertPayin(ctx, store.InsertPayinParams{
 		ID: payinID, OrgID: orgID, AccountID: c.cvu.AccountID, CvuID: c.cvu.ID, PayerID: c.cvu.PayerID,
 		Currency: string(c.transfer.Amount.Currency), GrossMinor: c.transfer.Amount.Minor, FeeMinor: c.fee.Minor, NetMinor: c.net.Minor,
 		OriginName: nonEmpty(c.transfer.OriginName), OriginCuit: nonEmpty(c.transfer.OriginCUIT), OriginCbu: nonEmpty(c.transfer.OriginCBU),
 		ProviderTransferID: c.transfer.ID, Status: string(StatusCredited), LedgerTransactionID: &ledgerTx, CreditedAt: &now,
+		Rail: rail, PayoutID: c.payoutID,
 	})
 	if err != nil {
 		return fmt.Errorf("insert payin: %w", err)
@@ -241,13 +267,35 @@ func (s *service) creditTx(ctx context.Context, tx pgx.Tx, c credit) error {
 	if err := s.publish(ctx, tx, c); err != nil {
 		return err
 	}
-	if err := s.deps.Audit.Record(ctx, tx, audit.Entry{
-		OrgID: &orgID, ActorKind: audit.ActorPSP, Action: "payin.credit", TargetType: "payin", TargetID: &payinID,
-		IdempotencyKey: "payin:" + c.transfer.ID, Payload: map[string]any{"gross": c.transfer.Amount.Minor, "fee": c.fee.Minor},
-	}); err != nil {
-		return err
+	return s.deps.Audit.Record(ctx, tx, audit.Entry{
+		OrgID: &orgID, ActorKind: actor, Action: "payin.credit", TargetType: "payin", TargetID: &payinID,
+		IdempotencyKey: "payin:" + c.transfer.ID, Payload: map[string]any{"gross": c.transfer.Amount.Minor, "fee": c.fee.Minor, "rail": rail},
+	})
+}
+
+// CreditInternal: the receiver pays no fee on-us (the payer's plan charged it, if any); the
+// provider id is "internal:<payoutId>", unique like any provider transfer id.
+func (s *service) CreditInternal(ctx context.Context, tx pgx.Tx, in InternalCredit) error {
+	if !in.Amount.IsPositive() || in.CVU.Currency != in.Amount.Currency {
+		return apperr.New(apperr.CodeCurrencyMismatch, nil)
 	}
-	return s.settleEventTx(ctx, q, c.eventID, "")
+	members, err := s.deps.Members.ListMembers(ctx, auth.Principal{OrgID: in.CVU.OrgID})
+	if err != nil {
+		return fmt.Errorf("payin recipients: %w", err)
+	}
+	payoutID := in.PayoutID
+	c := credit{
+		payinID: ids.New(), payoutID: &payoutID, cvu: in.CVU, fee: money.Zero(in.Amount.Currency), net: in.Amount,
+		transfer: psp.IncomingTransfer{
+			ID: "internal:" + in.PayoutID.String(), CVU: in.CVU.Number, Amount: in.Amount,
+			OriginName: in.OriginName, OriginCUIT: in.OriginCUIT, OriginCBU: in.OriginCBU, OccurredAt: s.deps.Clock.Now(),
+		},
+	}
+	for _, m := range members {
+		c.users = append(c.users, m.UserID)
+	}
+	c.view = s.view(ctx, c)
+	return s.record(ctx, tx, c, in.LedgerTransactionID, audit.ActorSystem)
 }
 
 // settleEvent records the outcome of a webhook event (no-op without an event).

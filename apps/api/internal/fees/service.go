@@ -56,32 +56,46 @@ func (s *service) Quote(ctx context.Context, orgID uuid.UUID, op Operation, amou
 		// No rows: the org's plan (or the default) lacks this currency; a configuration bug.
 		return Quote{}, fmt.Errorf("fees: rate for %s: %w", amount.Currency, err)
 	}
-	rates := Rates{PayinBps: int64(rate.PayinBps), PayoutFixedMinor: rate.PayoutFixedMinor, PayoutBps: int64(rate.PayoutBps)}
+	rates := Rates{
+		PayinBps: int64(rate.PayinBps), PayoutFixedMinor: rate.PayoutFixedMinor, PayoutBps: int64(rate.PayoutBps),
+		InternalFixedMinor: rate.InternalFixedMinor, InternalBps: int64(rate.InternalBps),
+	}
 	fee, err := Compute(op, amount, rates)
 	if err != nil {
 		return Quote{}, err
 	}
 	q := Quote{Fee: fee, PlanID: rate.FeePlanID, Bps: rates.PayinBps}
-	if op == OperationPayout {
+	switch op {
+	case OperationPayin: // Bps above
+	case OperationPayout:
 		q.Bps, q.FixedMinor = rates.PayoutBps, rates.PayoutFixedMinor
+	case OperationPayoutInternal:
+		q.Bps, q.FixedMinor = rates.InternalBps, rates.InternalFixedMinor
 	}
 	return q, nil
 }
 
 // Compute is THE fee formula (G12): payin = gross × payin_bps; payout = fixed + amount ×
-// payout_bps; percentages rounded with Rounding.
+// payout_bps; on-us payout = internal fixed + amount × internal_bps; percentages rounded with
+// Rounding.
 func Compute(op Operation, amount money.Amount, r Rates) (money.Amount, error) {
 	switch op {
 	case OperationPayin:
 		return money.ApplyBps(amount, r.PayinBps, Rounding)
 	case OperationPayout:
-		pct, err := money.ApplyBps(amount, r.PayoutBps, Rounding)
-		if err != nil {
-			return money.Amount{}, err
-		}
-		return money.New(r.PayoutFixedMinor, amount.Currency).Add(pct)
+		return fixedPlusBps(amount, r.PayoutFixedMinor, r.PayoutBps)
+	case OperationPayoutInternal:
+		return fixedPlusBps(amount, r.InternalFixedMinor, r.InternalBps)
 	}
 	return money.Amount{}, fmt.Errorf("fees: unknown operation %q", op)
+}
+
+func fixedPlusBps(amount money.Amount, fixedMinor, bps int64) (money.Amount, error) {
+	pct, err := money.ApplyBps(amount, bps, Rounding)
+	if err != nil {
+		return money.Amount{}, err
+	}
+	return money.New(fixedMinor, amount.Currency).Add(pct)
 }
 
 func (s *service) EnsureDefaultPlan(ctx context.Context) error {

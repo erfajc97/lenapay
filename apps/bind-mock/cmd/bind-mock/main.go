@@ -45,10 +45,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	sim := simulator.New(b, webhook.NewSender(cfg.WebhookURL, []byte(cfg.WebhookSecret.Reveal()), cfg.WebhookTimeout, now), now)
+	sim := simulator.New(ctx, b, webhook.NewSender(cfg.WebhookURL, []byte(cfg.WebhookSecret.Reveal()), cfg.WebhookTimeout, now), now)
 	if cfg.AutoPayinEvery > 0 {
 		sim.StartAuto(ctx, cfg.AutoPayinEvery)
 	}
+	defer sim.Wait() // runs last: the on-us webhooks in flight finish before exit
 	defer sim.StopAuto()
 
 	srv := &http.Server{

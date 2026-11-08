@@ -285,12 +285,16 @@ func (c *Client) ResolveDestination(ctx context.Context, to string) (psp.Destina
 	}, nil
 }
 
-// SendTransfer starts an outgoing transfer with origin_id = our per-attempt reference.
+// SendTransfer starts an outgoing transfer with origin_id = our per-attempt reference (and
+// origin_debit = the paying CVU when the account has one).
 func (c *Client) SendTransfer(ctx context.Context, req psp.SendTransferRequest) (psp.TransferResult, error) {
 	body := transferRequest{
 		OriginID: req.Reference, To: map[string]string{"cbu": req.AccountNumber},
 		Value:       valueJSON{Currency: string(req.Amount.Currency), Amount: decimal(req.Amount.Minor)},
 		Description: req.Concept, Concept: "VAR", Emails: []string{defaultReceiptEmail},
+	}
+	if req.OriginCVU != "" {
+		body.OriginDebit = map[string]string{"cvu": req.OriginCVU}
 	}
 	var out transferResponse
 	if err := c.json(ctx, "send transfer", request{

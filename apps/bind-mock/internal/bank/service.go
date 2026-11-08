@@ -10,6 +10,11 @@
 //     /_mock/next-transfer overrides the next one.
 //   - A valid CBU/CVU whose 13-digit account starts with 9999, or an alias starting with
 //     "noexiste", is not found; any other valid number or alias resolves to a deterministic holder.
+//   - On-us: an outgoing transfer to a CVU (or alias) this bank issued is settled like any other
+//     debit AND credited to that CVU as an incoming transfer, whose webhook goes to the API (the
+//     credit listener), exactly as the real BIND does with two clients of the same master
+//     account. The master balance nets to zero; the credit's origin is the holder of the debited
+//     CVU (origin_debit) or, without one, the master account holder.
 package bank
 
 import (
@@ -34,6 +39,9 @@ var (
 	ErrAliasTaken   = errors.New("bank: alias taken")
 	ErrCajaDisabled = errors.New("bank: caja disabled")
 )
+
+// MasterHolder owns the master account: the origin of an on-us credit without origin_debit.
+func MasterHolder() Holder { return Holder{Name: "Lenapay S.A.", CUIT: cuit("30", "71827364")} }
 
 // Currencies the master account holds (a function: nothing can change the list at runtime).
 func Currencies() []string { return []string{"ARS", "USD"} }
@@ -87,8 +95,13 @@ type Transfer struct {
 	Concept      string       `json:"concept,omitempty"`
 	Description  string       `json:"description,omitempty"`
 	FailureCode  string       `json:"failure_code,omitempty"`
-	CreatedAt    time.Time    `json:"start_date"`
-	CompletedAt  *time.Time   `json:"end_date,omitempty"`
+	// On-us debits: OnUsCVU is the receiving CVU of ours and Origin the debited side (the
+	// credit's counterparty). RelatedID links the debit and its credit both ways.
+	OnUsCVU     string        `json:"on_us_cvu,omitempty"`
+	Origin      *Counterparty `json:"origin,omitempty"`
+	RelatedID   string        `json:"related_id,omitempty"`
+	CreatedAt   time.Time     `json:"start_date"`
+	CompletedAt *time.Time    `json:"end_date,omitempty"`
 }
 
 // Delivery is one webhook attempt.
@@ -124,6 +137,16 @@ type Bank struct {
 	state       State
 	opts        Options
 	nextOutcome []Outcome
+	onCredit    func(Transfer)
+}
+
+// SetCreditListener registers who is told about every on-us credit (the simulator, which
+// sends its webhook). It is called with the bank locked: it must not block nor call the bank
+// synchronously.
+func (b *Bank) SetCreditListener(fn func(Transfer)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.onCredit = fn
 }
 
 // New loads the state file when it exists, or starts with the initial balances.
@@ -251,6 +274,15 @@ func (b *Bank) CreateCaja(in CreateCajaInput) (caja Caja, created bool, err erro
 func (b *Bank) aliasOwner(alias string) *Caja {
 	for _, c := range b.state.Cajas {
 		if strings.EqualFold(c.Alias, alias) {
+			return c
+		}
+	}
+	return nil
+}
+
+func (b *Bank) cajaByCVU(cvu string) *Caja {
+	for _, c := range b.state.Cajas {
+		if c.CVU == cvu {
 			return c
 		}
 	}

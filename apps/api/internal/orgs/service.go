@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -30,6 +31,10 @@ type Service interface {
 	List(ctx context.Context, p auth.Principal) ([]Organization, error)
 	// Create creates an org, makes the caller its admin and opens its KYC case in draft.
 	Create(ctx context.Context, p auth.Principal, in CreateInput) (Organization, error)
+	// CreatePersonalForUser creates a new user's personal org inside the signup transaction
+	// (identity.SignupHook): legal name = the email until the person KYC is approved, the user
+	// its admin, KYC in draft. created = false when personal mode is off.
+	CreatePersonalForUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (orgID uuid.UUID, created bool, err error)
 	// Get returns the principal's org (p.OrgID).
 	Get(ctx context.Context, p auth.Principal) (Organization, error)
 	// ListMembers lists the members of p.OrgID.
@@ -68,6 +73,9 @@ type Deps struct {
 	Config config.Config
 }
 
+// maxLegalName is the organizations.legal_name CHECK cap.
+const maxLegalName = 200
+
 // InviteTTL is how long an invite can be accepted (R-ORG-2).
 const InviteTTL = 7 * 24 * time.Hour
 
@@ -104,31 +112,52 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 		KYCStatus: auth.KYCDraft, Role: auth.RoleAdmin, CreatedAt: s.now(),
 	}
 	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		q := store.New(tx)
-		if in.Kind == KindPersonal {
-			if err := s.ensureNoPersonalOrg(ctx, tx, q, p.UserID); err != nil {
-				return err
-			}
-		}
-		if err := q.InsertOrganization(ctx, store.InsertOrganizationParams{
-			ID: org.ID, Kind: string(org.Kind), LegalName: org.LegalName, Cuit: org.CUIT, CreatedBy: p.UserID, CreatedAt: org.CreatedAt,
-		}); err != nil {
-			return err
-		}
-		if err := q.InsertMembership(ctx, store.InsertMembershipParams{
-			OrgID: org.ID, UserID: p.UserID, Role: string(auth.RoleAdmin), CreatedAt: org.CreatedAt,
-		}); err != nil {
-			return err
-		}
-		if err := s.deps.KYC.OpenCase(ctx, tx, org.ID, string(org.Kind)); err != nil {
-			return err
-		}
-		return s.record(ctx, tx, p, org.ID, "org.create", "organization", org.ID, map[string]any{"kind": org.Kind})
+		return s.insert(ctx, tx, p.UserID, org)
 	})
 	if err != nil {
 		return Organization{}, err
 	}
 	return org, nil
+}
+
+func (s *service) CreatePersonalForUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (uuid.UUID, bool, error) {
+	if !s.deps.Config.PersonalModeEnabled {
+		return uuid.Nil, false, nil
+	}
+	name := strings.TrimSpace(email)
+	if utf8.RuneCountInString(name) > maxLegalName {
+		name = string([]rune(name)[:maxLegalName])
+	}
+	org := Organization{ID: ids.New(), Kind: KindPersonal, LegalName: name, KYCStatus: auth.KYCDraft, Role: auth.RoleAdmin, CreatedAt: s.now()}
+	if err := s.insert(ctx, tx, userID, org); err != nil {
+		return uuid.Nil, false, err
+	}
+	return org.ID, true, nil
+}
+
+// insert writes a new org with its creator as admin, opens its KYC case and audits it, inside
+// tx. A personal org is ONE per user (ensureNoPersonalOrg).
+func (s *service) insert(ctx context.Context, tx pgx.Tx, userID uuid.UUID, org Organization) error {
+	q := store.New(tx)
+	if org.Kind == KindPersonal {
+		if err := s.ensureNoPersonalOrg(ctx, tx, q, userID); err != nil {
+			return err
+		}
+	}
+	if err := q.InsertOrganization(ctx, store.InsertOrganizationParams{
+		ID: org.ID, Kind: string(org.Kind), LegalName: org.LegalName, Cuit: org.CUIT, CreatedBy: userID, CreatedAt: org.CreatedAt,
+	}); err != nil {
+		return err
+	}
+	if err := q.InsertMembership(ctx, store.InsertMembershipParams{
+		OrgID: org.ID, UserID: userID, Role: string(auth.RoleAdmin), CreatedAt: org.CreatedAt,
+	}); err != nil {
+		return err
+	}
+	if err := s.deps.KYC.OpenCase(ctx, tx, org.ID, string(org.Kind)); err != nil {
+		return err
+	}
+	return s.record(ctx, tx, auth.Principal{UserID: userID}, org.ID, "org.create", "organization", org.ID, map[string]any{"kind": org.Kind})
 }
 
 // ensureNoPersonalOrg: a person has ONE personal wallet (R-ACC-1). The advisory lock
@@ -160,7 +189,7 @@ func (s *service) Get(ctx context.Context, p auth.Principal) (Organization, erro
 		return Organization{}, notFoundAs(err, apperr.CodeOrgNotFound)
 	}
 	return Organization{
-		ID: r.ID, Kind: Kind(r.Kind), LegalName: r.LegalName, CUIT: r.Cuit, KYCStatus: r.KycStatus,
+		ID: r.ID, Kind: Kind(r.Kind), LegalName: r.LegalName, CUIT: r.Cuit, DocNumber: r.DocNumber, KYCStatus: r.KycStatus,
 		Role: auth.Role(r.Role), CreatedAt: r.CreatedAt,
 	}, nil
 }

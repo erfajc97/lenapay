@@ -62,10 +62,15 @@ the fixture), with an ARS CVU and 2 payins, so `GET /me/payments/companies` as `
 both companies with history, and the Andina one with installments. Email codes are always `123456`
 (`DEV_FIXED_EMAIL_CODE`) and a submitted company KYC is auto-approved after 8 s
 (`DEV_KYC_AUTO_APPROVE_SECONDS`); both are development-only and refused/ignored in production.
+With personal mode on (the compose default) every user — including the company users above —
+gets a personal org (KYC draft) and personal account at signup; the personal CVUs (ARS, USD)
+appear on that account (`GET /orgs/{org}/accounts` → `cvus`) once the person KYC is approved.
+A payout to a Lenapay CVU or alias is on-us (`rail: internal`): it never reaches the bind-mock and
+settles at once (after the 4-eyes approval for companies), and the receiver sees a credited payin.
 
 `node scripts/smoke.mjs` walks the whole path with fresh users (signup → KYC → CVU → payin →
 SSE → payout → second approver → settle → attachment + proof → reconciliation → "Mis pagos":
-a verified person sees, hides/shows and pays the company) and exits 1 on
+a verified person sees, hides/shows and pays the company on-us) and exits 1 on
 any failure; `node scripts/p95.mjs` times the hot reads (R-NF-1) on the seeded stack.
 
 ## Testing

@@ -13,6 +13,9 @@ type Operation string
 const (
 	OperationPayin  Operation = "payin"
 	OperationPayout Operation = "payout"
+	// OperationPayoutInternal is an on-us payout (to a Lenapay CVU, never through the bank):
+	// fixed + bps of the plan's internal rates, 0 by default.
+	OperationPayoutInternal Operation = "payout_internal"
 )
 
 // Rounding is the ONE rounding of every percentage fee (MO1): half a minor unit or more
@@ -21,9 +24,11 @@ const Rounding = money.RoundHalfUp
 
 // Rates are one currency of a fee plan.
 type Rates struct {
-	PayinBps         int64
-	PayoutFixedMinor int64
-	PayoutBps        int64
+	PayinBps           int64
+	PayoutFixedMinor   int64
+	PayoutBps          int64
+	InternalFixedMinor int64
+	InternalBps        int64
 }
 
 // DefaultRates seed the default plan per currency when it is missing. (proposal, G11 — the PRD

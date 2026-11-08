@@ -51,7 +51,9 @@ func keys(t *testing.T, v any) []string {
 func TestHandlerMapping(t *testing.T) {
 	t.Parallel()
 	bal := CurrencyBalance{Posted: money.New(10, money.ARS), Held: money.New(4, money.ARS), Available: money.New(6, money.ARS)}
-	svc := &fakeService{account: Account{ID: ids.New(), Kind: KindProject, Name: "Torre", Balances: []CurrencyBalance{bal}, CreatedAt: time.Unix(0, 0).UTC()}}
+	alias := "lucia.pagos"
+	cvu := ReceivingCVU{ID: ids.New(), Currency: money.ARS, Number: "0000322100000000000017", Alias: &alias, Active: true, ShareLink: "https://l/x", QRPayload: "q"}
+	svc := &fakeService{account: Account{ID: ids.New(), Kind: KindPersonal, Name: "Personal", Balances: []CurrencyBalance{bal}, CVUs: []ReceivingCVU{cvu}, CreatedAt: time.Unix(0, 0).UTC()}}
 	h := NewHandler(svc)
 	ctx := auth.WithPrincipal(t.Context(), auth.Principal{UserID: ids.New(), OrgID: ids.New(), StepUp: true})
 
@@ -60,8 +62,14 @@ func TestHandlerMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 	acc := list.(api.ListAccounts200JSONResponse).Items[0]
-	if got, want := keys(t, acc), []string{"archived", "balances", "createdAt", "erpProjectRef", "id", "kind", "name"}; !slices.Equal(got, want) {
+	if got, want := keys(t, acc), []string{"archived", "balances", "createdAt", "cvus", "erpProjectRef", "id", "kind", "name"}; !slices.Equal(got, want) {
 		t.Fatalf("account keys = %v, want %v", got, want)
+	}
+	if got, want := keys(t, acc.Cvus[0]), []string{"alias", "currency", "cvu", "id", "share", "status"}; !slices.Equal(got, want) {
+		t.Fatalf("cvu keys = %v, want %v", got, want)
+	}
+	if c := acc.Cvus[0]; c.Cvu != cvu.Number || *c.Alias != alias || c.Status != api.Active || c.Currency != "ARS" || c.Share.Link != "https://l/x" {
+		t.Fatalf("cvu = %+v", c)
 	}
 	if got, want := keys(t, acc.Balances[0]), []string{"available", "currency", "held", "posted"}; !slices.Equal(got, want) {
 		t.Fatalf("balance keys = %v, want %v", got, want)

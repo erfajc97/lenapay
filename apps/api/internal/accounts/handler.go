@@ -109,9 +109,25 @@ func (h *Handler) CreateInternalTransfer(ctx context.Context, req api.CreateInte
 }
 
 func toAPIAccount(a Account) api.Account {
+	cvus := make([]api.AccountCvu, 0, len(a.CVUs))
+	for _, c := range a.CVUs {
+		cvus = append(cvus, ToAPICVU(c))
+	}
 	return api.Account{
 		Id: a.ID, Kind: api.AccountKind(a.Kind), Name: a.Name, Archived: a.Archived,
-		ErpProjectRef: a.ERPProjectRef, Balances: toAPIBalances(a.Balances), CreatedAt: a.CreatedAt,
+		ErpProjectRef: a.ERPProjectRef, Balances: toAPIBalances(a.Balances), Cvus: cvus, CreatedAt: a.CreatedAt,
+	}
+}
+
+// ToAPICVU maps an account's own CVU to the contract (also the updateAccountCvu answer).
+func ToAPICVU(c ReceivingCVU) api.AccountCvu {
+	status := api.Disabled
+	if c.Active {
+		status = api.Active
+	}
+	return api.AccountCvu{
+		Id: c.ID, Currency: api.Currency(c.Currency), Cvu: c.Number, Alias: c.Alias, Status: status,
+		Share: api.CvuShare{Link: c.ShareLink, QrPayload: c.QRPayload},
 	}
 }
 

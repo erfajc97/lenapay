@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
 	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
 	erpfake "github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
 	"github.com/erfajc97/lenapay/apps/api/internal/movements"
@@ -90,7 +91,7 @@ func (sd *seeder) andinaPersonaCVU(ctx context.Context) (string, error) {
 }
 
 // fundPersona gives the personal wallet an ARS balance to pay with: one transfer to her
-// personal CVU (issued by the worker after the KYC approval).
+// personal CVU (issued by the worker after the KYC approval), read from her accounts.
 func (sd *seeder) fundPersona(ctx context.Context) error {
 	if !sd.cfg.PersonalModeEnabled {
 		return nil
@@ -99,21 +100,25 @@ func (sd *seeder) fundPersona(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	o, found, err := sd.orgNamed(ctx, userID, personaName)
-	if err != nil || !found {
-		return errors.Join(err, errors.New("persona org missing"))
+	o, err := sd.personalOrg(ctx, userID)
+	if err != nil {
+		return err
 	}
 	p := auth.Principal{UserID: userID, OrgID: o.ID, Role: auth.RoleAdmin, KYCStatus: auth.KYCApproved}
 	if n, err := sd.countOf(ctx, p, movements.TypePayin, false); err != nil || n > 0 {
 		return err
 	}
-	var cvu payers.CVU
+	var cvu accounts.ReceivingCVU
 	if err := sd.waitFor(ctx, "personal CVU", func() (bool, error) {
-		cvu, err = sd.s.Payers.PersonalCVU(ctx, o.ID, money.ARS)
-		if apperr.IsCode(err, apperr.CodeCVUNotFound) {
-			return false, nil
+		list, err := sd.s.Accounts.List(ctx, p, false) // the person's own view: Account.cvus
+		for _, a := range list {
+			for _, c := range a.CVUs {
+				if c.Currency == money.ARS && c.Active {
+					cvu = c
+				}
+			}
 		}
-		return err == nil, err
+		return cvu.Number != "", err
 	}); err != nil {
 		return err
 	}

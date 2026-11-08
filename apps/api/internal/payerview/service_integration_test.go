@@ -14,7 +14,6 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
 )
 
 const (
@@ -133,7 +132,7 @@ func TestAnotherPersonsCompanyIsNotFoundEverywhere(t *testing.T) {
 	e.incoming(t, cvu, 50_000_00, "Lucia")
 	victim, _ := e.person(t, "lucia@persona.test", dniLucia)
 	attacker, attackerOrg := e.person(t, "mallory@persona.test", "31555666")
-	e.incoming(t, e.personalCVU(t, attackerOrg), 1_000_000_00, "Mallory")
+	e.incoming(t, e.personalCVU(t, attackerOrg).Number, 1_000_000_00, "Mallory")
 
 	_, body := e.get(t, victim.token, "/me/payments/companies")
 	linkID := items(t, body)[0]["linkId"]
@@ -304,13 +303,17 @@ func TestInstallmentsOfAnERPLinkedCompany(t *testing.T) {
 }
 
 // The pay flow end to end: step-up and Idempotency-Key, the installment in the concept, a
-// replay, the rule errors, then the dispatch settles at the PSP and the personal balance pays
-// amount + fee. With BINDMOCK_URL set this runs against apps/bind-mock.
+// replay, the rule errors. The company's CVU is a Lenapay one, so the payment is on-us (P5):
+// settled at once on the internal rail, never sent to the PSP, the personal balance pays
+// amount + on-us fee (0 by default) and the company receives a credited payin of the same
+// rail that shows in Lucía's "Mis pagos" history. With BINDMOCK_URL set this runs against
+// apps/bind-mock.
 func TestPayACompanyEndToEnd(t *testing.T) {
 	e := setup(t)
-	_, companyCVU := andinaWithLucia(t, e)
+	andinaOwner, companyCVU := andinaWithLucia(t, e)
 	u, orgID := e.person(t, "lucia@persona.test", dniLucia)
-	e.incoming(t, e.personalCVU(t, orgID), 2_000_000_00, "Lucia Fernandez")
+	e.incoming(t, e.personalCVU(t, orgID).Number, 2_000_000_00, "Lucia Fernandez")
+	pspCalls := e.pspCalls()
 	_, body := e.get(t, u.token, "/me/payments/companies")
 	linkID := companyNamed(t, items(t, body), andina)["linkId"]
 	path := companiesPath(linkID, "/pay")
@@ -326,7 +329,8 @@ func TestPayACompanyEndToEnd(t *testing.T) {
 		t.Fatalf("pay = %d %v", status, body)
 	}
 	dest := body["destination"].(map[string]any)
-	if body["status"] != string(payouts.StatusApproved) || body["concept"] != "Cuota 4 - "+andina || dest["accountNumber"] != companyCVU {
+	if body["status"] != string(payouts.StatusSettled) || body["rail"] != string(payouts.RailInternal) ||
+		body["concept"] != "Cuota 4 - "+andina || dest["accountNumber"] != companyCVU || dest["bankName"] != "Lenapay" {
 		t.Fatalf("payout = %v", body)
 	}
 	payoutID := uuid.MustParse(body["id"].(string))
@@ -352,11 +356,23 @@ func TestPayACompanyEndToEnd(t *testing.T) {
 		}
 	}
 
-	e.settle(t, orgID, payoutID)
+	if got := e.pspCalls(); got != pspCalls {
+		t.Fatalf("an on-us payment called the PSP: %d calls, want %d", got, pspCalls)
+	}
+	e.noBankTransfer(t, payoutID)
 	p := auth.Principal{UserID: u.id, OrgID: orgID, Role: auth.RoleAdmin, KYCStatus: auth.KYCApproved}
 	po, err := e.svc.Payouts.Get(t.Context(), p, payoutID)
-	if err != nil || po.Status != payouts.StatusSettled {
-		t.Fatalf("payout after dispatch = %s, %v", po.Status, err)
+	if err != nil || po.Status != payouts.StatusSettled || !po.Fee.IsZero() {
+		t.Fatalf("payout = %s fee %v, %v", po.Status, po.Fee, err)
+	}
+	// The company's side: one credited internal payin of the full amount, from Lucía.
+	if n := e.count(t, `SELECT count(*) FROM payins WHERE payout_id = $1 AND rail = 'internal' AND status = 'credited'
+		AND org_id = $2 AND gross_minor = 85000000 AND net_minor = 85000000 AND origin_name = 'Persona 30123456'`, payoutID, andinaOwner.admin.OrgID); n != 1 {
+		t.Fatalf("company internal payins = %d", n)
+	}
+	_, history := e.get(t, u.token, companiesPath(linkID, "/payins"))
+	if got := items(t, history); len(got) != 1 || got[0]["status"] != "credited" || got[0]["cvu"] != companyCVU {
+		t.Fatalf("Mis pagos history = %v", got)
 	}
 	total, _ := po.Total()
 	summary, err := e.svc.Accounts.Summary(t.Context(), p)
@@ -378,27 +394,4 @@ func payinFee(t *testing.T, e *env, orgID uuid.UUID) int64 {
 		t.Fatal(err)
 	}
 	return fee
-}
-
-// settle runs what the worker does: the dispatch job and, with the fake PSP (pending until
-// completed), the sweep's re-read after the PSP settles it.
-func (e *env) settle(t *testing.T, orgID, payoutID uuid.UUID) {
-	t.Helper()
-	ctx := t.Context()
-	if err := e.svc.Payouts.Dispatch(ctx, payoutID); err != nil {
-		t.Fatal(err)
-	}
-	if e.fakePSP == nil {
-		return
-	}
-	var ref string
-	if err := e.pool.QueryRow(ctx, `SELECT provider_attempt_id FROM payouts WHERE id = $1 AND org_id = $2`, payoutID, orgID).Scan(&ref); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.fakePSP.Complete(ref, psp.TransferSettled); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.svc.Payouts.Dispatch(ctx, payoutID); err != nil {
-		t.Fatal(err)
-	}
 }

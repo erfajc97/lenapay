@@ -11,6 +11,8 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/fees"
 	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
 	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
+	"github.com/erfajc97/lenapay/apps/api/internal/payers"
+	"github.com/erfajc97/lenapay/apps/api/internal/payins"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
@@ -43,4 +45,20 @@ type DocumentStore interface {
 // Notifier writes the notification outbox inside the payout transaction (notifications.Service).
 type Notifier interface {
 	Notify(ctx context.Context, tx pgx.Tx, n notifications.Notification) error
+}
+
+// CVUs finds Lenapay's own CVUs (payers.Service): a payout to one of them is on-us.
+type CVUs interface {
+	// OnUsDestination finds an active Lenapay CVU by number or alias (found = false otherwise).
+	OnUsDestination(ctx context.Context, to string) (payers.OnUs, bool, error)
+	// CVUByNumber re-reads the destination CVU at settlement (it may have been disabled).
+	CVUByNumber(ctx context.Context, number string) (payers.CVU, error)
+	// Holder is how the paying org shows to the receiver (name and CUIT/DNI).
+	Holder(ctx context.Context, orgID uuid.UUID) (name, doc string, err error)
+}
+
+// Credits records the receiving side of an on-us payout in its settlement transaction
+// (payins.Service).
+type Credits interface {
+	CreditInternal(ctx context.Context, tx pgx.Tx, in payins.InternalCredit) error
 }

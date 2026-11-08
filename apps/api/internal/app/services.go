@@ -82,14 +82,19 @@ func NewServices(p Platform, ports Ports) *Services {
 	// at call time, after both exist.
 	s.Identity = identity.NewService(identity.Deps{
 		Pool: p.Pool, Clock: p.Clock, Issuer: p.Issuer, Codes: s.Notifications, Config: p.Config,
-		Memberships: identity.MembershipsFunc(s.membershipsForUser),
+		Memberships: identity.MembershipsFunc(s.membershipsForUser), OnSignup: identity.SignupHookFunc(s.onSignup),
 	})
 	s.Orgs = orgs.NewService(orgs.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Users: s.Identity, Mailer: s.Notifications, Config: p.Config,
 		KYC: orgs.KYCCasesFunc(s.openKYCCase),
 	})
 
-	s.Accounts = accounts.NewService(accounts.Deps{Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Ledger: s.Ledger})
+	// accounts ↔ payers: accounts lists its own CVUs, which payers owns; the closure reads
+	// s.Payers at call time, after both exist.
+	s.Accounts = accounts.NewService(accounts.Deps{
+		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Ledger: s.Ledger,
+		CVUs: accounts.ReceivingCVUsFunc(s.receivingCVUs),
+	})
 	s.Payers = payers.NewService(payers.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP, Accounts: s.Accounts,
 		Orgs: s.Orgs, ShareBaseURL: p.Config.CVUShareBaseURL,
@@ -109,6 +114,7 @@ func NewServices(p Platform, ports Ports) *Services {
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP,
 		Accounts: s.Accounts, Ledger: s.Ledger, Fees: s.Fees, Notifications: s.Notifications,
 		Orgs: s.Orgs, Documents: ports.Documents, Location: p.Config.Location(),
+		CVUs: s.Payers, Credits: s.Payins,
 	})
 	s.Movements = movements.NewService(movements.Deps{Pool: p.Pool, Location: p.Config.Location()})
 	s.Reconciliation = reconciliation.NewService(reconciliation.Deps{
@@ -147,6 +153,21 @@ func NewServer(s *Services, issuer *auth.Issuer, health Pinger) *Server {
 // membershipsForUser forwards to orgs (see the identity ↔ orgs note in NewServices).
 func (s *Services) membershipsForUser(ctx context.Context, userID uuid.UUID) ([]identity.MembershipSummary, error) {
 	return s.Orgs.MembershipsForUser(ctx, userID)
+}
+
+// onSignup gives a new user their personal org and personal account (personal mode), in the
+// signup transaction; the personal CVUs follow on the person KYC approval (payers hook).
+func (s *Services) onSignup(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) error {
+	orgID, created, err := s.Orgs.CreatePersonalForUser(ctx, tx, userID, email)
+	if err != nil || !created {
+		return err
+	}
+	return s.Accounts.OpenOrgAccount(ctx, tx, orgID, string(orgs.KindPersonal))
+}
+
+// receivingCVUs forwards to payers (see the accounts ↔ payers note in NewServices).
+func (s *Services) receivingCVUs(ctx context.Context, orgID uuid.UUID) ([]accounts.ReceivingCVU, error) {
+	return s.Payers.ReceivingCVUs(ctx, orgID)
 }
 
 // openKYCCase forwards to kyc (orgs is built before kyc, which needs orgs.Service; the closure

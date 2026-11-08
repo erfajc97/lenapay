@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/erfajc97/lenapay/apps/api/internal/payers"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
@@ -47,4 +48,16 @@ type WebhookDelivery struct {
 	RawBody   []byte
 	Signature string
 	Timestamp string
+}
+
+// InternalCredit is the receiving side of an on-us payout (payouts settles it).
+type InternalCredit struct {
+	PayoutID            uuid.UUID
+	LedgerTransactionID uuid.UUID
+	CVU                 payers.CVU
+	Amount              money.Amount
+	// Origin is the paying org as the receiver sees it (its CVU in the currency, when it has one).
+	OriginName string
+	OriginCUIT string // 11 digits or ""
+	OriginCBU  string // 22 digits or ""
 }

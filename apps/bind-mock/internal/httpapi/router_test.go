@@ -67,7 +67,7 @@ func newFixture(t *testing.T) fixture {
 	rcv := &receiver{}
 	api := httptest.NewServer(rcv)
 	t.Cleanup(api.Close)
-	sim := simulator.New(b, webhook.NewSender(api.URL, []byte(secret), 2*time.Second, now), now)
+	sim := simulator.New(t.Context(), b, webhook.NewSender(api.URL, []byte(secret), 2*time.Second, now), now)
 	t.Cleanup(sim.StopAuto)
 	return fixture{h: NewRouter(Deps{Bank: b, Simulator: sim, TimeoutDelay: 50 * time.Millisecond}), bank: b, sim: sim, rcv: rcv}
 }
@@ -320,3 +320,32 @@ func TestAutoPayins(t *testing.T) {
 
 // pause waits one polling interval (polling with a deadline, never a fixed sleep: AG18).
 func pause() { <-time.After(10 * time.Millisecond) }
+
+// On-us over HTTP: a transfer to one of our CVUs (with origin_debit) answers like any debit,
+// and the receiving CVU's webhook reaches the API with the credit's id.
+func TestTransferToOwnCVUSendsTheIncomingWebhook(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	_, company := f.do(t, http.MethodPost, PrefixCobro+"/cajas", cajaBody("ref-company", "ARS"))
+	_, person := f.do(t, http.MethodPost, PrefixCobro+"/cajas", cajaBody("ref-person", "ARS"))
+	body := strings.Replace(transferBody("o-1", company["cvu"].(string), "1500", "ARS"), `"origin_id":"o-1"`,
+		`"origin_id":"o-1","origin_debit":{"cvu":"`+person["cvu"].(string)+`"}`, 1)
+	rec, debit := f.do(t, http.MethodPost, transferBase+"/transaction-requests", body)
+	if rec.Code != http.StatusOK || debit["status"] != bank.StatusCompleted {
+		t.Fatalf("send: %d %v", rec.Code, debit)
+	}
+	f.sim.Wait()
+	events := f.rcv.received()
+	if len(events) != 1 || f.rcv.badSig != 0 {
+		t.Fatalf("events %+v badSig %d", events, f.rcv.badSig)
+	}
+	rec, credit := f.do(t, http.MethodGet, transferBase+"/"+events[0].TransferID, "")
+	if rec.Code != http.StatusOK || credit["type"] != bank.TypeCredit || credit["cvu"] != company["cvu"] ||
+		credit["counterparty"].(map[string]any)["cbu"] != person["cvu"] {
+		t.Fatalf("credit: %d %v", rec.Code, credit)
+	}
+	malformed := strings.Replace(strings.Replace(body, `"o-1"`, `"o-2"`, 1), person["cvu"].(string), "123", 1)
+	if rec, _ := f.do(t, http.MethodPost, transferBase+"/transaction-requests", malformed); rec.Code != http.StatusBadRequest {
+		t.Fatalf("malformed origin_debit: %d", rec.Code)
+	}
+}

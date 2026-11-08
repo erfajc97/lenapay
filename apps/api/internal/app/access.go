@@ -49,6 +49,7 @@ func AccessRules() auth.Rules {
 		"createAccount":          auth.OrgRole(admin).WithKYC(),
 		"updateAccount":          auth.OrgRole(admin).WithKYC(),
 		"createInternalTransfer": auth.OrgRole(operator).WithKYC().WithStepUp(),
+		"updateAccountCvu":       auth.OrgRole(operator).WithKYC(),
 
 		// payers / CVU
 		"listPayers":  auth.OrgRole(viewer),

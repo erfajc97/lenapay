@@ -57,9 +57,12 @@ func outcomeForAmount(minor int64) Outcome {
 
 // SendInput is an outgoing transfer request (BIND TRANSFER transaction-request).
 type SendInput struct {
-	OriginID    string
-	ToAccount   string // CBU/CVU, or
-	ToAlias     string // alias
+	OriginID  string
+	ToAccount string // CBU/CVU, or
+	ToAlias   string // alias
+	// OriginCVU is BIND's origin_debit: the client CVU of ours the money leaves from. Optional;
+	// it names the origin of an on-us credit.
+	OriginCVU   string
 	Currency    string
 	Amount      int64
 	Concept     string
@@ -78,7 +81,8 @@ type SendResult struct {
 // second request with the same origin_id returns the first transfer and moves no money.
 func (b *Bank) SendTransfer(in SendInput) (SendResult, error) {
 	if in.OriginID == "" || len(in.OriginID) > 100 || in.Amount <= 0 || !slices.Contains(Currencies(), in.Currency) ||
-		(in.ToAccount == "") == (in.ToAlias == "") || len(in.Concept) > 100 || len(in.Description) > 200 {
+		(in.ToAccount == "") == (in.ToAlias == "") || len(in.Concept) > 100 || len(in.Description) > 200 ||
+		(in.OriginCVU != "" && !ValidAccountNumber(in.OriginCVU)) {
 		return SendResult{}, ErrInvalid
 	}
 	var target Resolution
@@ -110,21 +114,33 @@ func (b *Bank) SendTransfer(in SendInput) (SendResult, error) {
 		Amount: Decimal(in.Amount), Concept: in.Concept, Description: in.Description, CreatedAt: now,
 		Counterparty: Counterparty{Name: target.Holder.Name, CUIT: target.Holder.CUIT, AccountNumber: target.AccountNumber, Alias: in.ToAlias},
 	}
+	onUs := resolveErr == nil && b.cajaByCVU(target.AccountNumber) != nil
+	if onUs {
+		t.OnUsCVU, t.Origin = target.AccountNumber, b.originOf(in.OriginCVU)
+	}
+	b.state.Transfers = append(b.state.Transfers, t)
 	switch {
 	case resolveErr != nil:
 		b.fail(t, FailureNoSuchTarget)
-	case outcome == OutcomeRejected:
+	case onUs && b.cajaByCVU(target.AccountNumber).Currency != in.Currency, outcome == OutcomeRejected:
 		b.fail(t, FailureRejected)
 	case outcome != OutcomePending:
 		b.complete(t)
 	}
-	b.state.Transfers = append(b.state.Transfers, t)
 	b.save()
 	return SendResult{Transfer: *t, Outcome: outcome}, nil
 }
 
-// complete settles an IN_PROGRESS debit (FAILED when the master account cannot cover it).
+// complete settles an IN_PROGRESS debit (FAILED when the master account cannot cover it, or
+// when its on-us CVU stopped receiving meanwhile). An on-us debit also credits its CVU.
 func (b *Bank) complete(t *Transfer) {
+	var target *Caja
+	if t.OnUsCVU != "" {
+		if target = b.cajaByCVU(t.OnUsCVU); target == nil || target.Status != CajaActive {
+			b.fail(t, FailureNoSuchTarget)
+			return
+		}
+	}
 	if b.state.Balances[t.Currency] < int64(t.Amount) {
 		b.fail(t, FailureNoFunds)
 		return
@@ -132,6 +148,35 @@ func (b *Bank) complete(t *Transfer) {
 	now := b.opts.Now()
 	b.state.Balances[t.Currency] -= int64(t.Amount)
 	t.Status, t.CompletedAt = StatusCompleted, &now
+	if target != nil {
+		b.creditOnUs(t, target, now)
+	}
+}
+
+// creditOnUs books the incoming side of a settled on-us debit and tells the credit listener.
+// Called with b.mu held.
+func (b *Bank) creditOnUs(debit *Transfer, target *Caja, now time.Time) {
+	credit := &Transfer{
+		ID: newID("trf-"), Type: TypeCredit, Status: StatusCompleted, Currency: debit.Currency, Amount: debit.Amount,
+		CVU: target.CVU, Counterparty: *debit.Origin, Concept: withDefault(debit.Description, debit.Concept), RelatedID: debit.ID,
+		CreatedAt: now, CompletedAt: &now,
+	}
+	debit.RelatedID = credit.ID
+	b.state.Balances[credit.Currency] += int64(credit.Amount)
+	b.state.Transfers = append(b.state.Transfers, credit)
+	if b.onCredit != nil {
+		b.onCredit(*credit)
+	}
+}
+
+// originOf is the counterparty an on-us credit shows: the holder of the debited CVU when it is
+// one of ours, else the master account holder. Called with b.mu held.
+func (b *Bank) originOf(originCVU string) *Counterparty {
+	if c := b.cajaByCVU(originCVU); originCVU != "" && c != nil {
+		return &Counterparty{Name: c.Holder.Name, CUIT: c.Holder.CUIT, AccountNumber: c.CVU, Alias: c.Alias}
+	}
+	h := MasterHolder()
+	return &Counterparty{Name: h.Name, CUIT: h.CUIT, AccountNumber: MasterAccountNumber()}
 }
 
 func (b *Bank) fail(t *Transfer, code string) {

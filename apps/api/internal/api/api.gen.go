@@ -536,6 +536,24 @@ func (e PspTransferWebhookType) Valid() bool {
 	}
 }
 
+// Defines values for Rail.
+const (
+	Bank     Rail = "bank"
+	Internal Rail = "internal"
+)
+
+// Valid indicates whether the value is a known member of the Rail enum.
+func (e Rail) Valid() bool {
+	switch e {
+	case Bank:
+		return true
+	case Internal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeEventType.
 const (
 	ApprovalRequested RealtimeEventType = "approval.requested"
@@ -688,9 +706,13 @@ func (e TokenPairTokenType) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
-	Archived      bool               `json:"archived"`
-	Balances      []CurrencyBalance  `json:"balances"`
-	CreatedAt     time.Time          `json:"createdAt"`
+	Archived  bool              `json:"archived"`
+	Balances  []CurrencyBalance `json:"balances"`
+	CreatedAt time.Time         `json:"createdAt"`
+
+	// Cvus The account's own receiving CVUs (a personal account's ARS and USD CVUs, once the
+	// person KYC is approved); `[]` when it has none. Payers' CVUs are not listed here.
+	Cvus          []AccountCvu       `json:"cvus"`
 	ErpProjectRef *string            `json:"erpProjectRef"`
 	Id            openapi_types.UUID `json:"id"`
 	Kind          AccountKind        `json:"kind"`
@@ -703,6 +725,16 @@ type AccountBalances struct {
 	Balances  []CurrencyBalance  `json:"balances"`
 	Kind      AccountKind        `json:"kind"`
 	Name      string             `json:"name"`
+}
+
+// AccountCvu defines model for AccountCvu.
+type AccountCvu struct {
+	Alias    *string            `json:"alias"`
+	Currency Currency           `json:"currency"`
+	Cvu      string             `json:"cvu"`
+	Id       openapi_types.UUID `json:"id"`
+	Share    CvuShare           `json:"share"`
+	Status   CvuStatus          `json:"status"`
 }
 
 // AccountKind defines model for AccountKind.
@@ -1091,6 +1123,12 @@ type Movement struct {
 	Fee          *Money             `json:"fee"`
 	Id           openapi_types.UUID `json:"id"`
 
+	// Rail `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+	// alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+	// ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+	// payin of the same rail. Internal transfers between own accounts are `internal` too.
+	Rail Rail `json:"rail"`
+
 	// RefId Id of the payin, payout or internal transfer.
 	RefId  openapi_types.UUID `json:"refId"`
 	Status MovementStatus     `json:"status"`
@@ -1243,23 +1281,29 @@ type PayinStatus string
 
 // Payout defines model for Payout.
 type Payout struct {
-	AccountId    openapi_types.UUID  `json:"accountId"`
-	Amount       Money               `json:"amount"`
-	ApprovedBy   *openapi_types.UUID `json:"approvedBy"`
-	Attachments  []PayoutAttachment  `json:"attachments"`
-	Concept      string              `json:"concept"`
-	CreatedAt    time.Time           `json:"createdAt"`
-	CreatedBy    openapi_types.UUID  `json:"createdBy"`
-	Destination  Destination         `json:"destination"`
-	Events       []PayoutEvent       `json:"events"`
-	FailureCode  *string             `json:"failureCode"`
-	Fee          Money               `json:"fee"`
-	Id           openapi_types.UUID  `json:"id"`
-	RejectReason *string             `json:"rejectReason"`
-	SettledAt    *time.Time          `json:"settledAt"`
-	Status       PayoutStatus        `json:"status"`
-	Total        Money               `json:"total"`
-	UpdatedAt    time.Time           `json:"updatedAt"`
+	AccountId   openapi_types.UUID  `json:"accountId"`
+	Amount      Money               `json:"amount"`
+	ApprovedBy  *openapi_types.UUID `json:"approvedBy"`
+	Attachments []PayoutAttachment  `json:"attachments"`
+	Concept     string              `json:"concept"`
+	CreatedAt   time.Time           `json:"createdAt"`
+	CreatedBy   openapi_types.UUID  `json:"createdBy"`
+	Destination Destination         `json:"destination"`
+	Events      []PayoutEvent       `json:"events"`
+	FailureCode *string             `json:"failureCode"`
+	Fee         Money               `json:"fee"`
+	Id          openapi_types.UUID  `json:"id"`
+
+	// Rail `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+	// alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+	// ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+	// payin of the same rail. Internal transfers between own accounts are `internal` too.
+	Rail         Rail         `json:"rail"`
+	RejectReason *string      `json:"rejectReason"`
+	SettledAt    *time.Time   `json:"settledAt"`
+	Status       PayoutStatus `json:"status"`
+	Total        Money        `json:"total"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
 }
 
 // PayoutAttachment defines model for PayoutAttachment.
@@ -1302,7 +1346,13 @@ type PayoutQuote struct {
 	AvailableAfter Money       `json:"availableAfter"`
 	Destination    Destination `json:"destination"`
 	Fee            Money       `json:"fee"`
-	Total          Money       `json:"total"`
+
+	// Rail `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+	// alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+	// ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+	// payin of the same rail. Internal transfers between own accounts are `internal` too.
+	Rail  Rail  `json:"rail"`
+	Total Money `json:"total"`
 }
 
 // PayoutQuoteRequest defines model for PayoutQuoteRequest.
@@ -1325,6 +1375,12 @@ type PspTransferWebhook struct {
 
 // PspTransferWebhookType defines model for PspTransferWebhook.Type.
 type PspTransferWebhookType string
+
+// Rail `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+// alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+// ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+// payin of the same rail. Internal transfers between own accounts are `internal` too.
+type Rail string
 
 // RealtimeEvent defines model for RealtimeEvent.
 type RealtimeEvent struct {
@@ -1744,6 +1800,9 @@ type CreateAccountJSONRequestBody = CreateAccountRequest
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
+// UpdateAccountCvuJSONRequestBody defines body for UpdateAccountCvu for application/json ContentType.
+type UpdateAccountCvuJSONRequestBody = UpdateCvuRequest
+
 // UpdateCvuJSONRequestBody defines body for UpdateCvu for application/json ContentType.
 type UpdateCvuJSONRequestBody = UpdateCvuRequest
 
@@ -1875,6 +1934,9 @@ type ServerInterface interface {
 
 	// (PATCH /orgs/{orgId}/accounts/{accountId})
 	UpdateAccount(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId)
+
+	// (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
+	UpdateAccountCvu(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId, cvuId CvuId)
 
 	// (GET /orgs/{orgId}/approvals)
 	ListApprovals(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListApprovalsParams)
@@ -2122,6 +2184,11 @@ func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request, org
 
 // (PATCH /orgs/{orgId}/accounts/{accountId})
 func (_ Unimplemented) UpdateAccount(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
+func (_ Unimplemented) UpdateAccountCvu(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId, cvuId CvuId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2923,6 +2990,50 @@ func (siw *ServerInterfaceWrapper) UpdateAccount(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAccount(w, r, orgId, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAccountCvu operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAccountCvu(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", chi.URLParam(r, "accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cvuId" -------------
+	var cvuId CvuId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cvuId", chi.URLParam(r, "cvuId"), &cvuId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cvuId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAccountCvu(w, r, orgId, accountId, cvuId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4763,6 +4874,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/orgs/{orgId}/accounts/{accountId}", wrapper.UpdateAccount)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/orgs/{orgId}/accounts/{accountId}/cvus/{cvuId}", wrapper.UpdateAccountCvu)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orgs/{orgId}/balances", wrapper.GetBalances)
 	})
 	r.Group(func(r chi.Router) {
@@ -5862,6 +5976,48 @@ type UpdateAccountdefaultJSONResponse struct {
 }
 
 func (response UpdateAccountdefaultJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccountCvuRequestObject struct {
+	OrgId     OrgId     `json:"orgId"`
+	AccountId AccountId `json:"accountId"`
+	CvuId     CvuId     `json:"cvuId"`
+	Body      *UpdateAccountCvuJSONRequestBody
+}
+
+type UpdateAccountCvuResponseObject interface {
+	VisitUpdateAccountCvuResponse(w http.ResponseWriter) error
+}
+
+type UpdateAccountCvu200JSONResponse AccountCvu
+
+func (response UpdateAccountCvu200JSONResponse) VisitUpdateAccountCvuResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccountCvudefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateAccountCvudefaultJSONResponse) VisitUpdateAccountCvuResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -7467,6 +7623,9 @@ type StrictServerInterface interface {
 	// (PATCH /orgs/{orgId}/accounts/{accountId})
 	UpdateAccount(ctx context.Context, request UpdateAccountRequestObject) (UpdateAccountResponseObject, error)
 
+	// (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
+	UpdateAccountCvu(ctx context.Context, request UpdateAccountCvuRequestObject) (UpdateAccountCvuResponseObject, error)
+
 	// (GET /orgs/{orgId}/approvals)
 	ListApprovals(ctx context.Context, request ListApprovalsRequestObject) (ListApprovalsResponseObject, error)
 
@@ -8369,6 +8528,41 @@ func (sh *strictHandler) UpdateAccount(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAccountResponseObject); ok {
 		if err := validResponse.VisitUpdateAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAccountCvu operation middleware
+func (sh *strictHandler) UpdateAccountCvu(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId, cvuId CvuId) {
+	var request UpdateAccountCvuRequestObject
+
+	request.OrgId = orgId
+	request.AccountId = accountId
+	request.CvuId = cvuId
+
+	var body UpdateAccountCvuJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAccountCvu(ctx, request.(UpdateAccountCvuRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAccountCvu")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAccountCvuResponseObject); ok {
+		if err := validResponse.VisitUpdateAccountCvuResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
 	"github.com/erfajc97/lenapay/apps/api/internal/fees"
 	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
+	"github.com/erfajc97/lenapay/apps/api/internal/payers"
 	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
@@ -69,6 +70,9 @@ type Deps struct {
 	Notifications Notifier
 	Orgs          Members
 	Documents     DocumentStore
+	// CVUs and Credits route payouts to Lenapay CVUs on the internal rail (nil: always bank).
+	CVUs    CVUs
+	Credits Credits
 	// Location is the business time zone of the proof's dates (UTC when nil).
 	Location *time.Location
 }
@@ -112,7 +116,8 @@ func (s *service) ResolveDestination(ctx context.Context, p auth.Principal, to s
 	if err := requireMoney(p, auth.RoleOperator, false); err != nil {
 		return psp.Destination{}, err
 	}
-	return s.resolve(ctx, to)
+	t, err := s.resolve(ctx, to)
+	return t.dest, err
 }
 
 func (s *service) Quote(ctx context.Context, p auth.Principal, in QuoteInput) (Quote, error) {
@@ -137,7 +142,7 @@ func (s *service) Quote(ctx context.Context, p auth.Principal, in QuoteInput) (Q
 	if err != nil {
 		return Quote{}, apperr.Wrap(apperr.CodeInvalidAmount, err, nil)
 	}
-	return Quote{Amount: in.Amount, Fee: pr.fee.Fee, Total: pr.total, Destination: pr.dest, AvailableAfter: after}, nil
+	return Quote{Amount: in.Amount, Fee: pr.fee.Fee, Total: pr.total, Destination: pr.dest, AvailableAfter: after, Rail: pr.rail}, nil
 }
 
 // prepared is everything a payout is decided on, read BEFORE the transaction (no network
@@ -145,6 +150,7 @@ func (s *service) Quote(ctx context.Context, p auth.Principal, in QuoteInput) (Q
 type prepared struct {
 	account accounts.Account
 	dest    psp.Destination
+	rail    Rail
 	fee     fees.Quote
 	total   money.Amount
 }
@@ -163,11 +169,18 @@ func (s *service) prepare(ctx context.Context, p auth.Principal, accountID uuid.
 	if account.Archived {
 		return prepared{}, apperr.New(apperr.CodeAccountArchived, nil)
 	}
-	dest, err := s.resolve(ctx, to)
+	t, err := s.resolve(ctx, to)
 	if err != nil {
 		return prepared{}, err
 	}
-	quote, err := s.deps.Fees.Quote(ctx, p.OrgID, fees.OperationPayout, amount)
+	op := fees.OperationPayout
+	if t.onUs != nil {
+		if err := checkOnUs(*t.onUs, accountID, amount.Currency); err != nil {
+			return prepared{}, err
+		}
+		op = fees.OperationPayoutInternal
+	}
+	quote, err := s.deps.Fees.Quote(ctx, p.OrgID, op, amount)
 	if err != nil {
 		return prepared{}, err
 	}
@@ -175,7 +188,19 @@ func (s *service) prepare(ctx context.Context, p auth.Principal, accountID uuid.
 	if err != nil {
 		return prepared{}, apperr.Wrap(apperr.CodeInvalidAmount, err, nil)
 	}
-	return prepared{account: account, dest: dest, fee: quote, total: total}, nil
+	return prepared{account: account, dest: t.dest, rail: t.rail(), fee: quote, total: total}, nil
+}
+
+// checkOnUs: an on-us payout goes to a CVU of the same currency on ANOTHER account (moving
+// money between own accounts is an internal transfer).
+func checkOnUs(dest payers.CVU, accountID uuid.UUID, currency money.Currency) error {
+	if dest.Currency != currency {
+		return apperr.New(apperr.CodeCurrencyMismatch, map[string]any{"field": "to"})
+	}
+	if dest.AccountID == accountID {
+		return apperr.New(apperr.CodeDestinationInvalid, map[string]any{"reason": "same_account"})
+	}
+	return nil
 }
 
 // createRequest is what the idempotency key is bound to (MO2): same key + other content → 409.
@@ -237,7 +262,7 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 		if err := s.event(ctx, q, id, p.OrgID, nil, status, &p.UserID, nil); err != nil {
 			return err
 		}
-		if err := s.afterCreate(ctx, tx, p, id, in, status, approvers); err != nil {
+		if err := s.afterCreate(ctx, tx, p, id, in, status, pr.rail, approvers); err != nil {
 			return err
 		}
 		if out, err = load(ctx, q, id, p.OrgID); err != nil {
@@ -270,20 +295,20 @@ func insertParams(id uuid.UUID, p auth.Principal, in CreateInput, concept string
 		DestinationType: string(pr.dest.Type), DestinationValue: pr.dest.Value, DestinationAccount: pr.dest.AccountNumber,
 		DestinationHolderName: pr.dest.HolderName, DestinationHolderCuit: pr.dest.HolderCUIT, DestinationBankName: bank,
 		Concept: concept, Status: string(status), CreatedBy: p.UserID, HoldID: &holdID,
-		IdempotencyKey: in.IdempotencyKey, CreatedAt: now,
+		IdempotencyKey: in.IdempotencyKey, CreatedAt: now, Rail: string(pr.rail),
 	}
 }
 
-// afterCreate writes the side effects of a new payout in its transaction: dispatch job
-// (personal), audit, approvers' notification, realtime events.
-func (s *service) afterCreate(ctx context.Context, tx pgx.Tx, p auth.Principal, id uuid.UUID, in CreateInput, status Status, approvers []uuid.UUID) error {
-	if status == StatusApproved {
-		if err := s.enqueueDispatch(ctx, tx, id); err != nil {
-			return err
-		}
-	}
+// afterCreate writes the side effects of a new payout in its transaction: audit, dispatch job
+// or on-us settlement (personal), approvers' notification, realtime events.
+func (s *service) afterCreate(ctx context.Context, tx pgx.Tx, p auth.Principal, id uuid.UUID, in CreateInput, status Status, rail Rail, approvers []uuid.UUID) error {
 	if err := s.audit(ctx, tx, p.OrgID, &p.UserID, "payout.create", id, in.IdempotencyKey); err != nil {
 		return err
+	}
+	if status == StatusApproved {
+		if err := s.release(ctx, tx, id, rail); err != nil {
+			return err
+		}
 	}
 	if status == StatusPendingApproval {
 		if err := s.notify(ctx, tx, p.OrgID, approvers, "approval.requested", id, status); err != nil {
@@ -355,10 +380,10 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 		if err := s.event(ctx, q, payoutID, p.OrgID, &from, StatusApproved, &p.UserID, nil); err != nil {
 			return err
 		}
-		if err := s.enqueueDispatch(ctx, tx, payoutID); err != nil {
+		if err := s.audit(ctx, tx, p.OrgID, &p.UserID, "payout.approve", payoutID, idempotencyKey); err != nil {
 			return err
 		}
-		if err := s.audit(ctx, tx, p.OrgID, &p.UserID, "payout.approve", payoutID, idempotencyKey); err != nil {
+		if err := s.release(ctx, tx, payoutID, Rail(row.Rail)); err != nil {
 			return err
 		}
 		if err := publishPayout(ctx, tx, eventPayoutUpdated, payoutID, p.OrgID); err != nil {
@@ -588,7 +613,7 @@ func fromRow(r store.Payout, events []store.PayoutEvent) Payout {
 	}
 	out := Payout{
 		ID: r.ID, OrgID: r.OrgID, AccountID: r.AccountID, Amount: money.New(r.AmountMinor, c), Fee: money.New(r.FeeMinor, c),
-		Destination: dest, Concept: r.Concept, Status: Status(r.Status), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
+		Destination: dest, Concept: r.Concept, Status: Status(r.Status), Rail: Rail(r.Rail), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
 		RejectReason: r.RejectReason, FailureCode: r.FailureCode, Events: make([]Event, 0, len(events)), Attachments: []Attachment{},
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, SettledAt: r.SettledAt,
 		ProviderAttemptID: r.ProviderAttemptID, ProviderTransferID: r.ProviderTransferID,

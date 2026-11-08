@@ -23,6 +23,9 @@ type Organization struct {
 	Kind      Kind
 	LegalName string
 	CUIT      *string
+	// DocNumber is the KYC-verified document (CUIT, CUIL or DNI digits); nil before approval.
+	// Filled by Get only.
+	DocNumber *string
 	KYCStatus string
 	// Role is the caller's role in this org.
 	Role      auth.Role

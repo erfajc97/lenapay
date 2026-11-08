@@ -55,7 +55,12 @@ paths:
             schema: { $ref: '#/components/schemas/SignupRequest' }
       responses:
         '201':
-          description: User created; a 6-digit verification code was sent by email.
+          description: |
+            User created; a 6-digit verification code was sent by email. When personal mode is on
+            (PERSONAL_MODE_ENABLED), the user also gets their personal organization (kind
+            `personal`, legal name = the email until the person KYC is approved, KYC `draft`)
+            with its personal account; it shows in `GET /me` and `GET /orgs`. Its CVUs (ARS and
+            USD) are issued automatically when the person KYC is approved.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SignupResponse' }
@@ -225,7 +230,9 @@ paths:
             schema: { $ref: '#/components/schemas/CreateOrgRequest' }
       responses:
         '201':
-          description: Organization created; the caller is its admin.
+          description: |
+            Organization created; the caller is its admin. A user has ONE personal organization,
+            created at signup when personal mode is on: asking for another one is `conflict` (409).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Organization' }
@@ -474,6 +481,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Account' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/CvuId'
+    patch:
+      operationId: updateAccountCvu
+      tags: [accounts]
+      description: |
+        Changes the alias of the account's own receiving CVU (the personal CVUs; `Account.cvus`)
+        at the PSP. A payer's CVU, or a CVU of another account or org, is `cvu.not_found` (404).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCvuRequest' }
+      responses:
+        '200':
+          description: Alias changed at the PSP.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountCvu' }
         default: { $ref: '#/components/responses/Error' }
   /orgs/{orgId}/balances:
     parameters:
@@ -726,7 +756,10 @@ paths:
             schema: { $ref: '#/components/schemas/CreatePayoutRequest' }
       responses:
         '201':
-          description: Payout created with amount + fee held (or the stored response replayed).
+          description: |
+            Payout created with amount + fee held (or the stored response replayed). To a Lenapay
+            CVU or alias (`rail: internal`) it never reaches the PSP: a personal payout comes back
+            already `settled`, a company payout settles the moment it is approved.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Payout' }
@@ -1682,7 +1715,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, kind, name, archived, erpProjectRef, balances, createdAt]
+      required: [id, kind, name, archived, erpProjectRef, balances, cvus, createdAt]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/AccountKind' }
@@ -1692,7 +1725,24 @@ components:
         balances:
           type: array
           items: { $ref: '#/components/schemas/CurrencyBalance' }
+        cvus:
+          type: array
+          description: |
+            The account's own receiving CVUs (a personal account's ARS and USD CVUs, once the
+            person KYC is approved); `[]` when it has none. Payers' CVUs are not listed here.
+          items: { $ref: '#/components/schemas/AccountCvu' }
         createdAt: { type: string, format: date-time }
+    AccountCvu:
+      type: object
+      additionalProperties: false
+      required: [id, currency, cvu, alias, status, share]
+      properties:
+        id: { type: string, format: uuid }
+        currency: { $ref: '#/components/schemas/Currency' }
+        cvu: { type: string, pattern: '^[0-9]{22}$', maxLength: 22 }
+        alias: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/CvuStatus' }
+        share: { $ref: '#/components/schemas/CvuShare' }
     AccountList:
       type: object
       additionalProperties: false
@@ -1915,13 +1965,14 @@ components:
     PayoutQuote:
       type: object
       additionalProperties: false
-      required: [amount, fee, total, destination, availableAfter]
+      required: [amount, fee, total, destination, availableAfter, rail]
       properties:
         amount: { $ref: '#/components/schemas/Money' }
         fee: { $ref: '#/components/schemas/Money' }
         total: { $ref: '#/components/schemas/Money' }
         destination: { $ref: '#/components/schemas/Destination' }
         availableAfter: { $ref: '#/components/schemas/Money' }
+        rail: { $ref: '#/components/schemas/Rail' }
     CreatePayoutRequest:
       type: object
       additionalProperties: false
@@ -1931,6 +1982,14 @@ components:
         amount: { $ref: '#/components/schemas/Money' }
         to: { type: string, minLength: 6, maxLength: 22 }
         concept: { type: string, minLength: 1, maxLength: 140 }
+    Rail:
+      type: string
+      enum: [bank, internal]
+      description: |
+        `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+        alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+        ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+        payin of the same rail. Internal transfers between own accounts are `internal` too.
     PayoutStatus:
       type: string
       enum: [pending_approval, approved, sending, settled, failed, rejected, cancelled]
@@ -1950,10 +2009,11 @@ components:
     Payout:
       type: object
       additionalProperties: false
-      required: [id, accountId, amount, fee, total, destination, concept, status, createdBy, approvedBy, rejectReason, failureCode, events, attachments, createdAt, updatedAt, settledAt]
+      required: [id, accountId, amount, fee, total, destination, concept, status, rail, createdBy, approvedBy, rejectReason, failureCode, events, attachments, createdAt, updatedAt, settledAt]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
+        rail: { $ref: '#/components/schemas/Rail' }
         amount: { $ref: '#/components/schemas/Money' }
         fee: { $ref: '#/components/schemas/Money' }
         total: { $ref: '#/components/schemas/Money' }
@@ -2024,10 +2084,11 @@ components:
     Movement:
       type: object
       additionalProperties: false
-      required: [id, type, status, direction, accountId, amount, fee, counterparty, concept, refId, createdAt]
+      required: [id, type, status, direction, accountId, amount, fee, counterparty, concept, refId, rail, createdAt]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: '#/components/schemas/MovementType' }
+        rail: { $ref: '#/components/schemas/Rail' }
         status: { $ref: '#/components/schemas/MovementStatus' }
         direction: { $ref: '#/components/schemas/MovementDirection' }
         accountId: { type: string, format: uuid }

@@ -28,7 +28,7 @@ func (q *Queries) GetDefaultFeePlan(ctx context.Context) (FeePlan, error) {
 }
 
 const getEffectiveFeeRate = `-- name: GetEffectiveFeeRate :one
-SELECT r.fee_plan_id, r.currency, r.payin_bps, r.payout_fixed_minor, r.payout_bps
+SELECT r.fee_plan_id, r.currency, r.payin_bps, r.payout_fixed_minor, r.payout_bps, r.internal_fixed_minor, r.internal_bps
 FROM fee_plan_rates r
 JOIN fee_plans p ON p.id = r.fee_plan_id
 WHERE r.currency = $1
@@ -51,6 +51,8 @@ func (q *Queries) GetEffectiveFeeRate(ctx context.Context, arg GetEffectiveFeeRa
 		&i.PayinBps,
 		&i.PayoutFixedMinor,
 		&i.PayoutBps,
+		&i.InternalFixedMinor,
+		&i.InternalBps,
 	)
 	return i, err
 }

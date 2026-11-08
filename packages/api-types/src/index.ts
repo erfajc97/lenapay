@@ -424,6 +424,30 @@ export interface paths {
         patch: operations["updateAccount"];
         trace?: never;
     };
+    "/orgs/{orgId}/accounts/{accountId}/cvus/{cvuId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                accountId: components["parameters"]["AccountId"];
+                cvuId: components["parameters"]["CvuId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Changes the alias of the account's own receiving CVU (the personal CVUs; `Account.cvus`)
+         *     at the PSP. A payer's CVU, or a CVU of another account or org, is `cvu.not_found` (404).
+         */
+        patch: operations["updateAccountCvu"];
+        trace?: never;
+    };
     "/orgs/{orgId}/balances": {
         parameters: {
             query?: never;
@@ -1365,8 +1389,22 @@ export interface components {
             archived: boolean;
             erpProjectRef: string | null;
             balances: components["schemas"]["CurrencyBalance"][];
+            /**
+             * @description The account's own receiving CVUs (a personal account's ARS and USD CVUs, once the
+             *     person KYC is approved); `[]` when it has none. Payers' CVUs are not listed here.
+             */
+            cvus: components["schemas"]["AccountCvu"][];
             /** Format: date-time */
             createdAt: string;
+        };
+        AccountCvu: {
+            /** Format: uuid */
+            id: string;
+            currency: components["schemas"]["Currency"];
+            cvu: string;
+            alias: string | null;
+            status: components["schemas"]["CvuStatus"];
+            share: components["schemas"]["CvuShare"];
         };
         AccountList: {
             items: components["schemas"]["Account"][];
@@ -1532,6 +1570,7 @@ export interface components {
             total: components["schemas"]["Money"];
             destination: components["schemas"]["Destination"];
             availableAfter: components["schemas"]["Money"];
+            rail: components["schemas"]["Rail"];
         };
         CreatePayoutRequest: {
             /** Format: uuid */
@@ -1540,6 +1579,14 @@ export interface components {
             to: string;
             concept: string;
         };
+        /**
+         * @description `bank`: the money moves through the PSP (BIND). `internal`: on-us, the destination CVU or
+         *     alias is a Lenapay one, so the payout never reaches the bank: it settles instantly as one
+         *     ledger entry once approved (fee per plan, 0 by default) and the receiver sees a credited
+         *     payin of the same rail. Internal transfers between own accounts are `internal` too.
+         * @enum {string}
+         */
+        Rail: "bank" | "internal";
         /** @enum {string} */
         PayoutStatus: "pending_approval" | "approved" | "sending" | "settled" | "failed" | "rejected" | "cancelled";
         PayoutEvent: {
@@ -1556,6 +1603,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             accountId: string;
+            rail: components["schemas"]["Rail"];
             amount: components["schemas"]["Money"];
             fee: components["schemas"]["Money"];
             total: components["schemas"]["Money"];
@@ -1614,6 +1662,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             type: components["schemas"]["MovementType"];
+            rail: components["schemas"]["Rail"];
             status: components["schemas"]["MovementStatus"];
             direction: components["schemas"]["MovementDirection"];
             /** Format: uuid */
@@ -1870,7 +1919,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description User created; a 6-digit verification code was sent by email. */
+            /**
+             * @description User created; a 6-digit verification code was sent by email. When personal mode is on
+             *     (PERSONAL_MODE_ENABLED), the user also gets their personal organization (kind
+             *     `personal`, legal name = the email until the person KYC is approved, KYC `draft`)
+             *     with its personal account; it shows in `GET /me` and `GET /orgs`. Its CVUs (ARS and
+             *     USD) are issued automatically when the person KYC is approved.
+             */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2148,7 +2203,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Organization created; the caller is its admin. */
+            /**
+             * @description Organization created; the caller is its admin. A user has ONE personal organization,
+             *     created at signup when personal mode is on: asking for another one is `conflict` (409).
+             */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2544,6 +2602,35 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    updateAccountCvu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+                accountId: components["parameters"]["AccountId"];
+                cvuId: components["parameters"]["CvuId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCvuRequest"];
+            };
+        };
+        responses: {
+            /** @description Alias changed at the PSP. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountCvu"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getBalances: {
         parameters: {
             query?: never;
@@ -2915,7 +3002,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Payout created with amount + fee held (or the stored response replayed). */
+            /**
+             * @description Payout created with amount + fee held (or the stored response replayed). To a Lenapay
+             *     CVU or alias (`rail: internal`) it never reaches the PSP: a personal payout comes back
+             *     already `settled`, a company payout settles the moment it is approved.
+             */
             201: {
                 headers: {
                     [name: string]: unknown;

@@ -39,6 +39,9 @@ type Service interface {
 	Get(ctx context.Context, orgID, accountID uuid.UUID) (Account, error)
 	// OnKYCApproved opens the main (company) or personal account (kyc.ApprovalHook).
 	OnKYCApproved(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error
+	// OpenOrgAccount opens the org's main (company) or personal account inside tx when it has
+	// none: the personal account at signup, and every account on KYC approval.
+	OpenOrgAccount(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error
 	// ImportProject creates (or returns) the project account of an ERP project (erplink import).
 	ImportProject(ctx context.Context, orgID uuid.UUID, name, erpProjectRef string) (Account, error)
 }
@@ -50,6 +53,8 @@ type Deps struct {
 	Audit       *audit.Logger
 	Idempotency *idempotency.Store
 	Ledger      ledger.Service
+	// CVUs lists the accounts' own CVUs (Account.CVUs); nil lists none.
+	CVUs ReceivingCVUs
 }
 
 type service struct {
@@ -218,6 +223,10 @@ func addBalance(t, b CurrencyBalance) (CurrencyBalance, error) {
 }
 
 func (s *service) OnKYCApproved(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
+	return s.OpenOrgAccount(ctx, tx, orgID, orgKind)
+}
+
+func (s *service) OpenOrgAccount(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
 	kind, name := KindMain, mainAccountName
 	switch orgKind {
 	case "company":
@@ -228,7 +237,7 @@ func (s *service) OnKYCApproved(ctx context.Context, tx pgx.Tx, orgID uuid.UUID,
 	}
 	_, err := store.New(tx).GetMainAccount(ctx, &orgID)
 	if err == nil {
-		return nil // approved before (re-run of the hook): one main/personal account per org
+		return nil // opened before (at signup, or a re-run of the hook): one main/personal account per org
 	}
 	if !db.IsNoRows(err) {
 		return fmt.Errorf("accounts: main account: %w", err)
@@ -285,7 +294,7 @@ func (s *service) open(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID, kind
 	return s.deps.Ledger.OpenAccount(ctx, tx, id)
 }
 
-// withBalances attaches the ledger balances (ARS, USD) to each account.
+// withBalances attaches the ledger balances (ARS, USD) and the own CVUs to each account.
 func (s *service) withBalances(ctx context.Context, rows []store.Account) ([]Account, error) {
 	accountIDs := make([]uuid.UUID, 0, len(rows))
 	for _, r := range rows {
@@ -299,14 +308,41 @@ func (s *service) withBalances(ctx context.Context, rows []store.Account) ([]Acc
 	for _, b := range balances {
 		byAccount[b.AccountID] = append(byAccount[b.AccountID], CurrencyBalance{Posted: b.Posted, Held: b.Held, Available: b.Available})
 	}
+	cvus, err := s.receivingCVUs(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Account, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Account{
 			ID: r.ID, OrgID: *r.OrgID, Kind: Kind(r.Kind), Name: r.Name, Archived: r.ArchivedAt != nil,
-			ERPProjectRef: r.ErpProjectRef, Balances: byAccount[r.ID], CreatedAt: r.CreatedAt,
+			ERPProjectRef: r.ErpProjectRef, Balances: byAccount[r.ID], CVUs: cvus[r.ID], CreatedAt: r.CreatedAt,
 		})
 	}
 	return out, nil
+}
+
+// receivingCVUs reads the own CVUs of the rows' orgs once per org, by account.
+func (s *service) receivingCVUs(ctx context.Context, rows []store.Account) (map[uuid.UUID][]ReceivingCVU, error) {
+	byAccount := map[uuid.UUID][]ReceivingCVU{}
+	if s.deps.CVUs == nil {
+		return byAccount, nil
+	}
+	seen := map[uuid.UUID]bool{}
+	for _, r := range rows {
+		if seen[*r.OrgID] {
+			continue
+		}
+		seen[*r.OrgID] = true
+		list, err := s.deps.CVUs.ReceivingCVUs(ctx, *r.OrgID)
+		if err != nil {
+			return nil, fmt.Errorf("accounts: cvus: %w", err)
+		}
+		for _, c := range list {
+			byAccount[c.AccountID] = append(byAccount[c.AccountID], c)
+		}
+	}
+	return byAccount, nil
 }
 
 func cleanName(raw string) (string, error) {

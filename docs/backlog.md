@@ -74,8 +74,8 @@ Lanes run in parallel once E0 is done; a lane only touches its own packages/fold
 
 ## P — "Mis pagos": payer view, B2C bridge (api) · 6 pts
 A person whose personal org passed KYC sees the companies that registered them as a payer and
-pays them. Requirement IDs R-MP-* are new (owner's brief of 2026-11-07, not yet in `docs/prd.md`;
-G11: to be added there). Mobile screens are a separate lane (not in this section).
+pays them. Requirements R-MP-1..5, R-CVU-4 and R-ACC-5 are in `docs/prd.md` (owner's brief of
+2026-11-07; CUIL counts like CUIT for matching, confirmed). Mobile screens are a separate lane.
 - [x] P1 Matching (R-MP-1): `payer_links` (migration `20261109100000_payer_links.sql`, tenant =
   the personal org); KYC approval hook + lazy matching on read; DNI, or the middle 8 digits of
   an 11-digit CUIT/CUIL (7-digit DNIs left-padded); only the DNI KYC approval copied onto an
@@ -96,10 +96,43 @@ G11: to be added there). Mobile screens are a separate lane (not in this section
 - [x] P6 Seed + smoke: persona's DNI is a payer of the demo org (DNI) and of the ERP-linked
   Constructora Andina SRL (`andina@lenapay.app`, CUIT buyer in the fixtures, 12 installments);
   personal wallet funded; `scripts/smoke.mjs` step "Mis pagos".
-- [ ] P5 On-us payments (proposal, G11): a payout to a Lenapay CVU leaves through the PSP and
-  the bind-mock does not loop it back as a payin, so the company's history (and the person's
-  "Mis pagos" history) does not show it. Options: (a) bind-mock credits its own CVUs and sends
-  the webhook (what BIND would do), (b) an internal on-us ledger transfer between orgs without
-  the PSP. Decision pending with the owner.
+- [x] P5 On-us payments (R-MP-5, owner's decision 2026-11-07: never through the bank). A payout
+  whose destination CVU/alias is a Lenapay one (payers lookup BEFORE the PSP) is `rail=internal`:
+  hold + 4-eyes as usual, then settled at once (personal create / company approval) as ONE ledger
+  entry payer −(amount+fee) → receiver +amount (+ fees_revenue), fee from the plan's new on-us
+  rates (`fee_plan_rates.internal_*`, default 0); the receiver gets a credited payin
+  (`payins.rail=internal`, `payout_id`, `provider_transfer_id = internal:<payout>`), notification,
+  realtime `payin.credited`. Reconciliation lists only `rail=bank`. Destination disabled before the
+  approval → `failed` `destination_unavailable`, hold released. Migration
+  `20261110100000_internal_rail.sql`. The bind-mock also credits its own CVUs on an outgoing
+  transfer (with `origin_debit`), as a fallback for bank-rail payouts that still reach one.
+  AC: person→company, company→company, company→person, concurrency (8 at a balance for 3 → 3),
+  same key twice → one payout and one payin, the PSP is never called; smoke step.
+- [x] P8 Personal CVUs on the account (R-CVU-4): `Account.cvus` + `PATCH
+  /orgs/{org}/accounts/{accountId}/cvus/{cvuId}` (alias); seed/smoke read the CVU from the API.
+- [x] P9 Personal account by default (R-ACC-5): signup creates the personal org (KYC draft) and its
+  personal account in the signup transaction when `PERSONAL_MODE_ENABLED` (default on in compose,
+  off in the binary for production); personal CVUs ARS+USD issued on the person KYC approval.
 - [ ] P7 Mobile "Mis pagos" screens (lane M) + es-AR copy for the new error codes
   `payer_link.not_found` and `installment.not_found` in `apps/mobile/src/shared/api/errors.ts`.
+
+## L — Mobile app in live mode (expo) · 8 pts
+Deps: I1–I10. The app runs fully against the Go API (`EXPO_PUBLIC_API_MODE=live`) and keeps mock.
+- [x] L1 Contract types: `src/shared/api/types.ts` derives from `@lenapay/api-types` (tsconfig path,
+  type-only, ESLint guard); DTO → view model in `live/mappers.ts`; mock produces the same view
+  models. AC: typecheck exit 0; mapper specs pin money, nulls and joined names.
+- [x] L2 Mismatches of the integration pass: reconciliation runs + items + on-demand run, ERP
+  candidate/link, KYC company/person data + `kind`/`representativeDni` uploads (DNI front, back,
+  selfie), movement detail by id, payout attachments (multipart) and attachments on the payout,
+  push token platform, member role change/remove, resend code, verify-email without tokens,
+  nullable fields, every app-reachable error code with es-AR + en-US copy (R-ID-1, R-ORG-1,
+  R-KYC-*, R-MOV-1, R-OUT-*, R-REC-*, R-ERP-*).
+- [x] L3 Realtime: unnamed SSE frames `{type, orgId, occurredAt, data}` for `payin.credited`,
+  `payout.updated`, `approval.requested`, `balance.changed` → query invalidation + payin banner;
+  refetch after a reconnect; token refresh on a 401 stream (R-IN-3).
+- [x] L4 Step-up: password fallback and Ed25519 device key (registered with `POST /devices`
+  after sign-in on phones with biometrics; signature over the challenge nonce) (R-ID-3).
+- [x] L5 "Modo demo" badge only in mock; Settings → Desarrollador (dev builds) switches mock/live
+  and the API URL at runtime (persisted); default URL = Metro host on port 18080.
+- [x] L6 `pnpm test:live` against the running stack; live web tour screenshots in
+  `docs/screens/live/` (closes the E9 screenshots item for the live app).

@@ -105,7 +105,7 @@ func toMovement(r store.ListMovementsRow) Movement {
 	m := Movement{
 		ID: r.ID, Type: Type(r.Type), Status: Status(r.Status), Direction: Direction(r.Direction),
 		AccountID: r.AccountID, Amount: money.New(r.AmountMinor, currency), Concept: r.Concept,
-		RefID: r.RefID, CreatedAt: r.CreatedAt,
+		RefID: r.RefID, Rail: r.Rail, CreatedAt: r.CreatedAt,
 		Counterparty: Counterparty{CUIT: r.CounterpartyCuit, CBU: r.CounterpartyCbu},
 	}
 	if r.FeeMinor != nil {

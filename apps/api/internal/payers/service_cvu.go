@@ -34,7 +34,9 @@ const statusActive = "active"
 var (
 	cvuReferenceSpace = uuid.MustParse("7f1d2c4e-9a51-4c47-8f0e-3c5b6a2d1e90")
 	aliasPattern      = regexp.MustCompile(`^[a-zA-Z0-9.-]{6,20}$`)
-	errPeek           = errors.New("payers: idempotency peek")
+	// accountNumberPattern is a 22-digit CBU/CVU (anything else is looked up as an alias).
+	accountNumberPattern = regexp.MustCompile(`^[0-9]{22}$`)
+	errPeek              = errors.New("payers: idempotency peek")
 )
 
 // cvuReplay is the stored response of a completed createCvu key (the CVU is re-read on replay).
@@ -309,21 +311,38 @@ func (s *service) CreatePersonalCVUs(ctx context.Context, orgID uuid.UUID) error
 	return nil
 }
 
-func (s *service) PersonalCVU(ctx context.Context, orgID uuid.UUID, currency money.Currency) (CVU, error) {
-	account, err := s.personalAccount(ctx, auth.Principal{OrgID: orgID})
+func (s *service) ReceivingCVUs(ctx context.Context, orgID uuid.UUID) ([]accounts.ReceivingCVU, error) {
+	rows, err := store.New(s.deps.Pool).ListAccountCVUsForOrg(ctx, orgID)
 	if err != nil {
-		return CVU{}, err
+		return nil, fmt.Errorf("account cvus: %w", err)
 	}
-	rows, err := store.New(s.deps.Pool).ListCVUsForAccount(ctx, store.ListCVUsForAccountParams{OrgID: orgID, AccountID: account.ID})
-	if err != nil {
-		return CVU{}, fmt.Errorf("personal cvu: %w", err)
-	}
+	out := make([]accounts.ReceivingCVU, 0, len(rows))
 	for _, r := range rows {
-		if r.PayerID == nil && r.Status == statusActive && r.Currency == string(currency) {
-			return s.toCVU(r), nil
-		}
+		out = append(out, toReceiving(s.toCVU(r)))
 	}
-	return CVU{}, apperr.New(apperr.CodeCVUNotFound, nil)
+	return out, nil
+}
+
+func (s *service) UpdateAccountCVUAlias(ctx context.Context, p auth.Principal, accountID, cvuID uuid.UUID, alias string) (accounts.ReceivingCVU, error) {
+	current, err := s.cvu(ctx, p.OrgID, cvuID)
+	if err != nil {
+		return accounts.ReceivingCVU{}, err
+	}
+	if current.PayerID != nil || current.AccountID != accountID {
+		return accounts.ReceivingCVU{}, apperr.New(apperr.CodeCVUNotFound, nil) // not this account's own CVU (T2)
+	}
+	updated, err := s.UpdateCVUAlias(ctx, p, cvuID, alias)
+	if err != nil {
+		return accounts.ReceivingCVU{}, err
+	}
+	return toReceiving(updated), nil
+}
+
+func toReceiving(c CVU) accounts.ReceivingCVU {
+	return accounts.ReceivingCVU{
+		ID: c.ID, AccountID: c.AccountID, Currency: c.Currency, Number: c.Number, Alias: c.Alias, Active: c.Active,
+		ShareLink: c.ShareLink, QRPayload: c.QRPayload,
+	}
 }
 
 func (s *service) personalAccount(ctx context.Context, system auth.Principal) (accounts.Account, error) {
@@ -356,7 +375,40 @@ func (s *service) holderOf(ctx context.Context, p auth.Principal) (name, doc str
 	if err != nil {
 		return "", "", err
 	}
-	return org.LegalName, deref(org.CUIT), nil
+	doc = deref(org.CUIT)
+	if doc == "" {
+		doc = deref(org.DocNumber) // a person: the verified DNI/CUIL
+	}
+	return org.LegalName, doc, nil
+}
+
+func (s *service) OnUsDestination(ctx context.Context, to string) (OnUs, bool, error) {
+	q := store.New(s.deps.Pool)
+	var row store.Cvu
+	var err error
+	if accountNumberPattern.MatchString(to) {
+		row, err = q.GetCVUByNumber(ctx, to)
+	} else {
+		row, err = q.GetActiveCVUByAlias(ctx, to)
+	}
+	if db.IsNoRows(err) {
+		return OnUs{}, false, nil
+	}
+	if err != nil {
+		return OnUs{}, false, fmt.Errorf("on-us destination: %w", err)
+	}
+	if row.Status != statusActive {
+		return OnUs{}, false, nil // a disabled CVU of ours: the bank answers "not found"
+	}
+	name, doc, err := s.holderOf(ctx, auth.Principal{OrgID: row.OrgID})
+	if err != nil {
+		return OnUs{}, false, err
+	}
+	return OnUs{CVU: s.toCVU(row), HolderName: name, HolderDoc: doc}, true, nil
+}
+
+func (s *service) Holder(ctx context.Context, orgID uuid.UUID) (name, doc string, err error) {
+	return s.holderOf(ctx, auth.Principal{OrgID: orgID})
 }
 
 // pspError maps the PSP port's errors to catalog codes. Uncertain is never "failed": the

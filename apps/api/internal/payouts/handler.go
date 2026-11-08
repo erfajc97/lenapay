@@ -54,7 +54,7 @@ func (h *Handler) QuotePayout(ctx context.Context, req api.QuotePayoutRequestObj
 	}
 	return api.QuotePayout200JSONResponse{
 		Amount: moneyToAPI(q.Amount), Fee: moneyToAPI(q.Fee), Total: moneyToAPI(q.Total),
-		Destination: destinationToAPI(q.Destination), AvailableAfter: moneyToAPI(q.AvailableAfter),
+		Destination: destinationToAPI(q.Destination), AvailableAfter: moneyToAPI(q.AvailableAfter), Rail: api.Rail(q.Rail),
 	}, nil
 }
 
@@ -268,7 +268,7 @@ func PayoutToAPI(po Payout) api.Payout {
 	return api.Payout{
 		Attachments: attachments,
 		Id:          po.ID, AccountId: po.AccountID, Amount: moneyToAPI(po.Amount), Fee: moneyToAPI(po.Fee), Total: moneyToAPI(total),
-		Destination: destinationToAPI(po.Destination), Concept: po.Concept, Status: api.PayoutStatus(po.Status),
+		Destination: destinationToAPI(po.Destination), Concept: po.Concept, Status: api.PayoutStatus(po.Status), Rail: api.Rail(po.Rail),
 		CreatedBy: po.CreatedBy, ApprovedBy: po.ApprovedBy, RejectReason: po.RejectReason, FailureCode: po.FailureCode,
 		Events: events, CreatedAt: po.CreatedAt, UpdatedAt: po.UpdatedAt, SettledAt: po.SettledAt,
 	}

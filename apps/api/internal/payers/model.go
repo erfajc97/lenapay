@@ -34,6 +34,14 @@ type CVU struct {
 	CreatedAt time.Time
 }
 
+// OnUs is a Lenapay CVU found as a payout destination, with its holder at the PSP (the org
+// that owns it: legal name and CUIT, or a person's DNI/CUIL).
+type OnUs struct {
+	CVU        CVU
+	HolderName string
+	HolderDoc  string
+}
+
 // Payer is someone who pays an org (a buyer of a project).
 type Payer struct {
 	ID        uuid.UUID

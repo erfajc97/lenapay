@@ -13,7 +13,7 @@ import (
 )
 
 const getPayin = `-- name: GetPayin :one
-SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at FROM payins WHERE id = $1 AND org_id = $2
+SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at, rail, payout_id FROM payins WHERE id = $1 AND org_id = $2
 `
 
 type GetPayinParams struct {
@@ -42,12 +42,14 @@ func (q *Queries) GetPayin(ctx context.Context, arg GetPayinParams) (Payin, erro
 		&i.LedgerTransactionID,
 		&i.CreatedAt,
 		&i.CreditedAt,
+		&i.Rail,
+		&i.PayoutID,
 	)
 	return i, err
 }
 
 const getPayinByProviderTransferID = `-- name: GetPayinByProviderTransferID :one
-SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at FROM payins WHERE provider_transfer_id = $1
+SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at, rail, payout_id FROM payins WHERE provider_transfer_id = $1
 `
 
 func (q *Queries) GetPayinByProviderTransferID(ctx context.Context, providerTransferID string) (Payin, error) {
@@ -71,17 +73,20 @@ func (q *Queries) GetPayinByProviderTransferID(ctx context.Context, providerTran
 		&i.LedgerTransactionID,
 		&i.CreatedAt,
 		&i.CreditedAt,
+		&i.Rail,
+		&i.PayoutID,
 	)
 	return i, err
 }
 
 const insertPayin = `-- name: InsertPayin :exec
 INSERT INTO payins (id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor,
-                    origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, credited_at)
+                    origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, credited_at,
+                    rail, payout_id)
 VALUES ($1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11,
         $12, $13, $14, $15,
-        $16)
+        $16, $17, $18)
 `
 
 type InsertPayinParams struct {
@@ -101,6 +106,8 @@ type InsertPayinParams struct {
 	Status              string
 	LedgerTransactionID *uuid.UUID
 	CreditedAt          *time.Time
+	Rail                string
+	PayoutID            *uuid.UUID
 }
 
 func (q *Queries) InsertPayin(ctx context.Context, arg InsertPayinParams) error {
@@ -121,6 +128,8 @@ func (q *Queries) InsertPayin(ctx context.Context, arg InsertPayinParams) error 
 		arg.Status,
 		arg.LedgerTransactionID,
 		arg.CreditedAt,
+		arg.Rail,
+		arg.PayoutID,
 	)
 	return err
 }
@@ -156,8 +165,8 @@ func (q *Queries) InsertWebhookEvent(ctx context.Context, arg InsertWebhookEvent
 }
 
 const listCreditedPayinsBetween = `-- name: ListCreditedPayinsBetween :many
-SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at FROM payins
-WHERE currency = $1 AND status = 'credited'
+SELECT id, org_id, account_id, cvu_id, payer_id, currency, gross_minor, fee_minor, net_minor, origin_name, origin_cuit, origin_cbu, provider_transfer_id, status, ledger_transaction_id, created_at, credited_at, rail, payout_id FROM payins
+WHERE currency = $1 AND status = 'credited' AND rail = 'bank'
   AND credited_at >= $2 AND credited_at < $3
 ORDER BY credited_at, id
 `
@@ -168,6 +177,7 @@ type ListCreditedPayinsBetweenParams struct {
 	ToTime   *time.Time
 }
 
+// Bank-rail payins only: on-us credits never touch the master account (reconciliation).
 func (q *Queries) ListCreditedPayinsBetween(ctx context.Context, arg ListCreditedPayinsBetweenParams) ([]Payin, error) {
 	rows, err := q.db.Query(ctx, listCreditedPayinsBetween, arg.Currency, arg.FromTime, arg.ToTime)
 	if err != nil {
@@ -195,6 +205,8 @@ func (q *Queries) ListCreditedPayinsBetween(ctx context.Context, arg ListCredite
 			&i.LedgerTransactionID,
 			&i.CreatedAt,
 			&i.CreditedAt,
+			&i.Rail,
+			&i.PayoutID,
 		); err != nil {
 			return nil, err
 		}

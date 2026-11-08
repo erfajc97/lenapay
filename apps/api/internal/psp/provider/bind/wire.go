@@ -97,6 +97,7 @@ type valueJSON struct {
 
 type transferRequest struct {
 	OriginID    string            `json:"origin_id"`
+	OriginDebit map[string]string `json:"origin_debit,omitempty"`
 	To          map[string]string `json:"to"`
 	Value       valueJSON         `json:"value"`
 	Description string            `json:"description"`

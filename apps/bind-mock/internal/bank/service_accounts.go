@@ -140,6 +140,12 @@ func AccountNumberFor(account string) string {
 	return block1 + string(checkDigit(block1, block1Weights)) + acc + string(checkDigit(acc, block2Weights))
 }
 
+// MasterAccountNumber is the CBU of the master account at BIND (entity 322).
+func MasterAccountNumber() string {
+	block1, account := "3220001", "0000000001805"
+	return block1 + string(checkDigit(block1, block1Weights)) + account + string(checkDigit(account, block2Weights))
+}
+
 func hash(s string) uint64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(s)) // fnv never fails

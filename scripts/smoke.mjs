@@ -5,7 +5,8 @@
 // bind-mock (signed webhook, worker credits the ledger) → balance + movement + SSE event →
 // quote + payout → a second user approves → dispatch settles → attachment + proof PDF →
 // reconciliation run → "Mis pagos" (a verified person sees the company that registered their
-// CUIT, its payins, hides/shows it and pays it from the personal wallet). Prints a PASS/FAIL
+// CUIT, its payins, hides/shows it and pays it on-us from the personal wallet: personal org
+// and account at signup, personal CVUs on the account, alias change). Prints a PASS/FAIL
 // table; exit code 1 when any step fails.
 //
 //   node scripts/smoke.mjs
@@ -293,8 +294,13 @@ async function main() {
     const personName = `Persona Smoke ${run}`;
     const dni = String(30_000_000 + Math.floor(Math.random() * 9_000_000));
     const token = await newUser(`smoke-persona-${run}@example.com`);
-    const org = await must('POST', '/orgs', 201, { token, body: { kind: 'personal', legalName: personName } });
+    // Signup created her personal org (KYC draft) with its personal account and no CVUs yet.
+    const orgs = await must('GET', '/orgs', 200, { token });
+    const org = orgs.items.find((o) => o.kind === 'personal');
+    check(org && org.kycStatus === 'draft', `personal org at signup ${JSON.stringify(orgs.items)}`);
     const orgPath = `/orgs/${org.id}`;
+    const draft = await must('GET', `${orgPath}/accounts`, 200, { token });
+    check(draft.items.length === 1 && draft.items[0].kind === 'personal' && draft.items[0].cvus.length === 0, `draft accounts ${JSON.stringify(draft)}`);
     await must('PUT', `${orgPath}/kyc`, 200, {
       token, body: { person: { fullName: personName, dni, birthDate: '1990-01-02', address: { street: 'Gorriti', number: '4500', city: 'CABA', province: 'CABA', postalCode: 'C1414' } } },
     });
@@ -336,11 +342,16 @@ async function main() {
     const stranger = await call('GET', `${linkPath}/payins`, { token: ctx.token });
     check(stranger.status === 403 && stranger.json?.error?.code === 'kyc.not_approved', `company user ${stranger.status}`);
 
-    // Fund the personal wallet through its personal CVU at the bank, then pay the company.
-    const personal = await waitFor('personal ARS CVU', async () => {
-      const state = await call('GET', '/_mock/state', { base: BANK });
-      return Object.values(state.json?.cajas ?? {}).find((c) => c.titular?.name === personName && c.moneda === 'ARS');
+    // Her ARS + USD CVUs are issued on the KYC approval and listed on her personal account; she
+    // names the ARS one. Fund the wallet through it at the bank, then pay the company.
+    const account = await waitFor('personal CVUs', async () => {
+      const list = await must('GET', `${orgPath}/accounts`, 200, { token });
+      return list.items[0]?.cvus.length === 2 ? list.items[0] : null;
     }, 30_000);
+    const personal = account.cvus.find((c) => c.currency === 'ARS');
+    const alias = `smk.${run}`.slice(0, 20);
+    const renamed = await must('PATCH', `${orgPath}/accounts/${account.id}/cvus/${personal.id}`, 200, { token, body: { alias } });
+    check(renamed.alias === alias && renamed.cvu === personal.cvu, `alias ${JSON.stringify(renamed)}`);
     const funded = await call('POST', '/_mock/incoming-transfer', { base: BANK, body: { cvu: personal.cvu, amount: '500000.00', currency: 'ARS', originName: personName } });
     check(funded.status === 201, `fund personal → ${funded.status}`);
     await waitFor('personal balance', async () => {
@@ -353,12 +364,17 @@ async function main() {
       token, body: { amount: { minor: 10_000_000, currency: 'ARS' }, concept: 'Pago smoke' },
       headers: { 'Idempotency-Key': key('mp-pay'), 'X-Step-Up-Token': await stepUp(token) },
     });
-    check(po.destination.accountNumber === cvu.cvu && po.concept === 'Pago smoke', `payout ${JSON.stringify(po).slice(0, 200)}`);
-    const settled = await waitFor('personal payout settled', async () => {
-      const p = await must('GET', `${orgPath}/payouts/${po.id}`, 200, { token });
-      return p.status === 'settled' ? p : null;
-    });
-    return `${companyName}: paid ARS ${po.amount.minor / 100} (${settled.status})`;
+    // On-us (P5): the company's CVU is a Lenapay one, so it settles at once on the internal rail,
+    // never reaches the bank, and the company receives it as a payin she sees in her history.
+    check(po.destination.accountNumber === cvu.cvu && po.concept === 'Pago smoke' && po.status === 'settled' && po.rail === 'internal',
+      `payout ${JSON.stringify(po).slice(0, 200)}`);
+    const atBank = await call('GET', `/cvucollectentidad-financial/v1/v1.201/banks/322/accounts/owner/transaction-request-types/TRANSFER/po-${po.id}-1`, { base: BANK });
+    check(atBank.status === 422, `the bank knows the on-us payout: ${atBank.status}`);
+    const history = await must('GET', `${linkPath}/payins`, 200, { token });
+    check(history.items.length === 2 && history.items.every((x) => x.status === 'credited'), `history ${JSON.stringify(history)}`);
+    const received = await must('GET', `${ctx.orgPath}/movements?type=payin&limit=50`, 200, { token: ctx.token });
+    check(received.items.some((m) => m.rail === 'internal' && m.amount.minor === 10_000_000), 'company movements lack the on-us payin');
+    return `${companyName}: paid ARS ${po.amount.minor / 100} on-us (${po.status})`;
   });
 }
 

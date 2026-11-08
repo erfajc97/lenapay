@@ -82,6 +82,28 @@ func (q *Queries) CountPayoutAttachments(ctx context.Context, arg CountPayoutAtt
 	return count, err
 }
 
+const failInternalPayout = `-- name: FailInternalPayout :execrows
+UPDATE payouts
+SET status = 'failed', failure_code = $1, failed_at = $2,
+    updated_at = $2
+WHERE id = $3 AND status = 'approved' AND rail = 'internal'
+`
+
+type FailInternalPayoutParams struct {
+	FailureCode *string
+	FailedAt    *time.Time
+	ID          uuid.UUID
+}
+
+// On-us: the destination CVU stopped receiving before settlement; the hold is released.
+func (q *Queries) FailInternalPayout(ctx context.Context, arg FailInternalPayoutParams) (int64, error) {
+	result, err := q.db.Exec(ctx, failInternalPayout, arg.FailureCode, arg.FailedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const failPayout = `-- name: FailPayout :execrows
 UPDATE payouts
 SET status = 'failed', failure_code = $1, failed_at = $2,
@@ -104,7 +126,7 @@ func (q *Queries) FailPayout(ctx context.Context, arg FailPayoutParams) (int64, 
 }
 
 const getPayout = `-- name: GetPayout :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts WHERE id = $1 AND org_id = $2
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 AND org_id = $2
 `
 
 type GetPayoutParams struct {
@@ -147,12 +169,13 @@ func (q *Queries) GetPayout(ctx context.Context, arg GetPayoutParams) (Payout, e
 		&i.ApprovedAt,
 		&i.SettledAt,
 		&i.FailedAt,
+		&i.Rail,
 	)
 	return i, err
 }
 
 const getPayoutForUpdate = `-- name: GetPayoutForUpdate :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts WHERE id = $1 FOR UPDATE
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetPayoutForUpdate(ctx context.Context, id uuid.UUID) (Payout, error) {
@@ -190,12 +213,13 @@ func (q *Queries) GetPayoutForUpdate(ctx context.Context, id uuid.UUID) (Payout,
 		&i.ApprovedAt,
 		&i.SettledAt,
 		&i.FailedAt,
+		&i.Rail,
 	)
 	return i, err
 }
 
 const getPayoutForUpdateInOrg = `-- name: GetPayoutForUpdateInOrg :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts WHERE id = $1 AND org_id = $2 FOR UPDATE
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 AND org_id = $2 FOR UPDATE
 `
 
 type GetPayoutForUpdateInOrgParams struct {
@@ -238,6 +262,7 @@ func (q *Queries) GetPayoutForUpdateInOrg(ctx context.Context, arg GetPayoutForU
 		&i.ApprovedAt,
 		&i.SettledAt,
 		&i.FailedAt,
+		&i.Rail,
 	)
 	return i, err
 }
@@ -247,12 +272,12 @@ const insertPayout = `-- name: InsertPayout :exec
 INSERT INTO payouts (id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id,
                      destination_type, destination_value, destination_account, destination_holder_name,
                      destination_holder_cuit, destination_bank_name, concept, status, created_by, hold_id,
-                     idempotency_key, created_at, updated_at)
+                     idempotency_key, created_at, updated_at, rail)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9,
         $10, $11, $12,
         $13, $14, $15, $16,
-        $17, $18, $19, $19)
+        $17, $18, $19, $19, $20)
 `
 
 type InsertPayoutParams struct {
@@ -275,6 +300,7 @@ type InsertPayoutParams struct {
 	HoldID                *uuid.UUID
 	IdempotencyKey        string
 	CreatedAt             time.Time
+	Rail                  string
 }
 
 // Payout queries. Status changes are conditional on the current status (checked row count, MO3);
@@ -300,6 +326,7 @@ func (q *Queries) InsertPayout(ctx context.Context, arg InsertPayoutParams) erro
 		arg.HoldID,
 		arg.IdempotencyKey,
 		arg.CreatedAt,
+		arg.Rail,
 	)
 	return err
 }
@@ -458,7 +485,7 @@ func (q *Queries) ListPayoutEvents(ctx context.Context, arg ListPayoutEventsPara
 }
 
 const listPendingApprovals = `-- name: ListPendingApprovals :many
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts
 WHERE org_id = $1 AND status = 'pending_approval'
   AND ($2::timestamptz IS NULL
        OR (created_at, id) < ($2::timestamptz, $3::uuid))
@@ -519,6 +546,7 @@ func (q *Queries) ListPendingApprovals(ctx context.Context, arg ListPendingAppro
 			&i.ApprovedAt,
 			&i.SettledAt,
 			&i.FailedAt,
+			&i.Rail,
 		); err != nil {
 			return nil, err
 		}
@@ -561,8 +589,8 @@ func (q *Queries) ListSendingPayouts(ctx context.Context, arg ListSendingPayouts
 }
 
 const listSettledPayoutsBetween = `-- name: ListSettledPayoutsBetween :many
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at FROM payouts
-WHERE currency = $1 AND status = 'settled'
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts
+WHERE currency = $1 AND status = 'settled' AND rail = 'bank'
   AND settled_at >= $2 AND settled_at < $3
 ORDER BY settled_at, id
 `
@@ -573,6 +601,7 @@ type ListSettledPayoutsBetweenParams struct {
 	ToTime   *time.Time
 }
 
+// Bank-rail payouts only: on-us payouts never touch the master account (reconciliation).
 func (q *Queries) ListSettledPayoutsBetween(ctx context.Context, arg ListSettledPayoutsBetweenParams) ([]Payout, error) {
 	rows, err := q.db.Query(ctx, listSettledPayoutsBetween, arg.Currency, arg.FromTime, arg.ToTime)
 	if err != nil {
@@ -614,6 +643,7 @@ func (q *Queries) ListSettledPayoutsBetween(ctx context.Context, arg ListSettled
 			&i.ApprovedAt,
 			&i.SettledAt,
 			&i.FailedAt,
+			&i.Rail,
 		); err != nil {
 			return nil, err
 		}
@@ -648,6 +678,28 @@ func (q *Queries) RejectPayout(ctx context.Context, arg RejectPayoutParams) (int
 		arg.ID,
 		arg.OrgID,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const settleInternalPayout = `-- name: SettleInternalPayout :execrows
+UPDATE payouts
+SET status = 'settled', ledger_transaction_id = $1, settled_at = $2,
+    updated_at = $2
+WHERE id = $3 AND status = 'approved' AND rail = 'internal'
+`
+
+type SettleInternalPayoutParams struct {
+	LedgerTransactionID *uuid.UUID
+	SettledAt           *time.Time
+	ID                  uuid.UUID
+}
+
+// On-us: an approved internal-rail payout settles in one step (no PSP, no `sending`).
+func (q *Queries) SettleInternalPayout(ctx context.Context, arg SettleInternalPayoutParams) (int64, error) {
+	result, err := q.db.Exec(ctx, settleInternalPayout, arg.LedgerTransactionID, arg.SettledAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}

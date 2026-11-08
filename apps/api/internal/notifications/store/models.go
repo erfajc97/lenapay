@@ -151,11 +151,13 @@ type FeePlan struct {
 }
 
 type FeePlanRate struct {
-	FeePlanID        uuid.UUID
-	Currency         string
-	PayinBps         int32
-	PayoutFixedMinor int64
-	PayoutBps        int32
+	FeePlanID          uuid.UUID
+	Currency           string
+	PayinBps           int32
+	PayoutFixedMinor   int64
+	PayoutBps          int32
+	InternalFixedMinor int64
+	InternalBps        int32
 }
 
 type Hold struct {
@@ -334,6 +336,8 @@ type Payin struct {
 	LedgerTransactionID *uuid.UUID
 	CreatedAt           time.Time
 	CreditedAt          *time.Time
+	Rail                string
+	PayoutID            *uuid.UUID
 }
 
 type Payout struct {
@@ -368,6 +372,7 @@ type Payout struct {
 	ApprovedAt            *time.Time
 	SettledAt             *time.Time
 	FailedAt              *time.Time
+	Rail                  string
 }
 
 type PayoutAttachment struct {

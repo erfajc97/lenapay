@@ -161,15 +161,28 @@ func pdf(kind string) kyc.DocumentUpload {
 	return kyc.DocumentUpload{Kind: kind, FileName: kind + ".pdf", Content: strings.NewReader("%PDF-1.7 test " + kind)}
 }
 
+// personalOrg is the personal org signup created for the user (personal mode).
+func (e *env) personalOrg(t *testing.T, userID uuid.UUID) orgs.Organization {
+	t.Helper()
+	list, err := e.svc.Orgs.List(t.Context(), auth.Principal{UserID: userID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range list {
+		if o.Kind == orgs.KindPersonal {
+			return o
+		}
+	}
+	t.Fatalf("user %s has no personal org", userID)
+	return orgs.Organization{}
+}
+
 // personDraft is a user with a personal org whose KYC case carries the DNI but is NOT submitted.
 func (e *env) personDraft(t *testing.T, email, dni string) (user, uuid.UUID) {
 	t.Helper()
 	ctx := t.Context()
 	u := e.user(t, email)
-	o, err := e.svc.Orgs.Create(ctx, auth.Principal{UserID: u.id}, orgs.CreateInput{Kind: orgs.KindPersonal, LegalName: "Persona " + dni})
-	if err != nil {
-		t.Fatal(err)
-	}
+	o := e.personalOrg(t, u.id)
 	p := auth.Principal{UserID: u.id, OrgID: o.ID, Role: auth.RoleAdmin}
 	if _, err := e.svc.KYC.Update(ctx, p, kyc.UpdateInput{Person: &kyc.PersonData{
 		FullName: "Persona " + dni, DNI: dni, BirthDate: time.Date(1990, 1, 2, 0, 0, 0, 0, time.UTC),
@@ -301,14 +314,23 @@ func (e *env) mockIncoming(t *testing.T, cvu, amount, originName string) string 
 	return out.Transfer.ID
 }
 
-// personalCVU is the person's personal ARS CVU (issued by CreatePersonalCVUs).
-func (e *env) personalCVU(t *testing.T, orgID uuid.UUID) string {
+// personalCVU is the person's personal ARS CVU (issued by CreatePersonalCVUs), as her accounts
+// list it (Account.CVUs).
+func (e *env) personalCVU(t *testing.T, orgID uuid.UUID) accounts.ReceivingCVU {
 	t.Helper()
-	cvu, err := e.svc.Payers.PersonalCVU(t.Context(), orgID, money.ARS)
+	list, err := e.svc.Accounts.List(t.Context(), auth.Principal{OrgID: orgID}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cvu.Number
+	for _, a := range list {
+		for _, c := range a.CVUs {
+			if a.Kind == accounts.KindPersonal && c.Currency == money.ARS && c.Active {
+				return c
+			}
+		}
+	}
+	t.Fatalf("org %s has no personal ARS CVU", orgID)
+	return accounts.ReceivingCVU{}
 }
 
 func (e *env) count(t *testing.T, sql string, args ...any) int {

@@ -10,6 +10,7 @@
 // CVUCOLLECT (master account), prefix /cvucollectentidad-financial/v1/v1.201:
 //
 //	POST /banks/322/accounts/owner/transaction-request-types/TRANSFER/transaction-requests
+//	     (to a CVU of ours: settled on-us, credited to that CVU and its webhook sent)
 //	GET  /banks/322/accounts/owner/transaction-request-types/TRANSFER/{id}  (BIND id or origin_id;
 //	     unknown → 422 codigo TX019, as the real BIND answers)
 //	GET  /banks/322/accounts/transfers?type=&currency=&cvu=&transferenceId=&fromDate=&toDate=&start=&length=

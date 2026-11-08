@@ -14,7 +14,7 @@ import (
 
 const getMovement = `-- name: GetMovement :one
 SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
-       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at, m.rail
 FROM (
     SELECT p.id,
            'internal_transfer'::text AS type,
@@ -33,7 +33,8 @@ FROM (
            NULL::text AS counterparty_cbu,
            t.memo AS concept,
            t.ref_id,
-           t.created_at
+           t.created_at,
+           'internal'::text AS rail
     FROM ledger_postings p
     JOIN ledger_transactions t ON t.id = p.transaction_id
     JOIN ledger_accounts la ON la.id = p.ledger_account_id
@@ -44,7 +45,7 @@ FROM (
     SELECT pi.id, 'payin',
            CASE pi.status WHEN 'credited' THEN 'completed' WHEN 'failed' THEN 'failed' ELSE 'pending' END,
            'in', pi.account_id, pi.currency::text, pi.gross_minor, pi.fee_minor,
-           COALESCE(pi.origin_name, ''), pi.origin_cuit, pi.origin_cbu, NULL, pi.id, pi.created_at
+           COALESCE(pi.origin_name, ''), pi.origin_cuit, pi.origin_cbu, NULL, pi.id, pi.created_at, pi.rail
     FROM payins pi
     WHERE pi.id = $1 AND pi.org_id = $2
 
@@ -55,7 +56,7 @@ FROM (
                           WHEN 'rejected' THEN 'cancelled' WHEN 'cancelled' THEN 'cancelled' ELSE 'pending' END,
            'out', po.account_id, po.currency::text, po.amount_minor, po.fee_minor,
            po.destination_holder_name, po.destination_holder_cuit, po.destination_account::text,
-           po.concept, po.id, po.created_at
+           po.concept, po.id, po.created_at, po.rail
     FROM payouts po
     WHERE po.id = $1 AND po.org_id = $2
 ) m
@@ -82,6 +83,7 @@ type GetMovementRow struct {
 	Concept          *string
 	RefID            uuid.UUID
 	CreatedAt        time.Time
+	Rail             string
 }
 
 // One movement by its id (the posting id of an internal-transfer leg, the payin id or the
@@ -104,6 +106,7 @@ func (q *Queries) GetMovement(ctx context.Context, arg GetMovementParams) (GetMo
 		&i.Concept,
 		&i.RefID,
 		&i.CreatedAt,
+		&i.Rail,
 	)
 	return i, err
 }
@@ -111,7 +114,7 @@ func (q *Queries) GetMovement(ctx context.Context, arg GetMovementParams) (GetMo
 const listMovements = `-- name: ListMovements :many
 
 SELECT m.id, m.type, m.status, m.direction, m.account_id, m.currency, m.amount_minor, m.fee_minor,
-       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at
+       m.counterparty_name, m.counterparty_cuit, m.counterparty_cbu, m.concept, m.ref_id, m.created_at, m.rail
 FROM (
     SELECT p.id,
            'internal_transfer'::text AS type,
@@ -130,7 +133,8 @@ FROM (
            NULL::text AS counterparty_cbu,
            t.memo AS concept,
            t.ref_id,
-           t.created_at
+           t.created_at,
+           'internal'::text AS rail
     FROM ledger_transactions t
     JOIN ledger_postings p ON p.transaction_id = t.id
     JOIN ledger_accounts la ON la.id = p.ledger_account_id
@@ -159,7 +163,8 @@ FROM (
            pi.origin_cbu,
            NULL,
            pi.id,
-           pi.created_at
+           pi.created_at,
+           pi.rail
     FROM payins pi
     WHERE pi.org_id = $1
       AND ($2::text IS NULL OR $2::text = 'payin')
@@ -186,7 +191,8 @@ FROM (
            po.destination_account::text,
            po.concept,
            po.id,
-           po.created_at
+           po.created_at,
+           po.rail
     FROM payouts po
     WHERE po.org_id = $1
       AND ($2::text IS NULL OR $2::text = 'payout')
@@ -230,6 +236,7 @@ type ListMovementsRow struct {
 	Concept          *string
 	RefID            uuid.UUID
 	CreatedAt        time.Time
+	Rail             string
 }
 
 // Movements read model (R-MOV-1): read-only, one row per payin, payout and internal-transfer
@@ -237,7 +244,8 @@ type ListMovementsRow struct {
 // payouts tables of other features without writing them: a read model, never a writer (P4).
 // Every branch filters by org first and uses that table's (org_id, created_at DESC) index;
 // the internal-transfer branch comes first so sqlc types the nullable columns as nullable;
-// counterparty_name is ” when unknown (the service maps it to null).
+// counterparty_name is ” when unknown (the service maps it to null). rail: 'bank' for PSP
+// payins/payouts, 'internal' for on-us ones and for internal transfers (ledger only).
 func (q *Queries) ListMovements(ctx context.Context, arg ListMovementsParams) ([]ListMovementsRow, error) {
 	rows, err := q.db.Query(ctx, listMovements,
 		arg.OrgID,
@@ -273,6 +281,7 @@ func (q *Queries) ListMovements(ctx context.Context, arg ListMovementsParams) ([
 			&i.Concept,
 			&i.RefID,
 			&i.CreatedAt,
+			&i.Rail,
 		); err != nil {
 			return nil, err
 		}

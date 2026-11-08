@@ -56,7 +56,9 @@ type Movement struct {
 	Counterparty Counterparty
 	Concept      *string
 	RefID        uuid.UUID
-	CreatedAt    time.Time
+	// Rail is "bank" (through the PSP) or "internal" (on-us, or an internal transfer).
+	Rail      string
+	CreatedAt time.Time
 }
 
 // Filter narrows the list; From/To are business dates (inclusive) in the business time zone.

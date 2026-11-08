@@ -5,6 +5,7 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
+	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
 	"github.com/erfajc97/lenapay/apps/api/internal/api"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
@@ -118,6 +119,20 @@ func (h *Handler) UpdateCvu(ctx context.Context, req api.UpdateCvuRequestObject)
 		return nil, err
 	}
 	return api.UpdateCvu200JSONResponse(toAPICVU(cvu)), nil
+}
+
+// UpdateAccountCvu implements api.StrictServerInterface (an account's own CVU: the personal
+// CVUs live in the cvus table this feature owns).
+func (h *Handler) UpdateAccountCvu(ctx context.Context, req api.UpdateAccountCvuRequestObject) (api.UpdateAccountCvuResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cvu, err := h.svc.UpdateAccountCVUAlias(ctx, p, req.AccountId, req.CvuId, req.Body.Alias)
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateAccountCvu200JSONResponse(accounts.ToAPICVU(cvu)), nil
 }
 
 // DisableCvu implements api.StrictServerInterface.

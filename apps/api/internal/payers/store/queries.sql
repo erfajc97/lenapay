@@ -39,6 +39,10 @@ SELECT * FROM cvus WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
 -- System lookup for payins: the receiving CVU decides the org (no tenant filter by design).
 SELECT * FROM cvus WHERE cvu = sqlc.arg(cvu);
 
+-- name: GetActiveCVUByAlias :one
+-- System lookup of an on-us payout destination by alias (aliases are unique case-insensitively).
+SELECT * FROM cvus WHERE lower(alias) = lower(sqlc.arg(alias)::text) AND status = 'active';
+
 -- name: GetActiveCVUForPayer :one
 SELECT * FROM cvus
 WHERE org_id = sqlc.arg(org_id) AND payer_id = sqlc.arg(payer_id) AND currency = sqlc.arg(currency) AND status = 'active';
@@ -50,6 +54,10 @@ ORDER BY created_at, id;
 
 -- name: ListCVUsForAccount :many
 SELECT * FROM cvus WHERE org_id = sqlc.arg(org_id) AND account_id = sqlc.arg(account_id) ORDER BY created_at, id;
+
+-- name: ListAccountCVUsForOrg :many
+-- The org's account-owned CVUs (personal CVUs): no payer.
+SELECT * FROM cvus WHERE org_id = sqlc.arg(org_id) AND payer_id IS NULL ORDER BY created_at, id;
 
 -- name: UpdateCVUAlias :execrows
 UPDATE cvus SET alias = sqlc.arg(alias), updated_at = sqlc.arg(updated_at)

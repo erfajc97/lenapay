@@ -45,7 +45,7 @@ func TestListMovementsHandler(t *testing.T) {
 	svc := &fakeService{items: []Movement{
 		{
 			ID: ids.New(), Type: TypePayin, Status: StatusCompleted, Direction: DirectionIn, AccountID: ids.New(),
-			Amount: money.New(100, money.ARS), Fee: &fee, Counterparty: Counterparty{Name: &name}, RefID: ids.New(), CreatedAt: time.Unix(0, 0).UTC(),
+			Amount: money.New(100, money.ARS), Fee: &fee, Counterparty: Counterparty{Name: &name}, RefID: ids.New(), Rail: "internal", CreatedAt: time.Unix(0, 0).UTC(),
 		},
 		{
 			ID: ids.New(), Type: TypeInternalTransfer, Status: StatusCompleted, Direction: DirectionOut, AccountID: ids.New(),
@@ -76,11 +76,14 @@ func TestListMovementsHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Nullable members are always present (null), never omitted.
-	full := []string{"accountId", "amount", "concept", "counterparty", "createdAt", "direction", "fee", "id", "refId", "status", "type"}
+	full := []string{"accountId", "amount", "concept", "counterparty", "createdAt", "direction", "fee", "id", "rail", "refId", "status", "type"}
 	for i := range decoded.Items {
 		if got := slices.Sorted(maps.Keys(decoded.Items[i])); !slices.Equal(got, full) {
 			t.Fatalf("item %d keys = %v, want %v", i, got, full)
 		}
+	}
+	if decoded.Items[0]["rail"] != "internal" {
+		t.Fatalf("rail = %v", decoded.Items[0]["rail"])
 	}
 	if decoded.Items[1]["fee"] != nil || decoded.Items[1]["concept"] != nil {
 		t.Fatalf("bare item = %v", decoded.Items[1])

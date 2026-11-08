@@ -23,7 +23,8 @@ import (
 // Service is the identity API used by the handler and by other features.
 type Service interface {
 	// Signup creates an unverified user and emails a 6-digit code (R-ID-1). Signing up again
-	// with the same email and password while unverified re-sends a code (rate limited).
+	// with the same email and password while unverified re-sends a code (rate limited). A new
+	// user runs Deps.OnSignup in the same transaction (the personal org of personal mode).
 	Signup(ctx context.Context, in SignupInput) (uuid.UUID, error)
 	// ResendEmailCode issues and emails a fresh code to an UNVERIFIED user (the previous one
 	// stops working; rate limited). An unknown or verified email is a silent no-op, so the
@@ -58,6 +59,8 @@ type Deps struct {
 	Memberships Memberships
 	Codes       CodeSender
 	Config      config.Config
+	// OnSignup runs for each new user inside the signup transaction (nil: nothing).
+	OnSignup SignupHook
 }
 
 // Limits of the email code and the step-up challenge (R-ID-1, R-ID-3).
@@ -115,11 +118,16 @@ func (s *service) Signup(ctx context.Context, in SignupInput) (uuid.UUID, error)
 	var code string
 	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		id, err := s.signupUser(ctx, q, email, in.Password.Reveal())
+		id, created, err := s.signupUser(ctx, q, email, in.Password.Reveal())
 		if err != nil {
 			return err
 		}
 		userID = id
+		if created && s.deps.OnSignup != nil {
+			if err := s.deps.OnSignup.OnUserCreated(ctx, tx, id, email); err != nil {
+				return err
+			}
+		}
 		code, err = s.issueEmailCode(ctx, q, id)
 		return err
 	})
@@ -130,25 +138,25 @@ func (s *service) Signup(ctx context.Context, in SignupInput) (uuid.UUID, error)
 	return userID, nil
 }
 
-// signupUser inserts a new user, or returns the existing UNVERIFIED user when the password
-// matches (a re-sent code). Any other existing email is auth.email_taken.
-func (s *service) signupUser(ctx context.Context, q *store.Queries, email, password string) (uuid.UUID, error) {
+// signupUser inserts a new user (created = true), or returns the existing UNVERIFIED user
+// when the password matches (a re-sent code). Any other existing email is auth.email_taken.
+func (s *service) signupUser(ctx context.Context, q *store.Queries, email, password string) (id uuid.UUID, created bool, err error) {
 	existing, err := q.GetUserByEmail(ctx, email)
 	switch {
 	case err == nil:
 		if existing.EmailVerifiedAt != nil || !verifyPassword(existing.PasswordHash, password) {
-			return uuid.Nil, apperr.New(apperr.CodeEmailTaken, nil)
+			return uuid.Nil, false, apperr.New(apperr.CodeEmailTaken, nil)
 		}
-		return existing.ID, nil
+		return existing.ID, false, nil
 	case !db.IsNoRows(err):
-		return uuid.Nil, err
+		return uuid.Nil, false, err
 	}
-	id := ids.New()
+	id = ids.New()
 	err = q.InsertUser(ctx, store.InsertUserParams{ID: id, Email: email, PasswordHash: hashPassword(password), CreatedAt: s.now()})
 	if db.IsUniqueViolation(err, "") {
-		return uuid.Nil, apperr.Wrap(apperr.CodeEmailTaken, err, nil)
+		return uuid.Nil, false, apperr.Wrap(apperr.CodeEmailTaken, err, nil)
 	}
-	return id, err
+	return id, err == nil, err
 }
 
 // issueEmailCode replaces the user's active codes with a new one; at most emailCodesPerWindow

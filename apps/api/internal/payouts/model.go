@@ -25,6 +25,15 @@ const (
 	StatusCancelled       Status = "cancelled"
 )
 
+// Rail says how the money moves (DB CHECK payouts.rail).
+type Rail string
+
+// Rails: through the PSP, or on-us between two Lenapay accounts (never reaches the bank).
+const (
+	RailBank     Rail = "bank"
+	RailInternal Rail = "internal"
+)
+
 // Field caps shared with the contract and the DB CHECKs of payouts (A3, G12).
 const (
 	maxConcept      = 140
@@ -49,6 +58,7 @@ type Quote struct {
 	Total          money.Amount
 	Destination    psp.Destination
 	AvailableAfter money.Amount
+	Rail           Rail
 }
 
 // CreateInput creates a payout (R-OUT-1/3).
@@ -96,6 +106,7 @@ type Payout struct {
 	Destination  psp.Destination
 	Concept      string
 	Status       Status
+	Rail         Rail
 	CreatedBy    uuid.UUID
 	ApprovedBy   *uuid.UUID
 	RejectReason *string

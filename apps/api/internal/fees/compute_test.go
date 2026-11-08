@@ -71,3 +71,15 @@ func TestDefaultRatesCoverEveryCurrency(t *testing.T) {
 		t.Fatalf("default rates for %d currencies, want 2", len(rates))
 	}
 }
+
+// On-us payouts use the plan's internal rates: 0 by default, fixed + bps when set.
+func TestComputeInternalPayout(t *testing.T) {
+	t.Parallel()
+	amount := money.New(1_000_000, money.ARS)
+	if fee, err := fees.Compute(fees.OperationPayoutInternal, amount, fees.Rates{PayoutFixedMinor: 15_000, PayoutBps: 20}); err != nil || !fee.IsZero() {
+		t.Fatalf("default internal fee = %v, %v; want 0", fee, err)
+	}
+	if fee, err := fees.Compute(fees.OperationPayoutInternal, amount, fees.Rates{InternalFixedMinor: 100, InternalBps: 10}); err != nil || fee.Minor != 1_100 {
+		t.Fatalf("internal fee = %v, %v; want 1100", fee, err)
+	}
+}

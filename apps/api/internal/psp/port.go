@@ -95,6 +95,9 @@ type SendTransferRequest struct {
 	AccountNumber string
 	Amount        money.Amount
 	Concept       string
+	// OriginCVU is the paying account's own CVU in the currency, when it has one (a personal
+	// account): BIND's origin_debit, so the receiver sees who paid. Optional.
+	OriginCVU string
 }
 
 // TransferStatus is the provider status of an outgoing transfer.

@@ -5,12 +5,12 @@
 INSERT INTO payouts (id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id,
                      destination_type, destination_value, destination_account, destination_holder_name,
                      destination_holder_cuit, destination_bank_name, concept, status, created_by, hold_id,
-                     idempotency_key, created_at, updated_at)
+                     idempotency_key, created_at, updated_at, rail)
 VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(account_id), sqlc.arg(currency), sqlc.arg(amount_minor),
         sqlc.arg(fee_minor), sqlc.narg(fee_plan_id), sqlc.arg(destination_type), sqlc.arg(destination_value),
         sqlc.arg(destination_account), sqlc.arg(destination_holder_name), sqlc.arg(destination_holder_cuit),
         sqlc.narg(destination_bank_name), sqlc.arg(concept), sqlc.arg(status), sqlc.arg(created_by),
-        sqlc.narg(hold_id), sqlc.arg(idempotency_key), sqlc.arg(created_at), sqlc.arg(created_at));
+        sqlc.narg(hold_id), sqlc.arg(idempotency_key), sqlc.arg(created_at), sqlc.arg(created_at), sqlc.arg(rail));
 
 -- name: GetPayout :one
 SELECT * FROM payouts WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id);
@@ -52,6 +52,20 @@ SET status = 'settled', provider_transfer_id = sqlc.arg(provider_transfer_id),
     updated_at = sqlc.arg(settled_at)
 WHERE id = sqlc.arg(id) AND status = 'sending';
 
+-- name: SettleInternalPayout :execrows
+-- On-us: an approved internal-rail payout settles in one step (no PSP, no `sending`).
+UPDATE payouts
+SET status = 'settled', ledger_transaction_id = sqlc.arg(ledger_transaction_id), settled_at = sqlc.arg(settled_at),
+    updated_at = sqlc.arg(settled_at)
+WHERE id = sqlc.arg(id) AND status = 'approved' AND rail = 'internal';
+
+-- name: FailInternalPayout :execrows
+-- On-us: the destination CVU stopped receiving before settlement; the hold is released.
+UPDATE payouts
+SET status = 'failed', failure_code = sqlc.arg(failure_code), failed_at = sqlc.arg(failed_at),
+    updated_at = sqlc.arg(failed_at)
+WHERE id = sqlc.arg(id) AND status = 'approved' AND rail = 'internal';
+
 -- name: FailPayout :execrows
 UPDATE payouts
 SET status = 'failed', failure_code = sqlc.arg(failure_code), failed_at = sqlc.arg(failed_at),
@@ -79,8 +93,9 @@ SELECT id FROM payouts WHERE status = 'sending' AND updated_at < sqlc.arg(update
 ORDER BY updated_at, id LIMIT sqlc.arg(page_limit);
 
 -- name: ListSettledPayoutsBetween :many
+-- Bank-rail payouts only: on-us payouts never touch the master account (reconciliation).
 SELECT * FROM payouts
-WHERE currency = sqlc.arg(currency) AND status = 'settled'
+WHERE currency = sqlc.arg(currency) AND status = 'settled' AND rail = 'bank'
   AND settled_at >= sqlc.arg(from_time) AND settled_at < sqlc.arg(to_time)
 ORDER BY settled_at, id;
 
