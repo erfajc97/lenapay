@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { Member, Role } from '@/shared/api/types';
 import { canEditMember, canManageTeam } from '@/shared/helpers/permissions';
+import { useAccounts } from '@/shared/queries/accounts';
 import { useActiveOrg, useMembers } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 
@@ -14,6 +15,7 @@ const emailSchema = z.email();
 export function useTeam() {
   const { org } = useActiveOrg();
   const members = useMembers(org?.id);
+  const accounts = useAccounts(org?.kind === 'company' ? org.id : undefined);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('operator');
@@ -37,6 +39,7 @@ export function useTeam() {
   return {
     org,
     members,
+    accounts: accounts.data ?? [],
     canManage: org ? canManageTeam(org.role) : false,
     sheetOpen,
     openSheet: () => setSheetOpen(true),

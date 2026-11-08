@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCvu, classifyDestination, groupCbu, isValidCbu } from '../cbu';
+import { aliasError, buildCvu, classifyDestination, cvuQrPayload, groupCbu, isValidCbu } from '../cbu';
 
 // Why: a typo in a CBU must be caught on the phone; sending a payout to a key with a wrong
 // check digit wastes a resolve call at best and pays a stranger at worst.
@@ -40,5 +40,21 @@ describe('classifyDestination', () => {
 
   it('groups a key for reading only', () => {
     expect(groupCbu('2850590940090418135201')).toBe('28505909 40090418135201');
+  });
+});
+
+// Why: payer CVUs and the personal wallet's own CVUs share the BCRA alias rule; a looser
+// copy on one screen would send an alias the PSP refuses.
+describe('CVU alias and QR', () => {
+  it('validates the alias bounds (6–20, letters, digits, dots and hyphens)', () => {
+    expect(aliasError('juan.p')).toBeNull();
+    expect(aliasError('a'.repeat(20))).toBeNull();
+    expect(aliasError('a'.repeat(21))).toBe('validation.alias');
+    expect(aliasError('juan.')).toBe('validation.alias');
+    expect(aliasError('juan perez')).toBe('validation.alias');
+  });
+
+  it('encodes the CVU itself in the QR', () => {
+    expect(cvuQrPayload({ cvu: '0000031000000000000000' })).toBe('0000031000000000000000');
   });
 });

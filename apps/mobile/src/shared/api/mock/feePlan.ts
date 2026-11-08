@@ -1,4 +1,4 @@
-import type { Currency } from '../types';
+import type { Currency, Rail } from '../types';
 
 /**
  * Default fee plan of the mock backend (R-FEE-1): payin %, payout fixed + %. The real plan
@@ -27,6 +27,7 @@ export function payinFee(amountMinor: number, currency: Currency): number {
   return applyFee(amountMinor, PAYIN[currency]);
 }
 
-export function payoutFee(amountMinor: number, currency: Currency): number {
-  return applyFee(amountMinor, PAYOUT[currency]);
+/** On-us payouts (rail internal) use the plan's on-us rates, 0 by default (R-MP-5). */
+export function payoutFee(amountMinor: number, currency: Currency, rail: Rail = 'bank'): number {
+  return rail === 'internal' ? 0 : applyFee(amountMinor, PAYOUT[currency]);
 }

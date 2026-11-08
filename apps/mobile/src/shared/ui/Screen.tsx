@@ -10,6 +10,7 @@ import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 
 import { AppText } from './AppText';
 import { Icon } from './Icon';
+import { tabBarSpace } from './liquidTab';
 import { Scroll } from './Scroll';
 
 /**
@@ -24,7 +25,7 @@ interface ScreenProps {
   back?: boolean;
   /** Multi-step flows go one step back instead of leaving the screen. */
   onBack?: () => void;
-  /** Tab screens: the tab bar owns the bottom inset. */
+  /** Tab screens: content scrolls under the floating tab bar and reserves its space at the end. */
   inTabs?: boolean;
   /** false for screens that render their own virtualized list. */
   scroll?: boolean;
@@ -86,7 +87,7 @@ export function Screen({ children, title, back, onBack, inTabs, scroll = true, h
           <Scroll
             className="flex-1"
             contentContainerClassName="gap-4 px-4 pt-2"
-            contentContainerStyle={{ paddingBottom: footer ? 24 : bottomInset + 32 }}
+            contentContainerStyle={{ paddingBottom: footer ? 24 : inTabs ? tabBarSpace(insets.bottom) : bottomInset + 32 }}
             refreshControl={onRefresh ? <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColorClassName="accent-primary" /> : undefined}
           >
             {children}

@@ -36,6 +36,14 @@ export const endpoints = {
     one: (orgId: string, accountId: string) => `${org(orgId)}/accounts/${id(accountId)}`,
     balances: (orgId: string) => `${org(orgId)}/balances`,
     internalTransfers: (orgId: string) => `${org(orgId)}/internal-transfers`,
+    cvu: (orgId: string, accountId: string, cvuId: string) => `${org(orgId)}/accounts/${id(accountId)}/cvus/${id(cvuId)}`,
+  },
+  myPayments: {
+    companies: '/me/payments/companies',
+    company: (linkId: string) => `/me/payments/companies/${id(linkId)}`,
+    payins: (linkId: string) => `/me/payments/companies/${id(linkId)}/payins`,
+    installments: (linkId: string) => `/me/payments/companies/${id(linkId)}/installments`,
+    pay: (linkId: string) => `/me/payments/companies/${id(linkId)}/pay`,
   },
   payers: {
     list: (orgId: string) => `${org(orgId)}/payers`,

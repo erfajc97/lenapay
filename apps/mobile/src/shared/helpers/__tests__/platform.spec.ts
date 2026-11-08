@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyboardBehavior, modalReportsDismiss, pushPlatform } from '../platform';
+import { keyboardBehavior, modalReportsDismiss, pushPlatform, tabBarBlurs } from '../platform';
 
 // Why: the wrong keyboard behaviour hides the "Confirmar" button under the keyboard on one
 // platform only, which is the one nobody tested (ME11).
@@ -31,5 +31,16 @@ describe('pushPlatform', () => {
     expect(pushPlatform('android')).toBe('android');
     expect(pushPlatform('web')).toBe('web');
     expect(pushPlatform('windows')).toBe('unknown');
+  });
+});
+
+// Why: expo-blur on Android is an expensive experimental path; a translucent bar without blur
+// makes the labels unreadable over content, so Android gets the solid surface.
+describe('tabBarBlurs', () => {
+  it('blurs on iOS and web, never on Android or unknown platforms', () => {
+    expect(tabBarBlurs('ios')).toBe(true);
+    expect(tabBarBlurs('web')).toBe(true);
+    expect(tabBarBlurs('android')).toBe(false);
+    expect(tabBarBlurs('windows')).toBe(false);
   });
 });

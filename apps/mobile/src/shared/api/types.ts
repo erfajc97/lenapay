@@ -35,6 +35,12 @@ type MovementDirection = Schemas['MovementDirection'];
 export type KycDocumentKind = Schemas['KycDocumentKind'];
 type ReconciliationItemStatus = Schemas['ReconciliationItemStatus'];
 export type PushPlatform = Schemas['RegisterPushTokenRequest']['platform'];
+/** How the money moves: `bank` through the PSP, `internal` instantly between Lenapay accounts. */
+export type Rail = Schemas['Rail'];
+export const RAILS = enumValues<Rail>()(['bank', 'internal']);
+export type InstallmentStatus = Schemas['InstallmentStatus'];
+export const INSTALLMENT_STATUSES = enumValues<InstallmentStatus>()(['pending', 'paid', 'overdue']);
+export type AdjustmentIndex = Schemas['AdjustmentIndex'];
 
 // ── Contract DTOs used as they are ──────────────────────────────────────────────────────
 export type ApiErrorBody = Schemas['Error'];
@@ -67,6 +73,10 @@ export type Cvu = Schemas['Cvu'];
 export type CreatePayerRequest = Schemas['CreatePayerRequest'];
 export type IssueCvuRequest = Schemas['CreateCvuRequest'];
 export type UpdateCvuRequest = Schemas['UpdateCvuRequest'];
+/** A receiving CVU of the account itself (the personal wallet's ARS and USD CVUs). */
+export type AccountCvu = Schemas['AccountCvu'];
+export type MyPaymentCvu = Schemas['MyPaymentCvu'];
+export type PayinStatus = Schemas['PayinStatus'];
 export type Destination = Schemas['Destination'];
 export type PayoutAttachment = Schemas['PayoutAttachment'];
 export type RejectPayoutRequest = Schemas['RejectPayoutRequest'];
@@ -127,6 +137,8 @@ export interface Account {
   balances: Balance[];
   /** Mock only (the contract has no count): null in live mode. */
   payersCount: number | null;
+  /** The account's own receiving CVUs (personal wallet); `[]` for company accounts. */
+  cvus: AccountCvu[];
   createdAt: string;
 }
 
@@ -187,6 +199,8 @@ export interface PayoutQuote {
   total: number;
   /** Available balance after holding the total; negative means it does not fit. */
   availableAfter: number;
+  /** `internal` when the destination is a Lenapay CVU or alias: instant, never through the bank. */
+  rail: Rail;
 }
 
 export interface CreatePayoutRequest {
@@ -219,6 +233,7 @@ export interface Payout {
   destination: Destination;
   concept: string;
   status: PayoutStatus;
+  rail: Rail;
   createdBy: PersonRef;
   approvedBy: PersonRef | null;
   rejectReason: string | null;
@@ -243,6 +258,7 @@ export interface Movement {
   counterpartyDoc: string | null;
   concept: string | null;
   refId: string;
+  rail: Rail;
   createdAt: string;
 }
 
@@ -294,6 +310,57 @@ export interface ErpLink {
   displayName: string | null;
   linkedAt: string | null;
   importedAt: string | null;
+}
+
+// ── Mis pagos (payer view) ──────────────────────────────────────────────────────────────
+export interface MoneyAmount {
+  currency: Currency;
+  amount: number;
+}
+
+export interface MyPaymentCompany {
+  linkId: string;
+  companyName: string;
+  /** Null when the person pays into the company's main account. */
+  projectName: string | null;
+  cvus: MyPaymentCvu[];
+  /** Credited payins summed per currency, minor units. */
+  totalPaid: MoneyAmount[];
+  lastPaymentAt: string | null;
+  erpLinked: boolean;
+  hidden: boolean;
+}
+
+export interface MyPaymentPayin {
+  id: string;
+  cvu: string;
+  currency: Currency;
+  amount: number;
+  status: PayinStatus;
+  createdAt: string;
+  creditedAt: string | null;
+}
+
+export interface Installment {
+  number: number;
+  dueDate: string;
+  currency: Currency;
+  amount: number;
+  status: InstallmentStatus;
+  adjustmentIndex: AdjustmentIndex | null;
+}
+
+export interface InstallmentList {
+  erpLinked: boolean;
+  items: Installment[];
+}
+
+export interface PayCompanyRequest {
+  currency: Currency;
+  amount: number;
+  /** The installment paid; the API writes "Cuota N - …" in the transfer concept. */
+  installmentNumber?: number;
+  concept?: string;
 }
 
 // ── Realtime ────────────────────────────────────────────────────────────────────────────

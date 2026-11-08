@@ -1,27 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { Cvu } from '@/shared/api/types';
 import { groupCbu } from '@/shared/helpers/cbu';
 import { AppText } from '@/shared/ui/AppText';
 import { Card } from '@/shared/ui/Card';
 import { Chip, CurrencyChip } from '@/shared/ui/Chip';
-import { elevation, pressedScale } from '@/shared/ui/elevation';
-import { Icon, type IconName } from '@/shared/ui/Icon';
+import { IconAction } from '@/shared/ui/IconAction';
 import { Divider, LinkButton } from '@/shared/ui/Rows';
-
-function IconAction({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={pressedScale} className="min-h-11 flex-1 items-center justify-center gap-1.5 py-1">
-      <View className={`h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-primary-soft ${elevation('sm')}`}>
-        <Icon name={icon} size={20} tone="primary" />
-      </View>
-      <AppText variant="caption" tone="brand">
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
 
 /** One CVU: number and alias in JetBrains Mono, copy, share, QR (R-CVU-2). */
 export function CvuCard({

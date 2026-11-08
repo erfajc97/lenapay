@@ -9,6 +9,7 @@ import { formatMoney } from '@/shared/money/format';
 
 import { AppText } from './AppText';
 import { Chip } from './Chip';
+import { RailBadge } from './RailBadge';
 import { IconBadge } from './Rows';
 
 const ICONS = { payin: 'arrow-down', payout: 'arrow-up', internal_transfer: 'swap-horizontal' } as const;
@@ -24,7 +25,7 @@ export const MovementRow = memo(function MovementRow({ movement, onPress }: { mo
     <Pressable
       onPress={() => onPress(movement)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${amount}, ${t(`status.movement.${movement.status}`)}`}
+      accessibilityLabel={`${title}, ${amount}, ${t(`status.movement.${movement.status}`)}, ${t(`rail.${movement.rail}`)}`}
       className="min-h-16 flex-row items-center gap-3 py-2 active:opacity-70"
     >
       <IconBadge name={ICONS[movement.type]} tone={incoming ? 'success' : 'text-primary'} soft={incoming ? 'bg-success-bg' : 'bg-border-subtle'} />
@@ -43,7 +44,7 @@ export const MovementRow = memo(function MovementRow({ movement, onPress }: { mo
         <AppText variant="bodyStrong" tone={incoming ? 'success' : 'primary'}>
           {amount}
         </AppText>
-        {movement.status !== 'completed' ?<Chip label={t(`status.movement.${movement.status}`)} tone={MOVEMENT_STATUS_TONE[movement.status]} /> : null}
+        {movement.status !== 'completed' ? <Chip label={t(`status.movement.${movement.status}`)} tone={MOVEMENT_STATUS_TONE[movement.status]} /> : <RailBadge rail={movement.rail} />}
       </View>
     </Pressable>
   );

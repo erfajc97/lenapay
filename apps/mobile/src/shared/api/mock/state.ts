@@ -1,13 +1,16 @@
 import type {
+  AccountCvu,
   AccountKind,
   Currency,
   ErpCandidate,
+  Installment,
   Invite,
   KycCase,
   Org,
   Payer,
   Payin,
   Payout,
+  Rail,
   ReconciliationItem,
   ReconciliationRun,
   Role,
@@ -19,7 +22,6 @@ interface MockUser {
   email: string;
   fullName: string | null;
   mfaEnabled: boolean;
-  personalModeEnabled: boolean;
 }
 
 type MockOrg = Omit<Org, 'role'>;
@@ -38,6 +40,8 @@ export interface MockAccount {
   archived: boolean;
   createdAt: string;
   ledger: Record<Currency, { posted: number; held: number }>;
+  /** The account's own receiving CVUs (personal wallets, once the person KYC is approved). */
+  cvus: AccountCvu[];
 }
 
 export interface MockPayer extends Omit<Payer, 'accountName'> {
@@ -46,6 +50,7 @@ export interface MockPayer extends Omit<Payer, 'accountName'> {
 
 export interface MockPayin extends Payin {
   orgId: string;
+  rail: Rail;
 }
 
 export interface MockPayout extends Payout {
@@ -78,6 +83,14 @@ interface MockErp {
   linkedAt: string | null;
 }
 
+/** "Mis pagos": a verified person (their personal org) ↔ a company's payer with their DNI. */
+export interface MockPayerLink {
+  id: string;
+  personalOrgId: string;
+  payerId: string;
+  hidden: boolean;
+}
+
 export interface MockReconRun {
   run: ReconciliationRun;
   items: ReconciliationItem[];
@@ -101,5 +114,10 @@ export interface MockState {
   transfers: MockTransfer[];
   recon: Record<string, MockReconRun[]>;
   erp: Record<string, MockErp>;
+  /** DNI the person KYC verified, per personal org (copied on approval, like the API). */
+  verifiedDni: Record<string, string>;
+  payerLinks: MockPayerLink[];
+  /** ERP installments (cuotas) per payer id, for ERP-linked companies. */
+  installments: Record<string, Installment[]>;
   idempotency: Record<string, { hash: string; response: unknown }>;
 }

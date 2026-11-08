@@ -6,8 +6,11 @@ import {
   parseRealtimeFrame,
   toAccount,
   toErpLink,
+  toInstallmentList,
   toMe,
   toMovement,
+  toMyPaymentCompany,
+  toMyPaymentPayin,
   toPayin,
   toPayout,
   toQuote,
@@ -165,5 +168,63 @@ describe('parseRealtimeFrame', () => {
     expect(parseRealtimeFrame('[1,2]', directory)).toBeNull();
     expect(parseRealtimeFrame('', directory)).toBeNull();
     expect(parseRealtimeFrame(null, directory)).toBeNull();
+  });
+});
+
+// Why: the rail decides whether the app promises "instantánea · sin costo"; "Mis pagos" money
+// arrives as `{minor, currency}` lists and nullable dates. A dropped rail or a swapped total
+// tells a person the wrong thing about their own money (R-MP-2, R-MP-3, R-MP-5, R-CVU-4).
+describe('rails, personal CVUs and Mis pagos', () => {
+  it('carries the rail of payouts, quotes and movements as the API sends it', () => {
+    expect(toPayout({ ...payoutDto, rail: 'internal' }, directory).rail).toBe('internal');
+    expect(toPayout({ ...payoutDto, rail: 'bank' }, directory).rail).toBe('bank');
+    const quote = asContract<Schemas['PayoutQuote']>({ amount: ars(100), fee: ars(0), total: ars(100), destination: payoutDto.destination, availableAfter: ars(5), rail: 'internal' });
+    expect(toQuote(quote).rail).toBe('internal');
+    const movement = asContract<Schemas['Movement']>({
+      id: 'mv-2', type: 'payin', status: 'completed', direction: 'in', accountId: 'acc-1', amount: ars(1), fee: null,
+      counterparty: { name: null, cuit: null, cbu: null }, concept: null, refId: 'pin-2', rail: 'internal', createdAt: '2026-11-07T23:50:25Z',
+    });
+    expect(toMovement(movement, directory).rail).toBe('internal');
+  });
+
+  it("keeps the account's own CVUs, and [] for a company account", () => {
+    const cvu = { id: 'acvu-1', currency: 'USD' as const, cvu: '0000322100000010000157', alias: null, status: 'active' as const, share: { link: 'https://x', qrPayload: 'q' } };
+    const base = { id: 'acc-p', kind: 'personal' as const, name: 'Personal account', archived: false, erpProjectRef: null, createdAt: '2026-11-01T00:00:00Z', balances: [] };
+    expect(toAccount(asContract<Schemas['Account']>({ ...base, cvus: [cvu] })).cvus).toEqual([cvu]);
+    expect(toAccount(asContract<Schemas['Account']>({ ...base, cvus: [] })).cvus).toEqual([]);
+  });
+
+  it('maps a company of Mis pagos: totals per currency in minor units, nullable project and date', () => {
+    const company = toMyPaymentCompany({
+      linkId: 'lnk-1', companyName: 'Constructora Andina SRL', projectName: null, erpLinked: true, hidden: false, lastPaymentAt: null,
+      cvus: [{ currency: 'ARS', cvu: '0000322100000010000133', alias: 'rio.cerro.0013' }],
+      totalPaid: [ars(170_000_000), { minor: 1_250_00, currency: 'USD' }],
+    });
+    expect(company).toEqual({
+      linkId: 'lnk-1', companyName: 'Constructora Andina SRL', projectName: null, erpLinked: true, hidden: false, lastPaymentAt: null,
+      cvus: [{ currency: 'ARS', cvu: '0000322100000010000133', alias: 'rio.cerro.0013' }],
+      totalPaid: [{ currency: 'ARS', amount: 170_000_000 }, { currency: 'USD', amount: 1_250_00 }],
+    });
+  });
+
+  it('maps my payins and installments with their money and nullable fields', () => {
+    expect(toMyPaymentPayin({ id: 'p1', cvu: '0000322100000010000133', amount: ars(85_000_000), status: 'received', createdAt: '2026-11-07T01:00:00Z', creditedAt: null })).toEqual({
+      id: 'p1', cvu: '0000322100000010000133', currency: 'ARS', amount: 85_000_000, status: 'received', createdAt: '2026-11-07T01:00:00Z', creditedAt: null,
+    });
+    const plan = toInstallmentList({
+      erpLinked: true,
+      items: [
+        { number: 4, dueDate: '2026-10-10', amount: ars(88_750_000), status: 'overdue', adjustmentIndex: 'CAC' },
+        { number: 5, dueDate: '2026-11-10', amount: ars(90_000_000), status: 'pending', adjustmentIndex: null },
+      ],
+    });
+    expect(plan).toEqual({
+      erpLinked: true,
+      items: [
+        { number: 4, dueDate: '2026-10-10', currency: 'ARS', amount: 88_750_000, status: 'overdue', adjustmentIndex: 'CAC' },
+        { number: 5, dueDate: '2026-11-10', currency: 'ARS', amount: 90_000_000, status: 'pending', adjustmentIndex: null },
+      ],
+    });
+    expect(toInstallmentList({ erpLinked: false, items: [] })).toEqual({ erpLinked: false, items: [] });
   });
 });

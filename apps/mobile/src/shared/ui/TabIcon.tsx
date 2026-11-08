@@ -1,58 +1,128 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect } from 'react';
-import { type ColorValue, StyleSheet, View } from 'react-native';
+import { BlurView as ExpoBlurView } from 'expo-blur';
+import type { BottomTabBarProps } from 'expo-router/build/layouts/Tabs';
+import { useEffect, useRef, useState } from 'react';
+import { type LayoutChangeEvent, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { withUniwind } from 'uniwind';
 
+import { tabBarBlurs } from '@/shared/helpers/platform';
+
+import { AppText } from './AppText';
 import { elevation, SURFACE_TONE } from './elevation';
 import { type IconName, useThemeColor } from './Icon';
-import { tabPop } from './tabPop';
+import { edgeSprings, liquidSquash, pillEdges, TAB_BAR, tabBarSpace } from './liquidTab';
 
-const SPRING = { damping: 14, stiffness: 220, mass: 0.7, reduceMotion: ReduceMotion.System } as const;
+const BlurView = withUniwind(ExpoBlurView);
 
 /**
- * Tab bar icon. The selected tab pops: it rises and grows on a spring (UI thread, Reanimated;
- * with Reduce Motion it jumps), sits in a primary circle with the glow and shows the filled
- * icon; the others stay flat and muted. The label (navigator) also turns primary, so the
- * selection never rests on colour alone.
+ * Tab glyph: filled and on-primary on the liquid pill when selected, outlined and muted
+ * otherwise. It reads its own theme tokens, so the navigator's tint colour is not used.
  */
-export function TabIcon({ name, color, focused }: { name: IconName; color: ColorValue; focused: boolean }) {
-  const onPrimary = useThemeColor('on-primary');
-  const progress = useSharedValue(focused ? 1 : 0);
-  useEffect(() => {
-    progress.set(withSpring(focused ? 1 : 0, SPRING));
-  }, [focused, progress]);
-
-  const popStyle = useAnimatedStyle(() => {
-    const pop = tabPop(progress.get());
-    return { transform: [{ translateY: pop.translateY }, { scale: pop.scale }] };
-  });
-  const circleStyle = useAnimatedStyle(() => ({ opacity: progress.get() }));
-
+export function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  const color = useThemeColor(focused ? 'on-primary' : 'text-muted');
   const outline = `${String(name)}-outline` as IconName;
-  const iconColor = focused ? onPrimary : typeof color === 'string' ? color : undefined;
+  return <Ionicons name={focused ? name : outline} size={22} color={color} />;
+}
+
+/**
+ * The liquid pill behind the selected icon. Its edges are two shared values: on a change the
+ * edge facing the new tab springs fast and the other follows softly, so the pill stretches
+ * toward the target and contracts on arrival, thinning while stretched (UI thread; Reduce
+ * Motion makes it jump).
+ */
+function LiquidPill({ index, count, width }: { index: number; count: number; width: number }) {
+  const start = pillEdges({ index, count, width });
+  const left = useSharedValue(start.left);
+  const right = useSharedValue(start.right);
+  const previous = useRef({ index, width });
+
+  useEffect(() => {
+    const target = pillEdges({ index, count, width });
+    const from = previous.current;
+    previous.current = { index, width };
+    if (from.width !== width) {
+      left.set(target.left);
+      right.set(target.right);
+      return;
+    }
+    const springs = edgeSprings({ from: from.index, to: index });
+    left.set(withSpring(target.left, { ...springs.left, reduceMotion: ReduceMotion.System }));
+    right.set(withSpring(target.right, { ...springs.right, reduceMotion: ReduceMotion.System }));
+  }, [index, count, width, left, right]);
+
+  const rest = Math.min(TAB_BAR.pillWidth, count > 0 ? width / count : 0);
+  const style = useAnimatedStyle(() => {
+    const pillWidth = Math.max(0, right.get() - left.get());
+    return { left: left.get(), width: pillWidth, transform: [{ scaleY: liquidSquash({ width: pillWidth, rest }) }] };
+  });
   return (
-    // Reanimated views take `style` only; the token classes live on the plain views inside.
-    <Animated.View style={[styles.slot, popStyle]}>
-      <Animated.View style={[styles.circle, circleStyle]}>
-        <View className={`h-11 w-11 rounded-full bg-primary ${elevation('glow')}`} />
-      </Animated.View>
-      <Ionicons name={focused ? name : outline} size={26} color={iconColor} />
+    <Animated.View style={[styles.pill, style]} pointerEvents="none">
+      <View className={`h-full w-full rounded-full bg-primary ${elevation('glow')}`} />
     </Animated.View>
   );
 }
 
-// The slot keeps the navigator's icon height (36) so the label stays in place; the 44 dp circle
-// overflows it evenly above and below.
-const styles = StyleSheet.create({
-  slot: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
-  circle: { position: 'absolute', top: -4, left: 0, width: 44, height: 44 },
-});
+/**
+ * The floating tab bar: a blurred capsule inset from the screen edges, a few dp above the home
+ * indicator, with the liquid pill inside. Icons and small labels; the selected tab is also
+ * announced (`selected`), never only coloured (M7). Tab screens reserve `tabBarSpace` below.
+ */
+export function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const [width, setWidth] = useState(0);
+  const blur = tabBarBlurs(Platform.OS);
+  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
-/** Floating tab bar surface: rounded top corners over the page colour, lifted by a shadow. */
-export function TabBarBackground() {
   return (
-    <View className="absolute inset-0 bg-bg-page">
-      <View className={`absolute inset-0 rounded-t-sheet border-x border-t border-border-subtle ${SURFACE_TONE.bar} ${elevation('bar')}`} />
+    <View pointerEvents="box-none" style={[styles.host, { bottom: insets.bottom + TAB_BAR.gap, left: insets.left + TAB_BAR.side, right: insets.right + TAB_BAR.side }]}>
+      <View className={`rounded-full ${elevation('bar')}`}>
+        <View className="overflow-hidden rounded-full border border-border-subtle">
+          {blur ? <BlurView intensity={40} tint="systemChromeMaterial" className="absolute inset-0" /> : null}
+          <View className={`absolute inset-0 ${SURFACE_TONE.bar} ${blur ? 'opacity-80' : ''}`} />
+          <View role="tablist" className="flex-row" style={styles.row} onLayout={onLayout}>
+            {width > 0 ? <LiquidPill index={state.index} count={state.routes.length} width={width} /> : null}
+            {state.routes.map((route, index) => {
+              const focused = index === state.index;
+              const options = descriptors[route.key]?.options;
+              const label = options?.title ?? route.name;
+              const onPress = () => {
+                const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) navigateToTab(route.key);
+              };
+              return (
+                <Pressable
+                  key={route.key}
+                  onPress={onPress}
+                  onLongPress={() => emitter.emit({ type: 'tabLongPress', target: route.key })}
+                  accessibilityRole="tab"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected: focused }}
+                  className="flex-1 items-center justify-center gap-0.5"
+                >
+                  <View style={styles.iconSlot}>{options?.tabBarIcon?.({ focused, color: '', size: 22 })}</View>
+                  <AppText variant="caption" tone={focused ? 'brand' : 'muted'} numberOfLines={1} className="font-sans-semibold text-[10px]">
+                    {label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
     </View>
   );
+}
+
+const styles = StyleSheet.create({
+  host: { position: 'absolute' },
+  row: { height: TAB_BAR.height, paddingTop: 6, paddingBottom: 6 },
+  iconSlot: { height: TAB_BAR.pillHeight, alignItems: 'center', justifyContent: 'center' },
+  pill: { position: 'absolute', top: 6, height: TAB_BAR.pillHeight },
+});
+
+/** Bottom padding of a tab screen's scroll or list so its last row clears the floating bar. */
+export function useTabBarSpace(): number {
+  return tabBarSpace(useSafeAreaInsets().bottom);
 }

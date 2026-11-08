@@ -19,14 +19,14 @@ function allMovements(state: MockState, orgId: string): Movement[] {
     .map((item) => ({
       id: `mv_${item.id}`, type: 'payin', direction: 'in', status: 'completed', currency: item.currency, amount: item.net, fee: item.fee,
       accountId: item.accountId, accountName: item.accountName, counterparty: item.originName, counterpartyDoc: item.originCuit,
-      concept: null, refId: item.id, createdAt: item.createdAt,
+      concept: null, refId: item.id, rail: item.rail, createdAt: item.createdAt,
     }));
   const payouts: Movement[] = state.payouts
     .filter((item) => item.orgId === orgId)
     .map((item) => ({
       id: `mv_${item.id}`, type: 'payout', direction: 'out', status: PAYOUT_TO_MOVEMENT[item.status], currency: item.currency,
       amount: item.total, fee: item.fee, accountId: item.accountId, accountName: item.accountName,
-      counterparty: item.destination.holderName, counterpartyDoc: item.destination.holderCuit, concept: item.concept, refId: item.id, createdAt: item.createdAt,
+      counterparty: item.destination.holderName, counterpartyDoc: item.destination.holderCuit, concept: item.concept, refId: item.id, rail: item.rail, createdAt: item.createdAt,
     }));
   const transfers: Movement[] = state.transfers
     .filter((item) => item.orgId === orgId)
@@ -34,12 +34,12 @@ function allMovements(state: MockState, orgId: string): Movement[] {
       {
         id: `mv_${item.id}_out`, type: 'internal_transfer' as const, direction: 'out' as const, status: 'completed' as const, currency: item.currency, amount: item.amount, fee: null,
         accountId: item.fromAccountId, accountName: accountName(item.fromAccountId), counterparty: accountName(item.toAccountId), counterpartyDoc: null,
-        concept: item.concept, refId: item.id, createdAt: item.createdAt,
+        concept: item.concept, refId: item.id, rail: 'internal' as const, createdAt: item.createdAt,
       },
       {
         id: `mv_${item.id}_in`, type: 'internal_transfer' as const, direction: 'in' as const, status: 'completed' as const, currency: item.currency, amount: item.amount, fee: null,
         accountId: item.toAccountId, accountName: accountName(item.toAccountId), counterparty: accountName(item.fromAccountId), counterpartyDoc: null,
-        concept: item.concept, refId: item.id, createdAt: item.createdAt,
+        concept: item.concept, refId: item.id, rail: 'internal' as const, createdAt: item.createdAt,
       },
     ]);
   return [...payins, ...payouts, ...transfers];

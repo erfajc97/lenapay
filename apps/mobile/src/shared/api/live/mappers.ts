@@ -4,11 +4,15 @@ import type {
   Account,
   Balance,
   ErpLink,
+  Installment,
+  InstallmentList,
   InternalTransfer,
   LiveEvent,
   Me,
   Member,
   Movement,
+  MyPaymentCompany,
+  MyPaymentPayin,
   Payer,
   Payin,
   Payout,
@@ -43,6 +47,7 @@ export function toAccount(dto: Schemas['Account']): Account {
     erpProjectRef: dto.erpProjectRef,
     balances: dto.balances.map(toBalance),
     payersCount: null,
+    cvus: dto.cvus,
     createdAt: dto.createdAt,
   };
 }
@@ -84,7 +89,7 @@ export function toPayin(dto: Schemas['Payin'], directory: OrgDirectory): Payin {
 }
 
 export function toQuote(dto: Schemas['PayoutQuote']): PayoutQuote {
-  return { currency: dto.amount.currency, amount: dto.amount.minor, fee: dto.fee.minor, total: dto.total.minor, availableAfter: dto.availableAfter.minor };
+  return { currency: dto.amount.currency, amount: dto.amount.minor, fee: dto.fee.minor, total: dto.total.minor, availableAfter: dto.availableAfter.minor, rail: dto.rail };
 }
 
 function person(userId: string, directory: OrgDirectory) {
@@ -103,6 +108,7 @@ export function toPayout(dto: Schemas['Payout'], directory: OrgDirectory): Payou
     destination: dto.destination,
     concept: dto.concept,
     status: dto.status,
+    rail: dto.rail,
     createdBy: person(dto.createdBy, directory),
     approvedBy: dto.approvedBy ? person(dto.approvedBy, directory) : null,
     rejectReason: dto.rejectReason,
@@ -141,8 +147,34 @@ export function toMovement(dto: Schemas['Movement'], directory: OrgDirectory): M
     counterpartyDoc: dto.counterparty.cuit,
     concept: dto.concept,
     refId: dto.refId,
+    rail: dto.rail,
     createdAt: dto.createdAt,
   };
+}
+
+export function toMyPaymentCompany(dto: Schemas['MyPaymentCompany']): MyPaymentCompany {
+  return {
+    linkId: dto.linkId,
+    companyName: dto.companyName,
+    projectName: dto.projectName,
+    cvus: dto.cvus,
+    totalPaid: dto.totalPaid.map((total) => ({ currency: total.currency, amount: total.minor })),
+    lastPaymentAt: dto.lastPaymentAt,
+    erpLinked: dto.erpLinked,
+    hidden: dto.hidden,
+  };
+}
+
+export function toMyPaymentPayin(dto: Schemas['MyPaymentPayin']): MyPaymentPayin {
+  return { id: dto.id, cvu: dto.cvu, currency: dto.amount.currency, amount: dto.amount.minor, status: dto.status, createdAt: dto.createdAt, creditedAt: dto.creditedAt };
+}
+
+function toInstallment(dto: Schemas['MyPaymentInstallment']): Installment {
+  return { number: dto.number, dueDate: dto.dueDate, currency: dto.amount.currency, amount: dto.amount.minor, status: dto.status, adjustmentIndex: dto.adjustmentIndex };
+}
+
+export function toInstallmentList(dto: Schemas['MyPaymentInstallments']): InstallmentList {
+  return { erpLinked: dto.erpLinked, items: dto.items.map(toInstallment) };
 }
 
 export function toReconciliationRun(dto: Schemas['ReconciliationRun']): ReconciliationRun {

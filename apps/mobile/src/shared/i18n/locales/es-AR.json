@@ -44,7 +44,17 @@
       "cancelled": "Cancelado"
     },
     "movement": { "pending": "Pendiente", "completed": "Acreditado", "failed": "Falló", "cancelled": "Cancelado" },
-    "kyc": { "draft": "Verificación pendiente", "submitted": "En revisión", "approved": "Verificada", "rejected": "Rechazada" }
+    "kyc": { "draft": "Verificación pendiente", "submitted": "En revisión", "approved": "Verificada", "rejected": "Rechazada" },
+    "installment": {
+      "pending": "Pendiente",
+      "paid": "Pagada",
+      "overdue": "Vencida"
+    },
+    "payin": {
+      "received": "Recibido",
+      "credited": "Acreditado",
+      "failed": "Falló"
+    }
   },
   "fields": {
     "accountName": "Nombre de la cuenta",
@@ -109,7 +119,8 @@
     "province": "Ingresá la provincia.",
     "postalCode": "Ingresá el código postal.",
     "birthDate": "Ingresá la fecha como DD/MM/AAAA.",
-    "position": "Ingresá el cargo."
+    "position": "Ingresá el cargo.",
+    "payConcept": "Usá hasta {{max}} caracteres en el concepto."
   },
   "errors": {
     "generic": "Algo no salió bien. Probá de nuevo en un momento.",
@@ -178,7 +189,9 @@
     "erp_link_not_found": "La empresa todavía no está vinculada con Lebane.",
     "erp_link_no_candidate": "No encontramos tu empresa en Lebane.",
     "erp_link_credentials_invalid": "Usuario o contraseña de Lebane incorrectos.",
-    "erp_link_already_linked": "La empresa ya está vinculada con Lebane."
+    "erp_link_already_linked": "La empresa ya está vinculada con Lebane.",
+    "payer_link_not_found": "No encontramos esa empresa en tus pagos.",
+    "installment_not_found": "Esa cuota no existe en tu plan de pagos."
   },
   "demo": {
     "title": "Modo demo",
@@ -273,6 +286,34 @@
       "draft": { "title": "Completá la verificación", "body": "Necesitamos los datos de la empresa para habilitar cobros y pagos.", "action": "Completar ahora" },
       "submitted": { "title": "Estamos revisando tus datos", "body": "Te avisamos apenas esté aprobada.", "action": "Ver estado" },
       "rejected": { "title": "La verificación fue rechazada", "body": "Revisá el motivo y volvé a enviarla.", "action": "Ver motivo" }
+    },
+    "myCvu": {
+      "title": "Mi CVU",
+      "noAlias": "Sin alias",
+      "qrTitle": "Cobrá con tu CVU",
+      "qrA11y": "Código QR de tu CVU en {{currency}}",
+      "shareMessage": "Mi CVU en {{currency}} en Lenapay: {{cvu}} (alias {{alias}})"
+    },
+    "myPayments": {
+      "title": "Mis pagos",
+      "body": "Tus cuotas y pagos a empresas"
+    },
+    "kycPersonal": {
+      "draft": {
+        "title": "Verificá tu identidad",
+        "body": "Con tu DNI y una selfie habilitamos tu CVU y Mis pagos.",
+        "action": "Verificar ahora"
+      },
+      "submitted": {
+        "title": "Estamos revisando tu identidad",
+        "body": "Te avisamos apenas esté aprobada.",
+        "action": "Ver estado"
+      },
+      "rejected": {
+        "title": "No pudimos verificar tu identidad",
+        "body": "Revisá el motivo y volvé a enviarla.",
+        "action": "Ver motivo"
+      }
     }
   },
   "notFound": { "title": "No encontramos esta pantalla", "body": "Puede que el enlace esté vencido.", "action": "Ir al inicio" },
@@ -646,7 +687,8 @@
     "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" },
     "language": "Idioma",
     "languageBody": "Sistema sigue el idioma de tu teléfono. Los montos siguen en pesos o dólares.",
-    "languages": { "system": "Sistema", "esAR": "Español (Argentina)", "enUS": "English (US)" }
+    "languages": { "system": "Sistema", "esAR": "Español (Argentina)", "enUS": "English (US)" },
+    "personal": "Personal"
   },
   "developer": {
     "title": "Desarrollador",
@@ -668,5 +710,89 @@
     "applied": "Listo. Ingresá de nuevo contra la API elegida.",
     "reset": "Volver al valor del build",
     "signOutNote": "Al aplicar se cierra la sesión: los datos y el acceso son de cada API."
+  },
+  "rail": {
+    "label": "Vía",
+    "bank": "Banco",
+    "internal": "Lenapay instantánea",
+    "internalLong": "Transferencia instantánea entre cuentas Lenapay · sin costo"
+  },
+  "myPayments": {
+    "title": "Mis pagos",
+    "intro": "Las empresas que te registraron como pagador, con tus CVU para pagarles y lo que ya pagaste.",
+    "showHidden": "Mostrar empresas ocultas",
+    "emptyTitle": "Todavía no hay empresas",
+    "emptyBody": "Cuando una empresa te registre con tu DNI o CUIT, la vas a ver acá.",
+    "notVerifiedTitle": "Verificá tu identidad para ver Mis pagos",
+    "notVerifiedBody": "Usamos tu DNI verificado para encontrar las empresas a las que les pagás.",
+    "verify": "Verificar mi identidad",
+    "openCompany": "Abrir {{name}}",
+    "mainAccount": "Cuenta principal",
+    "erpBadge": "Lebane ERP",
+    "hiddenBadge": "Oculta",
+    "totalPaid": "Total pagado",
+    "nothingPaid": "Sin pagos todavía",
+    "lastPayment": "Último pago",
+    "never": "Nunca",
+    "myCvus_one": "Tu CVU en esta empresa",
+    "myCvus_other": "Tus {{count}} CVU en esta empresa",
+    "hide": "Ocultar",
+    "show": "Mostrar",
+    "hiddenDone": "Ocultamos {{name}}",
+    "shownDone": "{{name}} vuelve a tu lista",
+    "shareMessage": "Mi CVU en {{currency}} para pagar a {{company}}: {{cvu}} (alias {{alias}})",
+    "pay": "Pagar",
+    "tabs": "Secciones",
+    "tabInstallments": "Cuotas",
+    "tabPayins": "Pagos",
+    "overdueTitle_one": "Tenés {{count}} cuota vencida",
+    "overdueTitle_other": "Tenés {{count}} cuotas vencidas",
+    "overdueBody": "Pagala desde acá: llega al instante a la empresa.",
+    "installment": "Cuota {{number}}",
+    "dueDate": "Vence el {{date}}",
+    "adjusted": "Ajusta por {{index}}",
+    "payInstallment": "Pagar cuota",
+    "noInstallmentsTitle": "No hay cuotas para mostrar",
+    "notErpTitle": "Esta empresa no publica sus cuotas",
+    "notErpBody": "Las cuotas aparecen cuando la empresa vincula Lebane ERP. Igual podés pagarle con tu CVU.",
+    "noPayinsTitle": "Todavía no hay pagos",
+    "noPayinsBody": "Tus transferencias a esta empresa aparecen acá.",
+    "toCvu": "A tu CVU terminado en {{last}}",
+    "payTitle": "Pagar",
+    "payInstallmentTitle": "Pagar cuota {{number}}",
+    "payTo": "Pagás a",
+    "prefilledHint": "Es el monto de la cuota; podés cambiarlo.",
+    "conceptOptional": "Concepto (opcional)",
+    "conceptPlaceholder": "Ej.: Seña cochera",
+    "fromPersonal": "Sale de tu cuenta personal",
+    "noApproval": "Es tu dinero: no necesita aprobación. Te pedimos confirmar con tu huella o contraseña.",
+    "confirmPay": "Confirmar pago",
+    "paidTitle": "Pago enviado",
+    "paidBody": "Le pagaste a {{name}}."
+  },
+  "proposal": {
+    "ribbon": "Próximamente · propuesta",
+    "short": "Propuesta",
+    "disabledHint": "Todavía no se puede editar: es una propuesta.",
+    "maxPerApproval": "Monto máximo por aprobación",
+    "maxPerApprovalHint": "Por encima de este monto, el pago necesita otro aprobador.",
+    "withoutApproval": "Monto sin aprobación",
+    "withoutApprovalHint": "Los pagos hasta este monto salen sin esperar aprobación.",
+    "accountPermissions": {
+      "title": "Permisos por cuenta (Propuesta)",
+      "body": "Así elegirías en qué cuentas puede operar esta persona y sus límites. Todavía no se guarda.",
+      "accountA11y": "Puede operar en {{name}}"
+    },
+    "policies": {
+      "title": "Políticas de aprobación (Propuesta)",
+      "body": "Así configurarías cuántas aprobaciones necesita cada pago según el monto y la cuenta. Todavía no se guarda.",
+      "general": "Regla general",
+      "oneApprover": "Con un aprobador hasta",
+      "oneApproverHint": "Entre el monto sin aprobación y este, alcanza con una persona.",
+      "above": "Por encima:",
+      "twoApprovers": "Dos aprobadores",
+      "perAccount": "Límites por cuenta",
+      "footnote": "Los montos son un ejemplo. Hoy todo pago de empresa necesita una aprobación de otra persona."
+    }
   }
 }

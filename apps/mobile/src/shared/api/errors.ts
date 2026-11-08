@@ -104,6 +104,9 @@ export const ERROR_CODES = [
   'erp_link.no_candidate',
   'erp_link.credentials_invalid',
   'erp_link.already_linked',
+  // Mis pagos
+  'payer_link.not_found',
+  'installment.not_found',
 ] as const;
 
 const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);

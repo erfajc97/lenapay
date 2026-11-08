@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Chip } from '@/shared/ui/Chip';
 import { Icon } from '@/shared/ui/Icon';
+import { RailBadge } from '@/shared/ui/RailBadge';
 import { Field, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
@@ -50,6 +51,7 @@ export function MovementDetail() {
       </Card>
       <Card className="gap-1">
         <Field label={t('movements.date')} value={formatDateTime(movement.createdAt)} />
+        <Field label={t('rail.label')} value={t(`rail.${movement.rail}`)} trailing={<RailBadge rail={movement.rail} />} />
         <Field label={t('movements.account')} value={movement.accountName} />
         <Field label={incoming ? t('movements.from') : t('movements.to')} value={counterparty} />
         {movement.counterpartyDoc ? <Field label={t('fields.cuit')} value={formatCuit(movement.counterpartyDoc)} mono /> : null}

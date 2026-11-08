@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountCvu,
   AuthTokens,
   CreateAccountRequest,
   CreateOrgRequest,
@@ -11,6 +12,7 @@ import type {
   ErpCandidate,
   ErpLink,
   ErpLinkRequest,
+  InstallmentList,
   InternalTransfer,
   InternalTransferRequest,
   Invite,
@@ -27,9 +29,12 @@ import type {
   Member,
   Movement,
   MovementFilters,
+  MyPaymentCompany,
+  MyPaymentPayin,
   Org,
   OrgBalances,
   Page,
+  PayCompanyRequest,
   Payer,
   Payin,
   Payout,
@@ -113,6 +118,8 @@ export interface LenapayApi {
     create(orgId: string, body: CreateAccountRequest): Promise<Account>;
     update(orgId: string, accountId: string, body: UpdateAccountRequest): Promise<Account>;
     transfer(orgId: string, body: InternalTransferRequest, options: MoneyActionOptions): Promise<InternalTransfer>;
+    /** Changes the alias of the account's own CVU (personal wallet, R-CVU-4). */
+    updateCvu(orgId: string, accountId: string, cvuId: string, body: UpdateCvuRequest): Promise<AccountCvu>;
   };
   payers: {
     list(orgId: string, query: PayerQuery): Promise<Payer[]>;
@@ -135,6 +142,14 @@ export interface LenapayApi {
     approvals(orgId: string): Promise<Payout[]>;
     uploadAttachment(orgId: string, payoutId: string, file: LocalUpload): Promise<PayoutAttachment>;
     proof(orgId: string, payoutId: string): Promise<LocalFile>;
+  };
+  /** "Mis pagos" (R-MP-*): the caller's own verified personal org, resolved by the API. */
+  myPayments: {
+    companies(options: { includeHidden: boolean }): Promise<MyPaymentCompany[]>;
+    setHidden(linkId: string, hidden: boolean): Promise<MyPaymentCompany>;
+    payins(linkId: string, cursor: string | null): Promise<Page<MyPaymentPayin>>;
+    installments(linkId: string): Promise<InstallmentList>;
+    pay(linkId: string, body: PayCompanyRequest, options: MoneyActionOptions): Promise<Payout>;
   };
   movements: {
     list(orgId: string, filters: MovementFilters, cursor: string | null): Promise<Page<Movement>>;

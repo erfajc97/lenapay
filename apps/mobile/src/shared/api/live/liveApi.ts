@@ -9,7 +9,7 @@ import { useSessionStore } from '@/shared/stores/useSessionStore';
 import type { LenapayApi, MoneyActionOptions } from '../client';
 import { endpoints } from '../endpoints';
 import { ApiError } from '../errors';
-import type { AuthTokens, Currency, LocalUpload, MovementFilters } from '../types';
+import type { AuthTokens, Currency, LocalUpload, MovementFilters, PayCompanyRequest } from '../types';
 import { createHttp, type Http } from './http';
 import {
   type OrgDirectory,
@@ -17,10 +17,13 @@ import {
   toAccount,
   toBalance,
   toErpLink,
+  toInstallmentList,
   toInternalTransfer,
   toMe,
   toMember,
   toMovement,
+  toMyPaymentCompany,
+  toMyPaymentPayin,
   toPayer,
   toPayin,
   toPayout,
@@ -100,6 +103,14 @@ function createDirectory(http: Http) {
 }
 
 const EMPTY_DIRECTORY: OrgDirectory = { accountName: () => '', memberLabel: () => null };
+
+function payCompanyRequest(body: PayCompanyRequest): Schemas['PayMyPaymentCompanyRequest'] {
+  return {
+    amount: money(body.amount, body.currency),
+    ...(body.installmentNumber === undefined ? {} : { installmentNumber: body.installmentNumber }),
+    ...(body.concept === undefined ? {} : { concept: body.concept }),
+  };
+}
 
 /** `live`: the Lenapay API at `baseUrl`, same interface as the mock. */
 export function createLiveApi(options: { baseUrl: string }): LenapayApi {
@@ -237,6 +248,20 @@ export function createLiveApi(options: { baseUrl: string }): LenapayApi {
         };
         return toInternalTransfer(await http<Schemas['InternalTransfer']>('POST', endpoints.accounts.internalTransfers(orgId), { body: request, headers: moneyHeaders(moneyOptions) }));
       },
+      updateCvu: (orgId, accountId, cvuId, body) => http('PATCH', endpoints.accounts.cvu(orgId, accountId, cvuId), { body }),
+    },
+    myPayments: {
+      companies: async ({ includeHidden }) =>
+        (await http<Schemas['MyPaymentCompanyList']>('GET', endpoints.myPayments.companies, { query: { includeHidden: includeHidden ? 'true' : undefined } })).items.map(toMyPaymentCompany),
+      setHidden: async (linkId, hidden) => toMyPaymentCompany(await http<Schemas['MyPaymentCompany']>('PATCH', endpoints.myPayments.company(linkId), { body: { hidden } })),
+      payins: async (linkId, cursor) => {
+        const page = await http<Schemas['MyPaymentPayinList']>('GET', endpoints.myPayments.payins(linkId), { query: { cursor } });
+        return { items: page.items.map(toMyPaymentPayin), nextCursor: page.nextCursor };
+      },
+      installments: async (linkId) => toInstallmentList(await http<Schemas['MyPaymentInstallments']>('GET', endpoints.myPayments.installments(linkId))),
+      // The payout lives on the person's personal org: its one account needs no name to show.
+      pay: async (linkId, body, moneyOptions) =>
+        toPayout(await http<Schemas['Payout']>('POST', endpoints.myPayments.pay(linkId), { body: payCompanyRequest(body), headers: moneyHeaders(moneyOptions) }), EMPTY_DIRECTORY),
     },
     payers: {
       list: (orgId, query) =>

@@ -6,6 +6,7 @@ import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { groupedRowClass, LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { MovementRow } from '@/shared/ui/MovementRow';
 import { Screen } from '@/shared/ui/Screen';
+import { useTabBarSpace } from '@/shared/ui/TabIcon';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 
 import { FilterSheet } from './components/FilterSheet';
@@ -15,6 +16,7 @@ import { useMovementsScreen } from './hooks/useMovementsScreen';
 /** All movements of the org, cursor-paginated (R-MOV-1, R-NF-1). */
 export function Movements() {
   const { t } = useTranslation();
+  const tabSpace = useTabBarSpace();
   const screen = useMovementsScreen();
   const pull = usePullToRefresh(screen.movements.refetch);
   return (
@@ -35,7 +37,7 @@ export function Movements() {
               <MovementRow movement={item} onPress={screen.openMovement} />
             </View>
           )}
-          contentContainerStyle={LIST_CONTENT_STYLE}
+          contentContainerStyle={{ ...LIST_CONTENT_STYLE, paddingBottom: tabSpace }}
           onEndReached={screen.loadMore}
           onEndReachedThreshold={0.4}
           onRefresh={pull.onRefresh}

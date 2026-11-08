@@ -6,6 +6,7 @@ import type { MoneyActionOptions, PayerQuery } from '../client';
 import { ApiError } from '../errors';
 import type {
   Account,
+  AccountCvu,
   AuthTokens,
   Balance,
   CreateAccountRequest,
@@ -19,6 +20,7 @@ import type {
   ErpCandidate,
   ErpLink,
   ErpLinkRequest,
+  InstallmentList,
   InternalTransfer,
   InternalTransferRequest,
   Invite,
@@ -34,9 +36,12 @@ import type {
   Member,
   Movement,
   MovementFilters,
+  MyPaymentCompany,
+  MyPaymentPayin,
   Org,
   OrgBalances,
   Page,
+  PayCompanyRequest,
   Payer,
   Payin,
   Payout,
@@ -44,6 +49,7 @@ import type {
   PayoutQuote,
   PayoutQuoteRequest,
   PayoutStatus,
+  Rail,
   ReconciliationItem,
   ReconciliationRun,
   RegisterDeviceRequest,
@@ -59,10 +65,11 @@ import type {
   VerifyEmailRequest,
 } from '../types';
 import { CURRENCIES } from '../types';
-import { buildMockCvu, buildPayin, buildReconRun, createSeed, DEMO_USER_ID, DIRECTORY } from './fixtures';
+import { buildAccountCvu, buildMockCvu, buildPayin, buildReconRun, createSeed, DEMO_USER_ID, DIRECTORY } from './fixtures';
 import { payoutFee } from './feePlan';
 import { buildMovements } from './movements';
-import type { MockAccount, MockPayer, MockPayout, MockState } from './state';
+import { companyView, linkMatchingPayers, payinsOf } from './myPayments';
+import type { MockAccount, MockPayer, MockPayerLink, MockPayout, MockState } from './state';
 
 /** The mock "server": business rules mirror the API so the UI meets the same error codes as live. */
 export const MOCK_EMAIL_CODE = '123456';
@@ -71,6 +78,10 @@ const KYC_DECISION_MS = 8_000;
 const ERP_IMPORT_MS = 6_000;
 const PAGE_SIZE = 20;
 const PSP_PREFIX = '0031';
+/** Bank name the API reports for a Lenapay CVU or alias (on-us destination). */
+const LENAPAY_BANK = 'Lenapay';
+/** The API's cap on what the person types as the concept of a "Mis pagos" payment. */
+const MAX_PAY_CONCEPT = 120;
 /** Contract cap on payout attachments (`payout.attachment_invalid` past it). */
 const MAX_ATTACHMENTS = 10;
 const ATTACHMENT_TYPES: readonly PayoutAttachment['contentType'][] = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -129,8 +140,16 @@ export class MockBackend {
     if (!pending || pending.email !== body.email.trim().toLowerCase() || body.code !== MOCK_EMAIL_CODE) {
       throw new ApiError('auth.code_invalid', 422);
     }
-    this.state.users.push({ id: this.nextId('u'), email: pending.email, fullName: null, mfaEnabled: false, personalModeEnabled: false });
+    const userId = this.nextId('u');
+    this.state.users.push({ id: userId, email: pending.email, fullName: null, mfaEnabled: false });
     this.state.pendingSignup = null;
+    this.openPersonalWallet(userId, pending.email);
+  }
+
+  /** Signup opens the person's wallet (R-ACC-5): personal org in KYC draft + its personal account. */
+  private openPersonalWallet(userId: string, email: string): void {
+    const id = this.insertOrg(userId, { kind: 'personal', legalName: email });
+    this.state.accounts.push({ id: this.nextId('acc'), orgId: id, kind: 'personal', name: 'Mi cuenta', archived: false, createdAt: this.iso(), ledger: emptyLedger(), cvus: [] });
   }
 
   login(body: LoginRequest): AuthTokens {
@@ -181,7 +200,9 @@ export class MockBackend {
         const org = this.state.orgs.find((candidate) => candidate.id === item.orgId);
         return org ? [{ orgId: org.id, orgName: org.legalName, orgKind: org.kind, role: item.role, kycStatus: org.kycStatus }] : [];
       });
-    return { id: user.id, email: user.email, fullName: user.fullName, mfaEnabled: user.mfaEnabled, personalModeEnabled: user.personalModeEnabled, memberships };
+    // Like the live mapper: personal mode follows owning a personal wallet.
+    const personalModeEnabled = memberships.some((item) => item.orgKind === 'personal');
+    return { id: user.id, email: user.email, fullName: user.fullName, mfaEnabled: user.mfaEnabled, personalModeEnabled, memberships };
   }
 
   private requireUserId(): string {
@@ -232,6 +253,13 @@ export class MockBackend {
 
   createOrg(body: CreateOrgRequest): Org {
     const userId = this.requireUserId();
+    // Signup already opened the personal wallet: a second one is a conflict, like the API.
+    const hasPersonal = this.state.memberships.some((item) => item.userId === userId && this.state.orgs.find((org) => org.id === item.orgId)?.kind === 'personal');
+    if (body.kind === 'personal' && hasPersonal) throw new ApiError('resource.conflict', 409);
+    return this.orgFor(this.insertOrg(userId, body));
+  }
+
+  private insertOrg(userId: string, body: CreateOrgRequest): string {
     const id = this.nextId('org');
     this.state.orgs.push({ id, kind: body.kind, legalName: body.legalName.trim(), cuit: null, kycStatus: 'draft', createdAt: this.iso() });
     this.state.memberships.push({ orgId: id, userId, role: 'admin' });
@@ -240,7 +268,7 @@ export class MockBackend {
       documents: [], decisionReason: null, submittedAt: null, decidedAt: null, updatedAt: this.iso(),
     };
     this.state.erp[id] = { candidate: { found: false, erpOrgId: null, displayName: null }, projects: [], payers: [], linkStartedAt: null, linkedAt: null };
-    return this.orgFor(id);
+    return id;
   }
 
   members(orgId: string): Member[] {
@@ -367,8 +395,19 @@ export class MockBackend {
     if (status === 'approved' && org && current.company) org.cuit = current.company.cuit;
     if (status === 'approved' && !this.state.accounts.some((item) => item.orgId === orgId)) {
       const kind = current.kind === 'company' ? 'main' : 'personal';
-      this.state.accounts.push({ id: this.nextId('acc'), orgId, kind, name: kind === 'main' ? 'Cuenta principal' : 'Mi cuenta', archived: false, createdAt: this.iso(), ledger: emptyLedger() });
+      this.state.accounts.push({ id: this.nextId('acc'), orgId, kind, name: kind === 'main' ? 'Cuenta principal' : 'Mi cuenta', archived: false, createdAt: this.iso(), ledger: emptyLedger(), cvus: [] });
     }
+    if (status === 'approved' && current.person) this.approvePerson(orgId, current.person.dni, current.person.fullName);
+  }
+
+  /** Person approved (R-MP-1, R-CVU-4): the DNI is now verified and the wallet gets its ARS + USD CVUs. */
+  private approvePerson(orgId: string, dni: string, fullName: string): void {
+    this.state.verifiedDni[orgId] = dni;
+    const personal = this.state.accounts.find((item) => item.orgId === orgId && item.kind === 'personal');
+    if (!personal || personal.cvus.length > 0) return;
+    personal.cvus = CURRENCIES.map((currency) =>
+      buildAccountCvu({ id: this.nextId('acvu'), currency, cvu: buildCvu(PSP_PREFIX, String(4_000_000_000_000 + this.state.seq)), alias: this.uniqueAlias(fullName, currency) }),
+    );
   }
 
   // ── Accounts ───────────────────────────────────────────────────────────────────────────
@@ -387,6 +426,7 @@ export class MockBackend {
       erpProjectRef: null,
       balances: CURRENCIES.map((currency) => toBalance(currency, account.ledger[currency])),
       payersCount: this.state.payers.filter((item) => item.accountId === account.id).length,
+      cvus: account.cvus.map((cvu) => ({ ...cvu })),
       createdAt: account.createdAt,
     };
   }
@@ -412,7 +452,7 @@ export class MockBackend {
 
   createAccount(orgId: string, body: CreateAccountRequest): Account {
     this.requireMoneyAction(orgId);
-    const account: MockAccount = { id: this.nextId('acc'), orgId, kind: 'project', name: body.name.trim(), archived: false, createdAt: this.iso(), ledger: emptyLedger() };
+    const account: MockAccount = { id: this.nextId('acc'), orgId, kind: 'project', name: body.name.trim(), archived: false, createdAt: this.iso(), ledger: emptyLedger(), cvus: [] };
     this.state.accounts.push(account);
     return this.toAccount(account);
   }
@@ -449,6 +489,18 @@ export class MockBackend {
       this.emit(orgId, { type: 'balance.changed', accountId: from.id });
       return { id: transfer.id, fromAccountId: transfer.fromAccountId, toAccountId: transfer.toAccountId, currency: transfer.currency, amount: transfer.amount, concept: transfer.concept, createdAt: transfer.createdAt };
     });
+  }
+
+  /** Alias of the account's own CVU (R-CVU-4); a payer's or another org's CVU is not found. */
+  updateAccountCvu(orgId: string, accountId: string, cvuId: string, alias: string): AccountCvu {
+    this.orgFor(orgId);
+    const cvu = this.account(orgId, accountId).cvus.find((item) => item.id === cvuId);
+    if (!cvu) throw new ApiError('cvu.not_found', 404);
+    const next = alias.trim().toLowerCase();
+    if (classifyDestination(next) !== 'alias') throw new ApiError('validation.failed', 422);
+    if (next !== cvu.alias && this.aliasTaken(next)) throw new ApiError('cvu.alias_taken', 409);
+    cvu.alias = next;
+    return { ...cvu };
   }
 
   /** Same key + same payload replays the stored answer; same key + other payload is 409 (R-OUT-3). */
@@ -530,7 +582,8 @@ export class MockBackend {
   }
 
   private aliasTaken(alias: string): boolean {
-    return this.state.payers.some((item) => item.cvus.some((cvu) => cvu.alias === alias));
+    const taken = (cvus: { alias: string | null }[]) => cvus.some((cvu) => cvu.alias === alias);
+    return this.state.payers.some((item) => taken(item.cvus)) || this.state.accounts.some((item) => taken(item.cvus));
   }
 
   private cvu(orgId: string, cvuId: string): Cvu {
@@ -570,19 +623,39 @@ export class MockBackend {
     if (kind === 'invalid' || kind === 'incomplete') throw new ApiError('destination.invalid', 422);
     const known = DIRECTORY.find((item) => item.accountNumber === value || item.value === value);
     if (known) return { ...known, type: kind, value };
-    const ownCvu = this.state.payers.flatMap((item) => item.cvus.map((cvu) => ({ cvu, payer: item }))).find((item) => item.cvu.cvu === value || item.cvu.alias === value);
-    if (ownCvu) return { type: kind, value, accountNumber: ownCvu.cvu.cvu, holderName: ownCvu.payer.name, holderCuit: ownCvu.payer.docNumber, bankName: null };
+    const onUs = this.lenapayCvu(value);
+    if (onUs) return { type: kind, value, accountNumber: onUs.cvu, holderName: onUs.holderName, holderCuit: onUs.holderCuit, bankName: LENAPAY_BANK };
     throw new ApiError('destination.not_found', 404);
+  }
+
+  /** A Lenapay CVU or alias (a payer's or a personal wallet's): money to it never reaches the bank (R-MP-5). */
+  private lenapayCvu(value: string): { cvu: string; holderName: string; holderCuit: string; credit: { accountId: string; payerId: string | null; cvuId: string } } | null {
+    const matches = (cvu: { cvu: string; alias: string | null; status: string }) => cvu.status === 'active' && (cvu.cvu === value || cvu.alias === value);
+    for (const payer of this.state.payers) {
+      const cvu = payer.cvus.find(matches);
+      if (cvu) return { cvu: cvu.cvu, holderName: payer.name, holderCuit: payer.docNumber, credit: { accountId: payer.accountId, payerId: payer.id, cvuId: cvu.id } };
+    }
+    for (const account of this.state.accounts) {
+      const cvu = account.cvus.find(matches);
+      const org = this.state.orgs.find((item) => item.id === account.orgId);
+      if (cvu && org) return { cvu: cvu.cvu, holderName: org.legalName, holderCuit: org.cuit ?? '', credit: { accountId: account.id, payerId: null, cvuId: cvu.id } };
+    }
+    return null;
+  }
+
+  private railFor(to: string): Rail {
+    return this.lenapayCvu(to.trim().toLowerCase()) ? 'internal' : 'bank';
   }
 
   quote(orgId: string, body: PayoutQuoteRequest): PayoutQuote {
     this.orgFor(orgId);
     this.resolveDestination(orgId, body.to);
     const account = this.account(orgId, body.accountId);
-    const fee = payoutFee(body.amount, body.currency);
+    const rail = this.railFor(body.to);
+    const fee = payoutFee(body.amount, body.currency, rail);
     const balance = account.ledger[body.currency];
     const total = body.amount + fee;
-    return { currency: body.currency, amount: body.amount, fee, total, availableAfter: balance.posted - balance.held - total };
+    return { currency: body.currency, amount: body.amount, fee, total, availableAfter: balance.posted - balance.held - total, rail };
   }
 
   createPayout(orgId: string, body: CreatePayoutRequest, credentials: MoneyActionOptions): Payout {
@@ -593,7 +666,8 @@ export class MockBackend {
       const destination = this.resolveDestination(orgId, body.to);
       const account = this.account(orgId, body.accountId);
       if (account.archived) throw new ApiError('account.archived', 409);
-      const fee = payoutFee(body.amount, body.currency);
+      const rail = this.railFor(body.to);
+      const fee = payoutFee(body.amount, body.currency, rail);
       const balance = account.ledger[body.currency];
       if (balance.posted - balance.held < body.amount + fee) throw new ApiError('ledger.insufficient_funds', 422);
       balance.held += body.amount + fee;
@@ -601,7 +675,7 @@ export class MockBackend {
       const status: PayoutStatus = org.kind === 'personal' ? 'approved' : 'pending_approval';
       const payout: MockPayout = {
         id: this.nextId('po'), orgId, accountId: account.id, accountName: account.name, currency: body.currency, amount: body.amount, fee, total: body.amount + fee,
-        destination, concept: body.concept.trim(), attachments: [], status, createdBy: this.personRef(user.id), approvedBy: null, rejectReason: null,
+        destination, concept: body.concept.trim(), attachments: [], status, rail, createdBy: this.personRef(user.id), approvedBy: null, rejectReason: null,
         failureCode: null, createdAt: this.iso(), settledAt: null,
         events: [{ status: 'pending_approval', at: this.iso() }, ...(status === 'approved' ? [{ status, at: this.iso() }] : [])],
       };
@@ -684,8 +758,12 @@ export class MockBackend {
     if (account) account.ledger[payout.currency].held -= payout.total;
   }
 
-  /** The PSP dispatch runs off the request (R-OUT-5): sending, then settled. */
+  /** The PSP dispatch runs off the request (R-OUT-5): sending, then settled. On-us settles at once. */
   private dispatch(payout: MockPayout): void {
+    if (payout.rail === 'internal') {
+      this.settleOnUs(payout);
+      return;
+    }
     this.clock.setTimeout(() => this.transition(payout, 'sending'), 1_500);
     this.clock.setTimeout(() => {
       const account = this.state.accounts.find((item) => item.id === payout.accountId);
@@ -696,6 +774,101 @@ export class MockBackend {
       this.transition(payout, 'settled');
       this.emit(payout.orgId, { type: 'balance.changed', accountId: payout.accountId });
     }, 4_000);
+  }
+
+  /** On-us (R-MP-5): ONE entry, payer −total → receiver +amount, and the receiver sees a credited payin. */
+  private settleOnUs(payout: MockPayout): void {
+    const receiver = this.lenapayCvu(payout.destination.accountNumber);
+    const from = this.state.accounts.find((item) => item.id === payout.accountId);
+    const to = receiver ? this.state.accounts.find((item) => item.id === receiver.credit.accountId) : undefined;
+    if (!receiver || !from || !to) {
+      this.releaseHold(payout);
+      payout.failureCode = 'destination_unavailable';
+      this.transition(payout, 'failed');
+      return;
+    }
+    from.ledger[payout.currency].held -= payout.total;
+    from.ledger[payout.currency].posted -= payout.total;
+    to.ledger[payout.currency].posted += payout.amount;
+    this.transition(payout, 'settled');
+    this.emit(payout.orgId, { type: 'balance.changed', accountId: from.id });
+    const origin = this.state.orgs.find((item) => item.id === payout.orgId);
+    const payin = {
+      id: this.nextId('pin'), orgId: to.orgId, accountId: to.id, accountName: to.name, payerId: receiver.credit.payerId, cvuId: receiver.credit.cvuId, currency: payout.currency,
+      amount: payout.amount, fee: 0, net: payout.amount, originName: origin?.legalName ?? null, originCuit: origin?.cuit ?? null, createdAt: this.iso(), rail: 'internal' as const,
+    };
+    this.state.payins.push(payin);
+    const { orgId: receiverOrgId, rail: _rail, ...dto } = payin;
+    this.emit(receiverOrgId, { type: 'payin.credited', payin: dto });
+    this.emit(receiverOrgId, { type: 'balance.changed', accountId: to.id });
+  }
+
+  // ── Mis pagos (payer view) ─────────────────────────────────────────────────────────────
+  /** The caller's own personal org with a verified DNI, else `kyc.not_approved` (403). */
+  private verifiedPersonal(): { orgId: string; dni: string } {
+    const userId = this.requireUserId();
+    for (const membership of this.state.memberships.filter((item) => item.userId === userId)) {
+      const org = this.state.orgs.find((item) => item.id === membership.orgId);
+      const dni = this.state.verifiedDni[membership.orgId];
+      if (org?.kind === 'personal' && org.kycStatus === 'approved' && dni) return { orgId: org.id, dni };
+    }
+    throw new ApiError('kyc.not_approved', 403);
+  }
+
+  /** Another person's link answers exactly like a missing one (T2). */
+  private payerLink(linkId: string): MockPayerLink {
+    const { orgId } = this.verifiedPersonal();
+    const link = this.state.payerLinks.find((item) => item.id === linkId && item.personalOrgId === orgId);
+    if (!link) throw new ApiError('payer_link.not_found', 404);
+    return link;
+  }
+
+  myPaymentCompanies(includeHidden: boolean): MyPaymentCompany[] {
+    const { orgId, dni } = this.verifiedPersonal();
+    linkMatchingPayers(this.state, orgId, dni, () => this.nextId('lnk'));
+    return this.state.payerLinks
+      .filter((item) => item.personalOrgId === orgId && (includeHidden || !item.hidden))
+      .map((item) => companyView(this.state, item))
+      .reverse();
+  }
+
+  setMyPaymentHidden(linkId: string, hidden: boolean): MyPaymentCompany {
+    const link = this.payerLink(linkId);
+    link.hidden = hidden;
+    return companyView(this.state, link);
+  }
+
+  myPaymentPayins(linkId: string, cursor: string | null): Page<MyPaymentPayin> {
+    const all = payinsOf(this.state, this.payerLink(linkId));
+    const offset = cursor ? Number(cursor) : 0;
+    return { items: all.slice(offset, offset + PAGE_SIZE), nextCursor: offset + PAGE_SIZE < all.length ? String(offset + PAGE_SIZE) : null };
+  }
+
+  myPaymentInstallments(linkId: string): InstallmentList {
+    const link = this.payerLink(linkId);
+    const payer = this.state.payers.find((item) => item.id === link.payerId);
+    if (!payer || !this.state.erp[payer.orgId]?.linkedAt) return { erpLinked: false, items: [] };
+    return { erpLinked: true, items: (this.state.installments[payer.id] ?? []).map((item) => ({ ...item })) };
+  }
+
+  /** Pays the company from the personal account to the person's CVU there (R-MP-4); no approval. */
+  payMyPaymentCompany(linkId: string, body: PayCompanyRequest, credentials: MoneyActionOptions): Payout {
+    const link = this.payerLink(linkId);
+    const payer = this.state.payers.find((item) => item.id === link.payerId);
+    const cvu = payer?.cvus.find((item) => item.currency === body.currency && item.status === 'active');
+    if (!payer || !cvu) throw new ApiError('money.currency_mismatch', 422);
+    const typed = body.concept?.trim();
+    if (typed !== undefined && (typed.length < 1 || typed.length > MAX_PAY_CONCEPT)) throw new ApiError('validation.failed', 422);
+    const company = this.state.orgs.find((item) => item.id === payer.orgId)?.legalName ?? '';
+    let concept = typed ?? company;
+    if (body.installmentNumber !== undefined) {
+      const known = (this.state.installments[payer.id] ?? []).some((item) => item.number === body.installmentNumber);
+      if (!known) throw new ApiError('installment.not_found', 404);
+      concept = `Cuota ${body.installmentNumber} - ${concept}`;
+    }
+    const personal = this.state.accounts.find((item) => item.orgId === link.personalOrgId && item.kind === 'personal');
+    if (!personal) throw new ApiError('account.not_found', 404);
+    return this.createPayout(link.personalOrgId, { accountId: personal.id, currency: body.currency, amount: body.amount, to: cvu.cvu, concept }, credentials);
   }
 
   // ── Movements, reconciliation ──────────────────────────────────────────────────────────
@@ -780,7 +953,7 @@ export class MockBackend {
     if (!erp || erp.linkStartedAt === null || erp.linkedAt !== null || this.clock.now() - erp.linkStartedAt < ERP_IMPORT_MS) return;
     for (const project of erp.projects) {
       if (!this.state.accounts.some((item) => item.orgId === orgId && item.name === project)) {
-        this.state.accounts.push({ id: this.nextId('acc'), orgId, kind: 'project', name: project, archived: false, createdAt: this.iso(), ledger: emptyLedger() });
+        this.state.accounts.push({ id: this.nextId('acc'), orgId, kind: 'project', name: project, archived: false, createdAt: this.iso(), ledger: emptyLedger(), cvus: [] });
       }
     }
     for (const imported of erp.payers) {

@@ -26,7 +26,16 @@ function exists(key: string): boolean {
   return typeof resolve(key) === 'string' || (typeof resolve(`${key}_one`) === 'string' && typeof resolve(`${key}_other`) === 'string');
 }
 
-const LITERAL = /(?:\bt|i18n\.t|notifySuccess)\(\s*'([a-zA-Z][\w.]*)'/g;
+const LITERAL = /(?:\bt|i18n\.t|notifySuccess|notifyInfo)\(\s*'([a-zA-Z][\w.]*)'/g;
+/**
+ * Any quoted dotted string whose first segment is a namespace of the catalog: keys kept in
+ * helper maps, constants, `i18nKey` props or hook return values (`kycCopy: 'home.kyc'`) count too.
+ * A key may name a branch when the code appends the rest (`${copy}.draft.title`).
+ */
+const QUOTED_KEY = /['"`]([a-z][a-zA-Z]*(?:\.[a-zA-Z0-9_]+)+)['"`]/g;
+const NAMESPACES = new Set(Object.keys(esAR));
+/** Contract strings that look like keys: realtime event types (`payout.updated`), not copy. */
+const NOT_KEYS = new Set(['payin.credited', 'payout.updated', 'approval.requested', 'balance.changed']);
 const KEY_CONSTANT = /'((?:validation|kyc\.check|errors)\.[a-zA-Z_.]+)'/g;
 
 /** Keys built at runtime: prefix + every value the code can produce. */
@@ -61,6 +70,10 @@ const DYNAMIC: Record<string, readonly string[]> = {
   'developer.mode': ['mock', 'live'],
   'transfer.blocker': ['from', 'to', 'same_account', 'amount', 'insufficient'],
   'home.kyc': ['draft.title', 'draft.body', 'draft.action', 'submitted.title', 'submitted.body', 'submitted.action', 'rejected.title', 'rejected.body', 'rejected.action'],
+  'home.kycPersonal': ['draft.title', 'draft.body', 'draft.action', 'submitted.title', 'submitted.body', 'submitted.action', 'rejected.title', 'rejected.body', 'rejected.action'],
+  'status.installment': ['pending', 'paid', 'overdue'],
+  'status.payin': ['received', 'credited', 'failed'],
+  rail: ['bank', 'internal'],
   'security.push': ['enabled', 'denied', 'unavailable'],
 };
 
@@ -80,6 +93,19 @@ describe('es-AR locale', () => {
   it('has every literal key used in the source', () => {
     const missing = [...literal].filter((key) => key.includes('.') && !exists(key));
     expect(missing).toEqual([]);
+  });
+
+  it('has every quoted key of a catalog namespace, wherever it is written', () => {
+    const missing = new Set<string>();
+    for (const file of files) {
+      // API codes (`payout.not_found`) share namespaces with the copy: their files are skipped.
+      if (file.includes(join('api', 'mock')) || file.endsWith(join('api', 'errors.ts'))) continue;
+      for (const match of readFileSync(file, 'utf8').matchAll(QUOTED_KEY)) {
+        const key = match[1] ?? '';
+        if (NAMESPACES.has(key.split('.')[0] ?? '') && !NOT_KEYS.has(key) && !exists(key) && typeof resolve(key) !== 'object') missing.add(`${key} (${file.slice(SRC.length + 1)})`);
+      }
+    }
+    expect([...missing]).toEqual([]);
   });
 
   it('has every dynamic key family and ternary key', () => {

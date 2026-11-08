@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Switch, View } from 'react-native';
 
 import { config } from '@/shared/config/env';
+import { verifiedPersonalOrgId } from '@/shared/helpers/orgs';
 import { canManageTeam, canSeeReconciliation } from '@/shared/helpers/permissions';
 import { useErpLink } from '@/shared/queries/erp';
 import { useActiveOrg } from '@/shared/queries/orgs';
@@ -43,7 +44,17 @@ export function Settings() {
     { key: 'recon', icon: 'git-compare-outline' as const, title: t('settings.reconciliation'), subtitle: null, href: '/reconciliation' as const, show: canSeeReconciliation(role) },
     { key: 'erp', icon: 'git-merge-outline' as const, title: t('settings.erp'), subtitle: erpLink.data?.status === 'linked' ? t('settings.erpLinked') : null, href: '/erp-link' as const, show: true },
     { key: 'kyc', icon: 'shield-checkmark-outline' as const, title: t('settings.kyc'), subtitle: org ? t(`status.kyc.${org.kycStatus}`) : null, href: '/onboarding/status' as const, show: true },
+    {
+      key: 'policies',
+      icon: 'options-outline' as const,
+      title: t('proposal.policies.title'),
+      subtitle: t('proposal.short'),
+      href: '/settings/approval-policies' as const,
+      show: org?.kind === 'company',
+    },
   ].filter((item) => item.show);
+  // "Mis pagos" belongs to the person, not to the active org: it shows with any org selected.
+  const hasMyPayments = verifiedPersonalOrgId(me.data?.memberships) !== null;
 
   return (
     <Screen title={t('settings.title')} inTabs>
@@ -55,6 +66,15 @@ export function Settings() {
           onPress={() => router.push('/settings/profile')}
         />
       </Card>
+
+      {hasMyPayments ? (
+        <>
+          <SectionTitle title={t('settings.personal')} />
+          <Card className="py-1">
+            <ListRow title={t('myPayments.title')} subtitle={t('home.myPayments.body')} leading={<IconBadge name="business-outline" />} onPress={() => router.push('/my-payments')} />
+          </Card>
+        </>
+      ) : null}
 
       <SectionTitle title={org?.legalName ?? t('settings.organization')} />
       <Card className="py-1">

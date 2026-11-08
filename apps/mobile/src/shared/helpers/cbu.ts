@@ -54,3 +54,13 @@ export function classifyDestination(raw: string): DestinationKind {
 export function groupCbu(value: string): string {
   return value.length === 22 ? `${value.slice(0, 8)} ${value.slice(8)}` : value;
 }
+
+/** Alias rule of the BCRA: 6–20 characters, letters, digits, dots and hyphens. */
+export function aliasError(alias: string): 'validation.alias' | null {
+  return classifyDestination(alias.trim()) === 'alias' ? null : 'validation.alias';
+}
+
+/** What a CVU QR encodes: the CVU itself, readable by any banking app's scanner as text. */
+export function cvuQrPayload(cvu: { cvu: string }): string {
+  return cvu.cvu;
+}

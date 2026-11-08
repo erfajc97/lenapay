@@ -12,6 +12,7 @@ import { Sheet } from '@/shared/ui/Sheet';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 import { TextField } from '@/shared/ui/TextField';
 
+import { AccountPermissionsProposal } from './components/AccountPermissionsProposal';
 import { useTeam } from './hooks/useTeam';
 
 /** Members, roles and invites (R-ORG-2). */
@@ -75,6 +76,7 @@ export function Team() {
           onPress={team.remove}
           loading={team.savingMember}
         />
+        {team.accounts.length > 0 ? <AccountPermissionsProposal accounts={team.accounts} /> : null}
       </Sheet>
 
       <Sheet visible={team.sheetOpen} title={t('team.invite')} onClose={team.closeSheet}>

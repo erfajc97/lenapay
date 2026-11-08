@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { aliasError, cvuQrPayload, docError, formatDoc, missingCurrencies } from '../payerRules';
+import { docError, formatDoc, missingCurrencies } from '../payerRules';
 
 // Why: offering a second CVU in a currency the payer already has gets a 409 from the PSP,
 // and a CVU issued against a wrong CUIT routes a buyer's money to the wrong file (R-CVU-1).
@@ -25,12 +25,6 @@ describe('missingCurrencies', () => {
 });
 
 describe('payer validation', () => {
-  it('validates the alias bounds', () => {
-    expect(aliasError('juan.p')).toBeNull();
-    expect(aliasError('juan.')).toBe('validation.alias');
-    expect(aliasError('juan perez')).toBe('validation.alias');
-  });
-
   it('validates CUIT and DNI by the selected document type', () => {
     expect(docError('cuit', '20-28456789-8')).toBeNull();
     expect(docError('cuit', '20-28456789-7')).toBe('validation.cuit');
@@ -44,9 +38,5 @@ describe('payer validation', () => {
     expect(formatDoc('dni', '28456789')).toBe('28.456.789');
     expect(formatDoc('cuit', '20284567898')).toBe('20-28456789-8');
     expect(formatDoc('cuil', '20284567898')).toBe('20-28456789-8');
-  });
-
-  it('encodes the CVU in the QR', () => {
-    expect(cvuQrPayload(cvu('ARS'))).toBe('0000031000000000000000');
   });
 });

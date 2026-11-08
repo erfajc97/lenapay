@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Org } from '@/shared/api/types';
 
-import { pickActiveOrg, visibleOrgs } from '../orgs';
+import { personalOrg, pickActiveOrg, verifiedPersonalOrgId, visibleOrgs } from '../orgs';
 
 // Why: every money action runs against the active org; falling back to the wrong one after
 // a switch, or showing a personal wallet without the B2C flag, moves money in the wrong place.
@@ -27,5 +27,24 @@ describe('org selection', () => {
     expect(pickActiveOrg(walletFirst, null)?.id).toBe('a');
     expect(pickActiveOrg(walletFirst, 'me')?.id).toBe('me');
     expect(pickActiveOrg([org('me', 'personal')], null)?.id).toBe('me');
+  });
+});
+
+// Why: "Mis pagos" exposes what a person paid; offering it on an unverified wallet (or a
+// company membership) would only meet `kyc.not_approved`, and picking the wrong org pays from it.
+describe('personal wallet', () => {
+  const membership = (orgId: string, orgKind: Org['kind'], kycStatus: Org['kycStatus']) => ({ orgId, orgName: orgId, orgKind, role: 'admin' as const, kycStatus });
+
+  it('opens Mis pagos only for an approved personal wallet', () => {
+    expect(verifiedPersonalOrgId([membership('c', 'company', 'approved'), membership('p', 'personal', 'approved')])).toBe('p');
+    expect(verifiedPersonalOrgId([membership('c', 'company', 'approved'), membership('p', 'personal', 'submitted')])).toBeNull();
+    expect(verifiedPersonalOrgId([membership('c', 'company', 'approved')])).toBeNull();
+    expect(verifiedPersonalOrgId(undefined)).toBeNull();
+  });
+
+  it('finds the personal wallet among the orgs, or none', () => {
+    expect(personalOrg([org('a'), org('me', 'personal')])?.id).toBe('me');
+    expect(personalOrg([org('a')])).toBeNull();
+    expect(personalOrg(undefined)).toBeNull();
   });
 });

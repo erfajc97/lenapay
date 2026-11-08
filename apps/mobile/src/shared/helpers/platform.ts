@@ -19,3 +19,8 @@ export function modalReportsDismiss(os: string): boolean {
 export function pushPlatform(os: string): PushPlatform {
   return os === 'ios' || os === 'android' || os === 'web' ? os : 'unknown';
 }
+
+/** The floating tab bar blurs what scrolls behind it where blur is native (iOS, web); Android gets a solid surface. */
+export function tabBarBlurs(os: string): boolean {
+  return os === 'ios' || os === 'web';
+}

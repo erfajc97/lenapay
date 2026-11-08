@@ -22,6 +22,9 @@ describe('fee plan', () => {
     expect(applyFee(5_000, { fixedMinor: 0, bps: 1 })).toBe(1);
     expect(payoutFee(1_000_000_00, 'ARS')).toBe(150_00 + 1_000_00);
     expect(payoutFee(1_000_00, 'USD')).toBe(1_00);
+    // On-us transfers cost nothing by default (R-MP-5); the bank rail keeps its fee.
+    expect(payoutFee(1_000_000_00, 'ARS', 'internal')).toBe(0);
+    expect(payoutFee(1_000_000_00, 'ARS', 'bank')).toBe(150_00 + 1_000_00);
   });
 });
 
@@ -191,5 +194,120 @@ describe('movements and reconciliation', () => {
     expect(created).toMatchObject({ status: 'completed', day: '2026-11-07', currency: 'ARS' });
     expect(b.reconciliationRuns(ORG).some((item) => item.id === created.id)).toBe(true);
     expect(() => b.reconciliationItems(ORG, 'rec_nope')).toThrow(expect.objectContaining({ code: 'reconciliation.run_not_found' }));
+  });
+});
+
+// Why: "Mis pagos" and on-us payments move a person's own money; the mock must answer with the
+// API's rules (verified DNI only, own links only, installment checked, instant settlement)
+// or the screens are demoed against behaviour production will refuse (R-MP-1..5, R-CVU-4).
+describe('Mis pagos', () => {
+  const PERSONAL = 'org_personal';
+  const personalAvailable = (b: MockBackend, currency: 'ARS' | 'USD') =>
+    b.listAccounts(PERSONAL).find((item) => item.kind === 'personal')?.balances.find((item) => item.currency === currency)?.available ?? NaN;
+
+  it('links the companies whose payer carries the verified DNI (DNI or CUIT middle digits)', () => {
+    const b = backend();
+    const companies = b.myPaymentCompanies(false);
+    expect(companies.map((item) => item.companyName).sort()).toEqual(['Constructora Andina SRL', 'Desarrollos Del Sur SA']);
+    const andina = companies.find((item) => item.companyName === 'Constructora Andina SRL');
+    expect(andina).toMatchObject({ projectName: 'Edificio Belgrano R', erpLinked: true, hidden: false, totalPaid: [{ currency: 'ARS', amount: 1_737_500_00 }] });
+    expect(andina?.cvus.map((cvu) => cvu.currency)).toEqual(['ARS', 'USD']);
+    // Reading again never duplicates the links.
+    expect(b.myPaymentCompanies(false)).toHaveLength(2);
+  });
+
+  it('hides and shows a company; hidden ones only come with includeHidden', () => {
+    const b = backend();
+    const [first] = b.myPaymentCompanies(false);
+    b.setMyPaymentHidden(first?.linkId ?? '', true);
+    expect(b.myPaymentCompanies(false)).toHaveLength(1);
+    expect(b.myPaymentCompanies(true).find((item) => item.linkId === first?.linkId)?.hidden).toBe(true);
+    b.setMyPaymentHidden(first?.linkId ?? '', false);
+    expect(b.myPaymentCompanies(false)).toHaveLength(2);
+  });
+
+  it('answers installments only for an ERP-linked company', () => {
+    const b = backend();
+    const companies = b.myPaymentCompanies(false);
+    const andina = companies.find((item) => item.erpLinked);
+    const dds = companies.find((item) => !item.erpLinked);
+    const plan = b.myPaymentInstallments(andina?.linkId ?? '');
+    expect(plan.erpLinked).toBe(true);
+    expect(plan.items.map((item) => item.status).slice(0, 5)).toEqual(['paid', 'paid', 'paid', 'overdue', 'pending']);
+    expect(b.myPaymentInstallments(dds?.linkId ?? '')).toEqual({ erpLinked: false, items: [] });
+  });
+
+  it('pays an installment from the personal wallet instantly (on-us) and credits the company', () => {
+    const b = backend();
+    const andina = b.myPaymentCompanies(false).find((item) => item.erpLinked);
+    const before = personalAvailable(b, 'ARS');
+    const payout = b.payMyPaymentCompany(andina?.linkId ?? '', { currency: 'ARS', amount: 1_000_00, installmentNumber: 4 }, creds('mp1'));
+    expect(payout).toMatchObject({ status: 'settled', rail: 'internal', concept: 'Cuota 4 - Constructora Andina SRL', amount: 1_000_00, fee: 0 });
+    expect(personalAvailable(b, 'ARS')).toBe(before - 1_000_00);
+    expect(b.myPaymentCompanies(false).find((item) => item.erpLinked)?.totalPaid).toEqual([{ currency: 'ARS', amount: 1_738_500_00 }]);
+    // Same key, same body: the same payout, the money moves once.
+    expect(b.payMyPaymentCompany(andina?.linkId ?? '', { currency: 'ARS', amount: 1_000_00, installmentNumber: 4 }, creds('mp1')).id).toBe(payout.id);
+    expect(personalAvailable(b, 'ARS')).toBe(before - 1_000_00);
+  });
+
+  it('refuses an unknown installment, a currency without CVU and a foreign link', () => {
+    const b = backend();
+    const companies = b.myPaymentCompanies(false);
+    const andina = companies.find((item) => item.erpLinked);
+    const dds = companies.find((item) => !item.erpLinked);
+    expect(() => b.payMyPaymentCompany(andina?.linkId ?? '', { currency: 'ARS', amount: 1_00, installmentNumber: 999 }, creds('mp2'))).toThrow(
+      expect.objectContaining({ code: 'installment.not_found' }),
+    );
+    expect(() => b.payMyPaymentCompany(dds?.linkId ?? '', { currency: 'USD', amount: 1_00 }, creds('mp3'))).toThrow(expect.objectContaining({ code: 'money.currency_mismatch' }));
+    expect(() => b.myPaymentInstallments('lnk_someone_else')).toThrow(expect.objectContaining({ code: 'payer_link.not_found' }));
+  });
+
+  it('is closed to a person without a verified personal wallet', () => {
+    const b = backend();
+    b.login({ email: 'martina@desarrollosdelsur.com.ar', password: 'secreto1' });
+    expect(() => b.myPaymentCompanies(false)).toThrow(expect.objectContaining({ code: 'kyc.not_approved' }));
+  });
+});
+
+describe('personal wallet and on-us rail', () => {
+  it('signup opens a personal wallet in KYC draft and a second one is a conflict', () => {
+    const b = backend();
+    b.signup({ email: 'nueva@persona.com', password: 'secreto1234' });
+    b.verifyEmail({ email: 'nueva@persona.com', code: '123456' });
+    b.login({ email: 'nueva@persona.com', password: 'secreto1234' });
+    const me = b.me();
+    expect(me.personalModeEnabled).toBe(true);
+    expect(me.memberships).toEqual([expect.objectContaining({ orgKind: 'personal', kycStatus: 'draft', orgName: 'nueva@persona.com' })]);
+    const personal = me.memberships[0]?.orgId ?? '';
+    expect(b.listAccounts(personal)).toEqual([expect.objectContaining({ kind: 'personal', cvus: [] })]);
+    expect(() => b.createOrg({ kind: 'personal', legalName: 'Otra' })).toThrow(expect.objectContaining({ code: 'resource.conflict' }));
+  });
+
+  it('edits the alias of the wallet CVU and refuses one already taken', () => {
+    const b = backend();
+    expect(b.updateAccountCvu('org_personal', 'acc_personal', 'acvu_personal_ars', 'Erick.Nuevo').alias).toBe('erick.nuevo');
+    expect(() => b.updateAccountCvu('org_personal', 'acc_personal', 'acvu_personal_usd', 'juan.perez.torre')).toThrow(expect.objectContaining({ code: 'cvu.alias_taken' }));
+    expect(() => b.updateAccountCvu('org_personal', 'acc_personal', 'cvu_pay_juan_0', 'erick.otro')).toThrow(expect.objectContaining({ code: 'cvu.not_found' }));
+  });
+
+  it('quotes a Lenapay alias as internal and a bank alias as bank', () => {
+    const b = backend();
+    expect(b.quote(ORG, { accountId: 'acc_main', currency: 'ARS', amount: 1_000_00, to: 'erick.jimenez.lnp' }).rail).toBe('internal');
+    expect(b.quote(ORG, { accountId: 'acc_main', currency: 'ARS', amount: 1_000_00, to: 'hormigon.plata' }).rail).toBe('bank');
+  });
+
+  it('settles a company on-us payout at approval, crediting the receiver once', () => {
+    pending.length = 0;
+    const b = backend();
+    b.login({ email: 'martina@desarrollosdelsur.com.ar', password: 'secreto1' });
+    const payout = b.createPayout(ORG, { accountId: 'acc_main', currency: 'ARS', amount: 5_000_00, to: 'erick.jimenez.lnp', concept: 'Reintegro' }, creds('ou1'));
+    expect(payout).toMatchObject({ status: 'pending_approval', rail: 'internal' });
+    b.login({ email: 'erick@desarrollosdelsur.com.ar', password: 'secreto1' });
+    const personalBefore = b.listAccounts('org_personal')[0]?.balances.find((item) => item.currency === 'ARS')?.posted ?? NaN;
+    expect(b.approvePayout(ORG, payout.id, creds('ou2')).status).toBe('settled');
+    expect(pending).toHaveLength(0);
+    expect(b.listAccounts('org_personal')[0]?.balances.find((item) => item.currency === 'ARS')?.posted).toBe(personalBefore + 5_000_00);
+    const movement = b.listMovements('org_personal', { type: 'payin' }, null).items[0];
+    expect(movement).toMatchObject({ rail: 'internal', amount: 5_000_00, counterparty: 'Desarrollos Del Sur SA' });
   });
 });

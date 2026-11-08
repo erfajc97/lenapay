@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { cvuQrPayload } from '@/shared/helpers/cbu';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Chip } from '@/shared/ui/Chip';
+import { CvuQr } from '@/shared/ui/CvuQr';
 import { Avatar, Field, Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Sheet } from '@/shared/ui/Sheet';
@@ -12,8 +14,7 @@ import { ErrorState, SkeletonList } from '@/shared/ui/States';
 import { TextField } from '@/shared/ui/TextField';
 
 import { CvuCard } from './components/CvuCard';
-import { CvuQr } from './components/CvuQr';
-import { cvuQrPayload, formatDoc } from './helpers/payerRules';
+import { formatDoc } from './helpers/payerRules';
 import { usePayerDetail } from './hooks/usePayerDetail';
 
 export function PayerDetail() {

@@ -6,6 +6,7 @@ import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { Icon } from '@/shared/ui/Icon';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { Screen } from '@/shared/ui/Screen';
+import { useTabBarSpace } from '@/shared/ui/TabIcon';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 import { TextField } from '@/shared/ui/TextField';
 
@@ -15,6 +16,7 @@ import { usePayersScreen } from './hooks/usePayers';
 /** Payers and their CVUs (R-CVU-1): search by name, document or alias. */
 export function Payers() {
   const { t } = useTranslation();
+  const tabSpace = useTabBarSpace();
   const screen = usePayersScreen();
   const pull = usePullToRefresh(screen.payers.refetch);
   const addButton = screen.canCreate ? (
@@ -48,7 +50,7 @@ export function Payers() {
           data={screen.payers.data ?? []}
           keyExtractor={(payer) => payer.id}
           renderItem={({ item }) => <PayerRow payer={item} onPress={screen.open} />}
-          contentContainerStyle={LIST_CONTENT_STYLE}
+          contentContainerStyle={{ ...LIST_CONTENT_STYLE, paddingBottom: tabSpace }}
           keyboardShouldPersistTaps="handled"
           onRefresh={pull.onRefresh}
           refreshing={pull.refreshing}

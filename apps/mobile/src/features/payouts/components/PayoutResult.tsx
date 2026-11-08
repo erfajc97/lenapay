@@ -4,7 +4,9 @@ import { View } from 'react-native';
 import type { Payout } from '@/shared/api/types';
 import { formatMoney } from '@/shared/money/format';
 import { AppText } from '@/shared/ui/AppText';
+import { isInstantLenapay } from '@/shared/helpers/rail';
 import { Icon } from '@/shared/ui/Icon';
+import { RailBadge } from '@/shared/ui/RailBadge';
 
 import { payoutOutcome } from '../helpers/payoutRules';
 
@@ -27,6 +29,7 @@ export function PayoutResult({ payout }: { payout: Payout }) {
       <AppText tone="secondary" className="text-center">
         {t(`payout.result.${outcome}.body`, { name: payout.destination.holderName })}
       </AppText>
+      {isInstantLenapay(payout) ? <RailBadge rail="internal" long /> : null}
     </View>
   );
 }

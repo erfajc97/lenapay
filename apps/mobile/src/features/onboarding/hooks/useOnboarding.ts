@@ -2,10 +2,12 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import type { OrgKind } from '@/shared/api/types';
-import { useActiveOrg } from '@/shared/queries/orgs';
+import { personalOrg } from '@/shared/helpers/orgs';
+import { useActiveOrg, useOrgs } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
 
+import { onboardingTarget } from '../helpers/onboardingTarget';
 import { useCreateOrg } from '../mutations/useKycMutations';
 
 function legalNameError(name: string): 'validation.legalName' | null {
@@ -17,6 +19,8 @@ export function useOnboarding() {
   const { org } = useActiveOrg();
   const me = useMe();
   const preview = usePreferencesStore((state) => state.personalModePreview);
+  const setActiveOrgId = usePreferencesStore((state) => state.setActiveOrgId);
+  const existingPersonal = personalOrg(useOrgs().data);
   const [kind, setKind] = useState<OrgKind>('company');
   const [legalName, setLegalName] = useState('');
   const [touched, setTouched] = useState(false);
@@ -41,6 +45,12 @@ export function useOnboarding() {
     error: touched ? error : null,
     submit: () => {
       setTouched(true);
+      const target = onboardingTarget({ kind, existingPersonal });
+      if (target.action === 'open') {
+        setActiveOrgId(target.orgId);
+        router.push('/onboarding/person');
+        return;
+      }
       if (!error) create.mutate({ kind: kind === 'company' ? 'company' : 'personal', legalName: legalName.trim() });
     },
     creating: create.isPending,

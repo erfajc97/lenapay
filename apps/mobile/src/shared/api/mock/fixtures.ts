@@ -1,6 +1,6 @@
 import { buildCbu, buildCvu } from '@/shared/helpers/cbu';
 
-import type { Currency, Cvu, Destination, DocType, KycCase, KycDocument, PayoutStatus, ReconciliationItem } from '../types';
+import type { AccountCvu, Currency, Cvu, Destination, DocType, Installment, KycCase, KycDocument, PayoutStatus, Rail, ReconciliationItem } from '../types';
 import { payinFee, payoutFee } from './feePlan';
 import type { MockAccount, MockPayer, MockPayin, MockPayout, MockReconRun, MockState, MockTransfer } from './state';
 
@@ -18,6 +18,8 @@ export const DEMO_USER_ID = 'u_erick';
 const DEMO_ORG_ID = 'org_dds';
 const ANDINA_ORG_ID = 'org_andina';
 const PERSONAL_ORG_ID = 'org_personal';
+/** The DNI Erick's personal KYC verified: he is a payer of both demo companies ("Mis pagos"). */
+const PERSONAL_DNI = '30111222';
 
 const users = {
   erick: { userId: 'u_erick', label: 'Erick Jiménez' },
@@ -53,6 +55,12 @@ export function buildMockCvu(params: { id: string; payerId: string; accountId: s
     share: { link, qrPayload: `${link}?currency=${params.currency}` },
     createdAt: params.createdAt,
   };
+}
+
+/** A personal account's own CVU (R-CVU-4), shaped like the contract's AccountCvu. */
+export function buildAccountCvu(params: { id: string; currency: Currency; cvu: string; alias: string }): AccountCvu {
+  const link = `https://pay.lenapay.test/${params.cvu}`;
+  return { id: params.id, currency: params.currency, cvu: params.cvu, alias: params.alias, status: 'active', share: { link, qrPayload: `${link}?currency=${params.currency}` } };
 }
 
 function at(now: number, daysAgo: number, hour: number, minute = 0): string {
@@ -92,15 +100,25 @@ function payer(params: {
   };
 }
 
+function account(params: Omit<MockAccount, 'cvus'> & { cvus?: AccountCvu[] }): MockAccount {
+  return { ...params, cvus: params.cvus ?? [] };
+}
+
 function seedAccounts(now: number): MockAccount[] {
   return [
-    { id: 'acc_main', orgId: DEMO_ORG_ID, kind: 'main', name: 'Cuenta principal', archived: false, createdAt: at(now, 200, 10), ledger: ledger(48_250_000_00, 85_000_00) },
-    { id: 'acc_torre', orgId: DEMO_ORG_ID, kind: 'project', name: 'Torre Palermo', archived: false, createdAt: at(now, 200, 10), ledger: ledger(125_430_500_00, 312_000_00) },
-    { id: 'acc_nordelta', orgId: DEMO_ORG_ID, kind: 'project', name: 'Barrio Nordelta Lote 12', archived: false, createdAt: at(now, 200, 10), ledger: ledger(36_780_000_00, 54_500_00) },
-    { id: 'acc_caballito', orgId: DEMO_ORG_ID, kind: 'project', name: 'Edificio Caballito', archived: true, createdAt: at(now, 200, 10), ledger: ledger(0, 0) },
-    { id: 'acc_andina_main', orgId: ANDINA_ORG_ID, kind: 'main', name: 'Cuenta principal', archived: false, createdAt: at(now, 200, 10), ledger: ledger(12_400_000_00, 9_800_00) },
-    { id: 'acc_belgrano', orgId: ANDINA_ORG_ID, kind: 'project', name: 'Edificio Belgrano R', archived: false, createdAt: at(now, 200, 10), ledger: ledger(22_150_000_00, 0) },
-    { id: 'acc_personal', orgId: PERSONAL_ORG_ID, kind: 'personal', name: 'Mi cuenta', archived: false, createdAt: at(now, 200, 10), ledger: ledger(0, 0) },
+    account({ id: 'acc_main', orgId: DEMO_ORG_ID, kind: 'main', name: 'Cuenta principal', archived: false, createdAt: at(now, 200, 10), ledger: ledger(48_250_000_00, 85_000_00) }),
+    account({ id: 'acc_torre', orgId: DEMO_ORG_ID, kind: 'project', name: 'Torre Palermo', archived: false, createdAt: at(now, 200, 10), ledger: ledger(125_430_500_00, 312_000_00) }),
+    account({ id: 'acc_nordelta', orgId: DEMO_ORG_ID, kind: 'project', name: 'Barrio Nordelta Lote 12', archived: false, createdAt: at(now, 200, 10), ledger: ledger(36_780_000_00, 54_500_00) }),
+    account({ id: 'acc_caballito', orgId: DEMO_ORG_ID, kind: 'project', name: 'Edificio Caballito', archived: true, createdAt: at(now, 200, 10), ledger: ledger(0, 0) }),
+    account({ id: 'acc_andina_main', orgId: ANDINA_ORG_ID, kind: 'main', name: 'Cuenta principal', archived: false, createdAt: at(now, 200, 10), ledger: ledger(12_400_000_00, 9_800_00) }),
+    account({ id: 'acc_belgrano', orgId: ANDINA_ORG_ID, kind: 'project', name: 'Edificio Belgrano R', archived: false, createdAt: at(now, 200, 10), ledger: ledger(22_150_000_00, 0) }),
+    account({
+      id: 'acc_personal', orgId: PERSONAL_ORG_ID, kind: 'personal', name: 'Mi cuenta', archived: false, createdAt: at(now, 200, 10), ledger: ledger(2_985_000_00, 1_250_00),
+      cvus: [
+        buildAccountCvu({ id: 'acvu_personal_ars', currency: 'ARS', cvu: buildCvu(PSP_PREFIX, '1000000000901'), alias: 'erick.jimenez.lnp' }),
+        buildAccountCvu({ id: 'acvu_personal_usd', currency: 'USD', cvu: buildCvu(PSP_PREFIX, '1000000000902'), alias: 'erick.jimenez.usd' }),
+      ],
+    }),
   ];
 }
 
@@ -117,6 +135,10 @@ function seedPayers(now: number): MockPayer[] {
       cvus: [{ currency: 'ARS', alias: 'carlos.rod.nordelta', account: '1000000000401' }] }),
     payer({ id: 'pay_lucia', orgId: DEMO_ORG_ID, accountId: 'acc_nordelta', name: 'Lucía Fernández', docType: 'cuit', docNumber: '27351112226', email: null, createdAt: created,
       cvus: [{ currency: 'ARS', alias: 'lucia.fer.nordelta', account: '1000000000501' }, { currency: 'USD', alias: 'lucia.fer.ndt.usd', account: '1000000000502' }] }),
+    payer({ id: 'pay_erick_dds', orgId: DEMO_ORG_ID, accountId: 'acc_torre', name: 'Erick Jiménez', docType: 'dni', docNumber: PERSONAL_DNI, email: null, createdAt: created,
+      cvus: [{ currency: 'ARS', alias: 'erick.jim.torre', account: '1000000000701' }] }),
+    payer({ id: 'pay_erick_andina', orgId: ANDINA_ORG_ID, accountId: 'acc_belgrano', name: 'Erick Jiménez', docType: 'cuit', docNumber: `20${PERSONAL_DNI}3`, email: null, createdAt: created,
+      cvus: [{ currency: 'ARS', alias: 'erick.jim.belgrano', account: '1000000000801' }, { currency: 'USD', alias: 'erick.jim.belg.usd', account: '1000000000802' }] }),
     payer({ id: 'pay_roberto', orgId: ANDINA_ORG_ID, accountId: 'acc_belgrano', name: 'Roberto Silva', docType: 'cuit', docNumber: '20389991113', email: 'rsilva@gmail.com', createdAt: created,
       cvus: [{ currency: 'ARS', alias: 'roberto.silva.br', account: '1000000000601' }] }),
   ];
@@ -138,13 +160,16 @@ const PAYIN_PLAN: { payerId: string; currency: Currency; major: number; daysAgo:
   { payerId: 'pay_lucia', currency: 'ARS', major: 640_000, daysAgo: 29, hour: 11 },
   { payerId: 'pay_roberto', currency: 'ARS', major: 2_300_000, daysAgo: 2, hour: 13 },
   { payerId: 'pay_roberto', currency: 'ARS', major: 2_300_000, daysAgo: 32, hour: 13 },
+  { payerId: 'pay_erick_andina', currency: 'ARS', major: 862_500, daysAgo: 58, hour: 10 },
+  { payerId: 'pay_erick_andina', currency: 'ARS', major: 875_000, daysAgo: 27, hour: 11 },
+  { payerId: 'pay_erick_dds', currency: 'ARS', major: 450_000, daysAgo: 9, hour: 17 },
 ];
 
 function originCuitOf(payerRecord: Pick<MockPayer, 'docType' | 'docNumber'>): string {
   return payerRecord.docType === 'dni' ? `20${payerRecord.docNumber}8` : payerRecord.docNumber;
 }
 
-export function buildPayin(params: { id: string; payer: MockPayer; accountName: string; currency: Currency; amount: number; createdAt: string }): MockPayin {
+export function buildPayin(params: { id: string; payer: MockPayer; accountName: string; currency: Currency; amount: number; createdAt: string; rail?: Rail }): MockPayin {
   const cvu = params.payer.cvus.find((item) => item.currency === params.currency) ?? params.payer.cvus[0];
   const fee = payinFee(params.amount, params.currency);
   return {
@@ -161,6 +186,7 @@ export function buildPayin(params: { id: string; payer: MockPayer; accountName: 
     originName: params.payer.name,
     originCuit: originCuitOf(params.payer),
     createdAt: params.createdAt,
+    rail: params.rail ?? 'bank',
   };
 }
 
@@ -230,6 +256,7 @@ function seedPayouts(now: number, accounts: MockAccount[]): MockPayout[] {
       concept: plan.concept,
       attachments: plan.id === 'po_5' ? [invoice(plan.id, users[plan.createdBy].userId, new Date(created).toISOString())] : [],
       status: plan.status,
+      rail: 'bank',
       createdBy: users[plan.createdBy],
       approvedBy: plan.decidedBy && plan.status !== 'rejected' ? users[plan.decidedBy] : null,
       rejectReason: plan.rejectionReason ?? null,
@@ -299,6 +326,40 @@ function kycCase(params: { orgId: string; kind: 'company' | 'person'; status: Ky
     decidedAt: approved ? at(params.now, 39, 16) : null,
     updatedAt: approved ? at(params.now, 39, 16) : at(params.now, 1, 9),
   };
+}
+
+/** Erick's personal KYC, approved with his DNI and the three identity documents. */
+function personalKyc(now: number): KycCase {
+  const document = (index: number, kind: KycDocument['kind'], fileName: string): KycDocument => ({
+    id: `doc_${PERSONAL_ORG_ID}_${index}`, kind, representativeDni: null, fileName, contentType: 'image/jpeg', sizeBytes: 120_000, createdAt: at(now, 59, 10, index),
+  });
+  return {
+    id: `kyc_${PERSONAL_ORG_ID}`,
+    orgId: PERSONAL_ORG_ID,
+    kind: 'person',
+    status: 'approved',
+    person: { fullName: 'Erick Jiménez', dni: PERSONAL_DNI, birthDate: '1990-05-14', address: ADDRESS },
+    documents: [document(1, 'dni_front', 'dni-frente.jpg'), document(2, 'dni_back', 'dni-dorso.jpg'), document(3, 'selfie', 'selfie.jpg')],
+    decisionReason: null,
+    submittedAt: at(now, 59, 10, 15),
+    decidedAt: at(now, 59, 16),
+    updatedAt: at(now, 59, 16),
+  };
+}
+
+/** The 10th of each month: date-only (YYYY-MM-DD), months relative to `now`. */
+function dueDate(now: number, monthOffset: number): string {
+  const date = new Date(now);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + monthOffset, 10)).toISOString().slice(0, 10);
+}
+
+/** 12 CAC-adjusted installments: 3 paid, the 4th overdue, the rest pending (like the ERP fixture). */
+function seedInstallments(now: number): Installment[] {
+  return Array.from({ length: 12 }, (_, index) => {
+    const number = index + 1;
+    const status: Installment['status'] = number <= 3 ? 'paid' : number === 4 ? 'overdue' : 'pending';
+    return { number, dueDate: dueDate(now, number - 5), currency: 'ARS', amount: (850_000_00 + index * 12_500_00), status, adjustmentIndex: 'CAC' };
+  });
 }
 
 function reconItems(prefix: string, payins: MockPayin[], payouts: MockPayout[]): ReconciliationItem[] {
@@ -372,16 +433,16 @@ export function createSeed(now: number): MockState {
     pendingSignup: null,
     devices: [],
     users: [
-      { id: 'u_erick', email: 'erick@desarrollosdelsur.com.ar', fullName: 'Erick Jiménez', mfaEnabled: false, personalModeEnabled: false },
-      { id: 'u_martina', email: 'martina@desarrollosdelsur.com.ar', fullName: 'Martina López', mfaEnabled: true, personalModeEnabled: false },
-      { id: 'u_pablo', email: 'pablo@desarrollosdelsur.com.ar', fullName: 'Pablo Sánchez', mfaEnabled: true, personalModeEnabled: false },
-      { id: 'u_sofia', email: 'sofia@desarrollosdelsur.com.ar', fullName: 'Sofía Díaz', mfaEnabled: false, personalModeEnabled: false },
-      { id: 'u_diego', email: 'diego@constructoraandina.com.ar', fullName: 'Diego Ferrari', mfaEnabled: false, personalModeEnabled: false },
+      { id: 'u_erick', email: 'erick@desarrollosdelsur.com.ar', fullName: 'Erick Jiménez', mfaEnabled: false },
+      { id: 'u_martina', email: 'martina@desarrollosdelsur.com.ar', fullName: 'Martina López', mfaEnabled: true },
+      { id: 'u_pablo', email: 'pablo@desarrollosdelsur.com.ar', fullName: 'Pablo Sánchez', mfaEnabled: true },
+      { id: 'u_sofia', email: 'sofia@desarrollosdelsur.com.ar', fullName: 'Sofía Díaz', mfaEnabled: false },
+      { id: 'u_diego', email: 'diego@constructoraandina.com.ar', fullName: 'Diego Ferrari', mfaEnabled: false },
     ],
     orgs: [
       { id: DEMO_ORG_ID, kind: 'company', legalName: 'Desarrollos Del Sur SA', cuit: '30712345671', kycStatus: 'approved', createdAt: at(now, 41, 9) },
       { id: ANDINA_ORG_ID, kind: 'company', legalName: 'Constructora Andina SRL', cuit: '30713456787', kycStatus: 'approved', createdAt: at(now, 41, 9) },
-      { id: PERSONAL_ORG_ID, kind: 'personal', legalName: 'Erick Jiménez', cuit: null, kycStatus: 'draft', createdAt: at(now, 1, 9) },
+      { id: PERSONAL_ORG_ID, kind: 'personal', legalName: 'Erick Jiménez', cuit: null, kycStatus: 'approved', createdAt: at(now, 60, 9) },
     ],
     memberships: [
       { orgId: DEMO_ORG_ID, userId: 'u_erick', role: 'admin' },
@@ -396,7 +457,7 @@ export function createSeed(now: number): MockState {
     kyc: {
       [DEMO_ORG_ID]: kycCase({ orgId: DEMO_ORG_ID, kind: 'company', status: 'approved', now, company: { cuit: '30712345671', legalName: 'Desarrollos Del Sur SA' } }),
       [ANDINA_ORG_ID]: kycCase({ orgId: ANDINA_ORG_ID, kind: 'company', status: 'approved', now, company: { cuit: '30713456787', legalName: 'Constructora Andina SRL' } }),
-      [PERSONAL_ORG_ID]: kycCase({ orgId: PERSONAL_ORG_ID, kind: 'person', status: 'draft', now }),
+      [PERSONAL_ORG_ID]: personalKyc(now),
     },
     kycSubmittedAt: {},
     accounts,
@@ -418,8 +479,18 @@ export function createSeed(now: number): MockState {
         linkStartedAt: null,
         linkedAt: null,
       },
-      [ANDINA_ORG_ID]: { candidate: { found: false, erpOrgId: null, displayName: null }, projects: [], payers: [], linkStartedAt: null, linkedAt: null },
+      // Already linked to its ERP: the source of Erick's installments in "Mis pagos".
+      [ANDINA_ORG_ID]: {
+        candidate: { found: true, erpOrgId: 'erp-org-002', displayName: 'Constructora Andina S.R.L.' },
+        projects: [],
+        payers: [],
+        linkStartedAt: now - 90 * DAY,
+        linkedAt: at(now, 90, 10),
+      },
     },
+    verifiedDni: { [PERSONAL_ORG_ID]: PERSONAL_DNI },
+    payerLinks: [],
+    installments: { pay_erick_andina: seedInstallments(now) },
     idempotency: {},
   };
 }

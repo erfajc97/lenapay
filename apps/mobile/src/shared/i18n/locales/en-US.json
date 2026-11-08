@@ -44,7 +44,17 @@
       "cancelled": "Cancelled"
     },
     "movement": { "pending": "Pending", "completed": "Credited", "failed": "Failed", "cancelled": "Cancelled" },
-    "kyc": { "draft": "Verification pending", "submitted": "In review", "approved": "Verified", "rejected": "Rejected" }
+    "kyc": { "draft": "Verification pending", "submitted": "In review", "approved": "Verified", "rejected": "Rejected" },
+    "installment": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    },
+    "payin": {
+      "received": "Received",
+      "credited": "Credited",
+      "failed": "Failed"
+    }
   },
   "fields": {
     "accountName": "Account name",
@@ -109,7 +119,8 @@
     "province": "Enter the province.",
     "postalCode": "Enter the postal code.",
     "birthDate": "Enter the date as DD/MM/YYYY.",
-    "position": "Enter the position."
+    "position": "Enter the position.",
+    "payConcept": "Use up to {{max}} characters for the concept."
   },
   "errors": {
     "generic": "Something went wrong. Try again in a moment.",
@@ -178,7 +189,9 @@
     "erp_link_not_found": "The company isn't linked with Lebane yet.",
     "erp_link_no_candidate": "We couldn't find your company in Lebane.",
     "erp_link_credentials_invalid": "Wrong Lebane username or password.",
-    "erp_link_already_linked": "The company is already linked with Lebane."
+    "erp_link_already_linked": "The company is already linked with Lebane.",
+    "payer_link_not_found": "We couldn't find that company in your payments.",
+    "installment_not_found": "That installment isn't in your payment plan."
   },
   "demo": {
     "title": "Demo mode",
@@ -273,6 +286,34 @@
       "draft": { "title": "Complete the verification", "body": "We need the company's details to enable collections and payments.", "action": "Complete now" },
       "submitted": { "title": "We're reviewing your details", "body": "We'll let you know as soon as it's approved.", "action": "See status" },
       "rejected": { "title": "The verification was rejected", "body": "Check the reason and submit it again.", "action": "See reason" }
+    },
+    "myCvu": {
+      "title": "My CVU",
+      "noAlias": "No alias",
+      "qrTitle": "Get paid with your CVU",
+      "qrA11y": "QR code of your {{currency}} CVU",
+      "shareMessage": "My {{currency}} CVU at Lenapay: {{cvu}} (alias {{alias}})"
+    },
+    "myPayments": {
+      "title": "My payments",
+      "body": "Your installments and payments to companies"
+    },
+    "kycPersonal": {
+      "draft": {
+        "title": "Verify your identity",
+        "body": "With your DNI and a selfie we enable your CVU and My payments.",
+        "action": "Verify now"
+      },
+      "submitted": {
+        "title": "We're reviewing your identity",
+        "body": "We'll let you know as soon as it's approved.",
+        "action": "See status"
+      },
+      "rejected": {
+        "title": "We couldn't verify your identity",
+        "body": "Check the reason and send it again.",
+        "action": "See reason"
+      }
     }
   },
   "notFound": { "title": "We couldn't find this screen", "body": "The link may have expired.", "action": "Go home" },
@@ -646,7 +687,8 @@
     "theme": { "system": "System", "light": "Light", "dark": "Dark" },
     "language": "Language",
     "languageBody": "System follows your phone's language. Amounts stay in pesos or dollars.",
-    "languages": { "system": "System", "esAR": "Español (Argentina)", "enUS": "English (US)" }
+    "languages": { "system": "System", "esAR": "Español (Argentina)", "enUS": "English (US)" },
+    "personal": "Personal"
   },
   "developer": {
     "title": "Developer",
@@ -668,5 +710,89 @@
     "applied": "Done. Log in again against the chosen API.",
     "reset": "Back to the build default",
     "signOutNote": "Applying logs you out: data and access belong to each API."
+  },
+  "rail": {
+    "label": "Via",
+    "bank": "Bank",
+    "internal": "Lenapay instant",
+    "internalLong": "Instant transfer between Lenapay accounts · free"
+  },
+  "myPayments": {
+    "title": "My payments",
+    "intro": "The companies that registered you as a payer, with your CVUs to pay them and what you already paid.",
+    "showHidden": "Show hidden companies",
+    "emptyTitle": "No companies yet",
+    "emptyBody": "When a company registers you with your DNI or CUIT, you will see it here.",
+    "notVerifiedTitle": "Verify your identity to see My payments",
+    "notVerifiedBody": "We use your verified DNI to find the companies you pay.",
+    "verify": "Verify my identity",
+    "openCompany": "Open {{name}}",
+    "mainAccount": "Main account",
+    "erpBadge": "Lebane ERP",
+    "hiddenBadge": "Hidden",
+    "totalPaid": "Total paid",
+    "nothingPaid": "No payments yet",
+    "lastPayment": "Last payment",
+    "never": "Never",
+    "myCvus_one": "Your CVU at this company",
+    "myCvus_other": "Your {{count}} CVUs at this company",
+    "hide": "Hide",
+    "show": "Show",
+    "hiddenDone": "{{name}} hidden",
+    "shownDone": "{{name}} is back on your list",
+    "shareMessage": "My {{currency}} CVU to pay {{company}}: {{cvu}} (alias {{alias}})",
+    "pay": "Pay",
+    "tabs": "Sections",
+    "tabInstallments": "Installments",
+    "tabPayins": "Payments",
+    "overdueTitle_one": "You have {{count}} overdue installment",
+    "overdueTitle_other": "You have {{count}} overdue installments",
+    "overdueBody": "Pay it from here: it reaches the company instantly.",
+    "installment": "Installment {{number}}",
+    "dueDate": "Due {{date}}",
+    "adjusted": "Adjusted by {{index}}",
+    "payInstallment": "Pay installment",
+    "noInstallmentsTitle": "No installments to show",
+    "notErpTitle": "This company doesn't publish its installments",
+    "notErpBody": "Installments show up once the company links Lebane ERP. You can still pay it with your CVU.",
+    "noPayinsTitle": "No payments yet",
+    "noPayinsBody": "Your transfers to this company show up here.",
+    "toCvu": "To your CVU ending in {{last}}",
+    "payTitle": "Pay",
+    "payInstallmentTitle": "Pay installment {{number}}",
+    "payTo": "You pay",
+    "prefilledHint": "It's the installment amount; you can change it.",
+    "conceptOptional": "Concept (optional)",
+    "conceptPlaceholder": "E.g.: Parking deposit",
+    "fromPersonal": "From your personal account",
+    "noApproval": "It's your money: no approval needed. We ask you to confirm with your fingerprint or password.",
+    "confirmPay": "Confirm payment",
+    "paidTitle": "Payment sent",
+    "paidBody": "You paid {{name}}."
+  },
+  "proposal": {
+    "ribbon": "Coming soon · proposal",
+    "short": "Proposal",
+    "disabledHint": "Can't be edited yet: it's a proposal.",
+    "maxPerApproval": "Maximum amount per approval",
+    "maxPerApprovalHint": "Above this amount the payment needs another approver.",
+    "withoutApproval": "Amount without approval",
+    "withoutApprovalHint": "Payments up to this amount go out without waiting for approval.",
+    "accountPermissions": {
+      "title": "Per-account permissions (Proposal)",
+      "body": "This is how you would pick which accounts this person can operate and their limits. It isn't saved yet.",
+      "accountA11y": "Can operate in {{name}}"
+    },
+    "policies": {
+      "title": "Approval policies (Proposal)",
+      "body": "This is how you would set how many approvals each payment needs by amount and account. It isn't saved yet.",
+      "general": "General rule",
+      "oneApprover": "One approver up to",
+      "oneApproverHint": "Between the no-approval amount and this one, one person is enough.",
+      "above": "Above that:",
+      "twoApprovers": "Two approvers",
+      "perAccount": "Limits per account",
+      "footnote": "Amounts are an example. Today every company payment needs another person to approve it."
+    }
   }
 }

@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Cvu } from '@/shared/api/types';
+import { aliasError } from '@/shared/helpers/cbu';
 import { moneyActionBlocker } from '@/shared/helpers/permissions';
 import { useCopy, useShareText } from '@/shared/mutations/useDeviceActions';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { usePayer } from '@/shared/queries/payers';
 
-import { aliasError, missingCurrencies } from '../helpers/payerRules';
+import { missingCurrencies } from '../helpers/payerRules';
 import { useDisableCvu, useIssueCvu, useUpdateAlias } from '../mutations/usePayerMutations';
 
 type SheetState = { kind: 'qr' | 'alias' | 'disable'; cvu: Cvu } | null;

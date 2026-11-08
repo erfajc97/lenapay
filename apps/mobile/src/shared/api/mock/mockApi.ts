@@ -69,6 +69,14 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
       create: (orgId, body) => respond(() => backend.createAccount(orgId, body)),
       update: (orgId, accountId, body) => respond(() => backend.updateAccount(orgId, accountId, body)),
       transfer: (orgId, body, credentials) => respond(() => backend.transfer(orgId, body, credentials)),
+      updateCvu: (orgId, accountId, cvuId, body) => respond(() => backend.updateAccountCvu(orgId, accountId, cvuId, body.alias)),
+    },
+    myPayments: {
+      companies: ({ includeHidden }) => respond(() => backend.myPaymentCompanies(includeHidden)),
+      setHidden: (linkId, hidden) => respond(() => backend.setMyPaymentHidden(linkId, hidden)),
+      payins: (linkId, cursor) => respond(() => backend.myPaymentPayins(linkId, cursor)),
+      installments: (linkId) => respond(() => backend.myPaymentInstallments(linkId)),
+      pay: (linkId, body, credentials) => respond(() => backend.payMyPaymentCompany(linkId, body, credentials)),
     },
     payers: {
       list: (orgId, query) => respond(() => backend.listPayers(orgId, query)),

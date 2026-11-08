@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { LinkButton } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
+import { useTabBarSpace } from '@/shared/ui/TabIcon';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { Sheet } from '@/shared/ui/Sheet';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
@@ -17,6 +18,7 @@ import { useAccountsScreen } from './hooks/useAccounts';
 
 export function Accounts() {
   const { t } = useTranslation();
+  const tabSpace = useTabBarSpace();
   const screen = useAccountsScreen();
   const pull = usePullToRefresh(screen.accounts.refetch);
   const addButton = screen.canCreate ? (
@@ -38,7 +40,7 @@ export function Accounts() {
           data={screen.visible}
           keyExtractor={(account) => account.id}
           renderItem={({ item }) => <AccountCard account={item} onPress={screen.open} />}
-          contentContainerStyle={LIST_CONTENT_STYLE}
+          contentContainerStyle={{ ...LIST_CONTENT_STYLE, paddingBottom: tabSpace }}
           onRefresh={pull.onRefresh}
           refreshing={pull.refreshing}
           ListEmptyComponent={<EmptyState icon="wallet-outline" title={t('accounts.emptyTitle')} body={t('accounts.emptyBody')} />}

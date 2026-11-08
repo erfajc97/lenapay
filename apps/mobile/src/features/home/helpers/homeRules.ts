@@ -1,4 +1,4 @@
-import type { Balance, Currency, ErpLinkStatus, Org } from '@/shared/api/types';
+import type { Account, AccountCvu, Balance, Currency, ErpLinkStatus, Org } from '@/shared/api/types';
 import { type MoneyBlocker, moneyActionBlocker } from '@/shared/helpers/permissions';
 
 /** The org-wide balance of one currency, or null while it is not known (never a fake 0, M6). */
@@ -38,4 +38,16 @@ export function showErpInvite(org: Pick<Org, 'kind' | 'kycStatus' | 'role'>, lin
 export function heldShare(balance: Balance | null): number {
   if (!balance || balance.posted <= 0) return 0;
   return Math.min(1, Math.max(0, balance.held / balance.posted));
+}
+
+/** Where the KYC notice leads: a person goes straight to the DNI + selfie form (no kind to pick). */
+export function kycActionRoute(org: Pick<Org, 'kind' | 'kycStatus'>): '/onboarding' | '/onboarding/person' | '/onboarding/status' {
+  if (org.kycStatus !== 'draft') return '/onboarding/status';
+  return org.kind === 'personal' ? '/onboarding/person' : '/onboarding';
+}
+
+/** "Mi CVU": the active receiving CVUs of the personal wallet's own account, ARS first; [] before KYC. */
+export function personalCvus(accounts: Account[] | undefined): AccountCvu[] {
+  const personal = accounts?.find((account) => account.kind === 'personal' && !account.archived);
+  return (personal?.cvus ?? []).filter((cvu) => cvu.status === 'active').sort((a, b) => a.currency.localeCompare(b.currency));
 }

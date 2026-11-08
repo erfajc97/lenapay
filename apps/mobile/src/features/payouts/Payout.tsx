@@ -8,6 +8,8 @@ import { AccountPicker } from '@/shared/ui/AccountPicker';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Money } from '@/shared/ui/Money';
+import { isInstantLenapay } from '@/shared/helpers/rail';
+import { RailBadge } from '@/shared/ui/RailBadge';
 import { Divider, Field, LinkButton, Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Segmented } from '@/shared/ui/Segmented';
@@ -144,6 +146,7 @@ export function Payout() {
       footer={<Button label={t('payout.confirm')} icon="finger-print" onPress={flow.confirm} loading={flow.confirming} disabled={!quote || flow.blockedByBalance !== null} />}
     >
       {flow.destination.data ? <DestinationCard destination={flow.destination.data} /> : null}
+      {isInstantLenapay(quote) ? <RailBadge rail="internal" long /> : null}
       {flow.quote.isError ? <ErrorState error={flow.quote.error} onRetry={() => void flow.quote.refetch()} /> : null}
       <Card className="gap-1">
         {quote ? (
