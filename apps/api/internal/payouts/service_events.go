@@ -8,10 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/realtime"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/payouts/store"
+	"lenapay/apps/api/internal/platform/realtime"
 )
 
 // Realtime event types of the contract (RealtimeEventType).

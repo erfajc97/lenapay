@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 type fakeDirectory struct {

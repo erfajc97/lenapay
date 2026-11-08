@@ -9,8 +9,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 func testIssuer(t *testing.T, c clock.Clock, seedByte byte) *Issuer {
@@ -156,7 +156,9 @@ func TestRoleOrdering(t *testing.T) {
 		{RoleOperator, RoleApprover, false},
 		{RoleViewer, RoleViewer, true},
 		{RoleViewer, RoleOperator, false},
-		{Role("owner"), RoleViewer, false},
+		{RoleOwner, RoleAdmin, true},
+		{RoleAdmin, RoleOwner, false},
+		{Role("root"), RoleViewer, false},
 	}
 	for _, c := range cases {
 		if got := c.have.AtLeast(c.min); got != c.want {
@@ -168,5 +170,10 @@ func TestRoleOrdering(t *testing.T) {
 	}
 	if _, ok := ParseRole("root"); ok {
 		t.Error("unknown role parsed")
+	}
+	for role, want := range map[Role]bool{RoleViewer: true, RoleAdmin: true, RoleOwner: false, Role("root"): false} {
+		if role.Grantable() != want {
+			t.Errorf("%s.Grantable() = %v", role, !want)
+		}
 	}
 }

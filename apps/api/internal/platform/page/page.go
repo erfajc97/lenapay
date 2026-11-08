@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 // Limits of a page (A3: a floor and a ceiling).

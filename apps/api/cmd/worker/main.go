@@ -15,11 +15,11 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db"
+	applog "lenapay/apps/api/internal/platform/log"
 )
 
 func main() {

@@ -1,13 +1,13 @@
 package app
 
-import "github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+import "lenapay/apps/api/internal/platform/auth"
 
 // AccessRules is THE access table: EXACTLY one rule per operationId of the contract (A14,
 // AG15). An operation missing here is denied at runtime and fails
 // TestAccessRulesCoverTheSpec. Lanes edit only their own rows. A function, not a variable,
 // so nothing can mutate it at runtime.
 func AccessRules() auth.Rules {
-	viewer, operator, approver, admin := auth.RoleViewer, auth.RoleOperator, auth.RoleApprover, auth.RoleAdmin
+	viewer, operator, approver, admin, owner := auth.RoleViewer, auth.RoleOperator, auth.RoleApprover, auth.RoleAdmin, auth.RoleOwner
 	return auth.Rules{
 		// system
 		"getHealth": auth.Public(),
@@ -24,6 +24,9 @@ func AccessRules() auth.Rules {
 		"verifyStepUp":          auth.Authenticated(),
 		"registerDevice":        auth.Authenticated(),
 		"getMe":                 auth.Authenticated(),
+		"updateMe":              auth.Authenticated(),
+		"getMyPreferences":      auth.Authenticated(),
+		"updateMyPreferences":   auth.Authenticated(),
 
 		// orgs
 		"listOrgs":     auth.Authenticated(),
@@ -35,6 +38,10 @@ func AccessRules() auth.Rules {
 		"updateMember": auth.OrgRole(admin),
 		"removeMember": auth.OrgRole(admin),
 		"createInvite": auth.OrgRole(admin),
+		// owner only: ownership and the approval policy (step-up: they decide who moves money)
+		"transferOwnership":    auth.OrgRole(owner).WithStepUp(),
+		"getApprovalPolicy":    auth.OrgRole(viewer),
+		"updateApprovalPolicy": auth.OrgRole(owner).WithStepUp(),
 
 		// kyc
 		"getKyc":            auth.OrgRole(viewer),

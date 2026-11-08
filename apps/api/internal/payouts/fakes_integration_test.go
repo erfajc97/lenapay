@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/psp"
 )
 
 // fakePSP is a scriptable PSP with the provider's semantics the payouts rely on: transfers
@@ -109,6 +109,24 @@ type fakeMembers struct{ members map[uuid.UUID][]orgs.Member }
 
 func (f fakeMembers) ListMembers(_ context.Context, p auth.Principal) ([]orgs.Member, error) {
 	return f.members[p.OrgID], nil
+}
+
+// fakePolicies answers the approval rules the test sets (zero value: strict 4-eyes).
+type fakePolicies struct {
+	mu    sync.Mutex
+	rules orgs.ApprovalRules
+}
+
+func (f *fakePolicies) set(r orgs.ApprovalRules) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rules = r
+}
+
+func (f *fakePolicies) ApprovalRules(context.Context, uuid.UUID) (orgs.ApprovalRules, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.rules, nil
 }
 
 // recordingNotifier writes nothing but remembers what the payout asked for inside its tx.

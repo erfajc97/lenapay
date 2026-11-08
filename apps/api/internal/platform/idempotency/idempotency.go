@@ -21,8 +21,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/clock"
 )
 
 // DefaultTTL is how long a key is remembered (clients persist keys for at most 24 h).

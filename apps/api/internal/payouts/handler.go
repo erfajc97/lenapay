@@ -7,13 +7,13 @@ import (
 	"io"
 	"mime/multipart"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/platform/upload"
+	"lenapay/apps/api/internal/psp"
 )
 
 // Handler implements the payouts operations of api.StrictServerInterface (HTTP only: generated

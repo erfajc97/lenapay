@@ -14,26 +14,26 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/orgs/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 // Service is the orgs API used by the handler and by other features.
 type Service interface {
 	// List returns the caller's orgs (R-ORG-1).
 	List(ctx context.Context, p auth.Principal) ([]Organization, error)
-	// Create creates an org, makes the caller its admin and opens its KYC case in draft.
+	// Create creates an org, makes the caller its owner and opens its KYC case in draft.
 	Create(ctx context.Context, p auth.Principal, in CreateInput) (Organization, error)
 	// CreatePersonalForUser creates a new user's personal org inside the signup transaction
 	// (identity.SignupHook): legal name = the email until the person KYC is approved, the user
-	// its admin, KYC in draft. created = false when personal mode is off.
+	// its owner, KYC in draft. created = false when personal mode is off.
 	CreatePersonalForUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (orgID uuid.UUID, created bool, err error)
 	// Get returns the principal's org (p.OrgID).
 	Get(ctx context.Context, p auth.Principal) (Organization, error)
@@ -41,11 +41,27 @@ type Service interface {
 	ListMembers(ctx context.Context, p auth.Principal) ([]Member, error)
 	// AddMember adds a registered user with a role not above the caller's (T4).
 	AddMember(ctx context.Context, p auth.Principal, in MemberInput) (Member, error)
-	// UpdateMemberRole changes a member's role: never above the caller's (T4), and never
-	// demoting the last admin (org.last_admin).
+	// UpdateMemberRole changes a member's role: never above the caller's (T4), an admin's only
+	// by the owner, and never the owner's own (org.last_admin: ownership moves by transfer).
 	UpdateMemberRole(ctx context.Context, p auth.Principal, userID uuid.UUID, role auth.Role) (Member, error)
-	// RemoveMember removes a member; removing the last admin is org.last_admin.
+	// RemoveMember removes a member: an admin only by the owner; the owner never (org.last_admin).
 	RemoveMember(ctx context.Context, p auth.Principal, userID uuid.UUID) error
+	// TransferOwnership makes another member the owner and the caller (the owner) an admin.
+	TransferOwnership(ctx context.Context, p auth.Principal, userID uuid.UUID) (previous, owner Member, err error)
+	// ApprovalPolicy returns the org's payout approval policy (defaults until set) and whether
+	// owner self-approval is effective right now.
+	ApprovalPolicy(ctx context.Context, p auth.Principal) (ApprovalPolicy, bool, error)
+	// UpdateApprovalPolicy replaces the policy (owner only, audited).
+	UpdateApprovalPolicy(ctx context.Context, p auth.Principal, in PolicyInput) (ApprovalPolicy, bool, error)
+	// ApprovalRules is the system read payouts decides on (no principal: the caller already
+	// resolved the org).
+	ApprovalRules(ctx context.Context, orgID uuid.UUID) (ApprovalRules, error)
+	// InviteERPUsers invites the ERP users of an imported org (erp_import invites, auto-accepted
+	// on email verification): role capped at the linking admin's (never owner), members skipped.
+	InviteERPUsers(ctx context.Context, in ERPInviteInput) (ERPInviteResult, error)
+	// AcceptERPInvites makes a verified user a member of every org whose ERP import invited
+	// their email (identity.InviteAcceptor), inside the caller's transaction.
+	AcceptERPInvites(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (int, error)
 	// CreateInvite emails a single-use invite valid 7 days (R-ORG-2).
 	CreateInvite(ctx context.Context, p auth.Principal, in MemberInput) (Invite, error)
 	// AcceptInvite makes the caller a member (token hashed, single use, email must match).
@@ -71,6 +87,8 @@ type Deps struct {
 	Mailer InviteMailer
 	KYC    KYCCases
 	Config config.Config
+	// Names fills the owner's full name on the person KYC approval (nil: never).
+	Names Names
 }
 
 // maxLegalName is the organizations.legal_name CHECK cap.
@@ -78,6 +96,13 @@ const maxLegalName = 200
 
 // InviteTTL is how long an invite can be accepted (R-ORG-2).
 const InviteTTL = 7 * 24 * time.Hour
+
+// Invite sources (DB CHECK invites.source): an admin's invite, or one the ERP users import
+// created (accepted automatically once that email is verified).
+const (
+	inviteSourceManual    = "manual"
+	inviteSourceERPImport = "erp_import"
+)
 
 type service struct {
 	deps Deps
@@ -109,7 +134,7 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 	}
 	org := Organization{
 		ID: ids.New(), Kind: in.Kind, LegalName: strings.TrimSpace(in.LegalName), CUIT: in.CUIT,
-		KYCStatus: auth.KYCDraft, Role: auth.RoleAdmin, CreatedAt: s.now(),
+		KYCStatus: auth.KYCDraft, Role: auth.RoleOwner, CreatedAt: s.now(),
 	}
 	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return s.insert(ctx, tx, p.UserID, org)
@@ -128,14 +153,14 @@ func (s *service) CreatePersonalForUser(ctx context.Context, tx pgx.Tx, userID u
 	if utf8.RuneCountInString(name) > maxLegalName {
 		name = string([]rune(name)[:maxLegalName])
 	}
-	org := Organization{ID: ids.New(), Kind: KindPersonal, LegalName: name, KYCStatus: auth.KYCDraft, Role: auth.RoleAdmin, CreatedAt: s.now()}
+	org := Organization{ID: ids.New(), Kind: KindPersonal, LegalName: name, KYCStatus: auth.KYCDraft, Role: auth.RoleOwner, CreatedAt: s.now()}
 	if err := s.insert(ctx, tx, userID, org); err != nil {
 		return uuid.Nil, false, err
 	}
 	return org.ID, true, nil
 }
 
-// insert writes a new org with its creator as admin, opens its KYC case and audits it, inside
+// insert writes a new org with its creator as owner, opens its KYC case and audits it, inside
 // tx. A personal org is ONE per user (ensureNoPersonalOrg).
 func (s *service) insert(ctx context.Context, tx pgx.Tx, userID uuid.UUID, org Organization) error {
 	q := store.New(tx)
@@ -150,7 +175,7 @@ func (s *service) insert(ctx context.Context, tx pgx.Tx, userID uuid.UUID, org O
 		return err
 	}
 	if err := q.InsertMembership(ctx, store.InsertMembershipParams{
-		OrgID: org.ID, UserID: userID, Role: string(auth.RoleAdmin), CreatedAt: org.CreatedAt,
+		OrgID: org.ID, UserID: userID, Role: string(auth.RoleOwner), CreatedAt: org.CreatedAt,
 	}); err != nil {
 		return err
 	}
@@ -201,15 +226,24 @@ func (s *service) ListMembers(ctx context.Context, p auth.Principal) ([]Member, 
 	}
 	out := make([]Member, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Member{UserID: r.UserID, Email: r.Email, Role: auth.Role(r.Role), JoinedAt: r.CreatedAt})
+		out = append(out, Member{UserID: r.UserID, Email: r.Email, FullName: r.FullName, Role: auth.Role(r.Role), JoinedAt: r.CreatedAt})
 	}
 	return out, nil
 }
 
-// checkGrant is the T4 rule for every door that grants a role (add member, invite): nobody
-// grants a role above their own.
+// getMember reads one member of orgID with its user's email and name.
+func getMember(ctx context.Context, q *store.Queries, orgID, userID uuid.UUID) (Member, error) {
+	row, err := q.GetMember(ctx, store.GetMemberParams{OrgID: orgID, UserID: userID})
+	if err != nil {
+		return Member{}, notFoundAs(err, apperr.CodeMemberNotFound)
+	}
+	return Member{UserID: row.UserID, Email: row.Email, FullName: row.FullName, Role: auth.Role(row.Role), JoinedAt: row.CreatedAt}, nil
+}
+
+// checkGrant is the T4 rule for every door that grants a role (add member, invite, role
+// change): only grantable roles (never owner), and nobody grants a role above their own.
 func checkGrant(p auth.Principal, role auth.Role) error {
-	if _, ok := auth.ParseRole(string(role)); !ok {
+	if !role.Grantable() {
 		return apperr.New(apperr.CodeValidation, map[string]any{"field": "/role"})
 	}
 	if !p.Role.AtLeast(role) {
@@ -236,11 +270,9 @@ func (s *service) AddMember(ctx context.Context, p auth.Principal, in MemberInpu
 		if err != nil {
 			return err
 		}
-		row, err := q.GetMember(ctx, store.GetMemberParams{OrgID: p.OrgID, UserID: userID})
-		if err != nil {
+		if m, err = getMember(ctx, q, p.OrgID, userID); err != nil {
 			return err
 		}
-		m = Member{UserID: row.UserID, Email: row.Email, Role: auth.Role(row.Role), JoinedAt: row.CreatedAt}
 		return s.record(ctx, tx, p, p.OrgID, "member.add", "user", userID, map[string]any{"role": in.Role})
 	})
 	if err != nil {
@@ -260,21 +292,14 @@ func (s *service) UpdateMemberRole(ctx context.Context, p auth.Principal, userID
 		if err != nil {
 			return err
 		}
-		if current == auth.RoleAdmin && role != auth.RoleAdmin {
-			if err := ensureAnotherAdmin(ctx, q, p.OrgID); err != nil {
-				return err
-			}
-		}
 		if err := q.UpdateMembershipRole(ctx, store.UpdateMembershipRoleParams{
 			Role: string(role), UpdatedAt: s.now(), OrgID: p.OrgID, UserID: userID,
 		}); err != nil {
 			return err
 		}
-		row, err := q.GetMember(ctx, store.GetMemberParams{OrgID: p.OrgID, UserID: userID})
-		if err != nil {
+		if m, err = getMember(ctx, q, p.OrgID, userID); err != nil {
 			return err
 		}
-		m = Member{UserID: row.UserID, Email: row.Email, Role: auth.Role(row.Role), JoinedAt: row.CreatedAt}
 		return s.record(ctx, tx, p, p.OrgID, "member.role_change", "user", userID, map[string]any{"from": current, "to": role})
 	})
 	if err != nil {
@@ -290,11 +315,6 @@ func (s *service) RemoveMember(ctx context.Context, p auth.Principal, userID uui
 		if err != nil {
 			return err
 		}
-		if current == auth.RoleAdmin {
-			if err := ensureAnotherAdmin(ctx, q, p.OrgID); err != nil {
-				return err
-			}
-		}
 		n, err := q.DeleteMembership(ctx, store.DeleteMembershipParams{OrgID: p.OrgID, UserID: userID})
 		if err != nil {
 			return err
@@ -306,31 +326,24 @@ func (s *service) RemoveMember(ctx context.Context, p auth.Principal, userID uui
 	})
 }
 
-// lockMember locks the target membership of p.OrgID and returns its role. Nobody changes a
-// member whose role is above their own (T4).
+// lockMember locks the target membership of p.OrgID and returns its role, applying the member
+// management ladder: nobody changes a member above their own role (T4); an admin is changed only
+// by the owner; the owner is never changed here — the org always keeps its owner, and ownership
+// moves only by transfer (org.last_admin, the code clients already handle for "the org must keep
+// its top member", A18).
 func (s *service) lockMember(ctx context.Context, q *store.Queries, p auth.Principal, userID uuid.UUID) (auth.Role, error) {
 	row, err := q.GetMembershipForUpdate(ctx, store.GetMembershipForUpdateParams{OrgID: p.OrgID, UserID: userID})
 	if err != nil {
 		return "", notFoundAs(err, apperr.CodeMemberNotFound)
 	}
 	current := auth.Role(row.Role)
-	if !p.Role.AtLeast(current) {
+	if !p.Role.AtLeast(current) || (current == auth.RoleAdmin && p.Role != auth.RoleOwner) {
 		return "", apperr.New(apperr.CodeRoleEscalation, map[string]any{"role": string(current)})
 	}
+	if current == auth.RoleOwner {
+		return "", apperr.New(apperr.CodeLastAdmin, map[string]any{"role": string(current)})
+	}
 	return current, nil
-}
-
-// ensureAnotherAdmin refuses losing an admin when it is the last one. The count locks every
-// admin row, so two admins demoting each other at once cannot both succeed.
-func ensureAnotherAdmin(ctx context.Context, q *store.Queries, orgID uuid.UUID) error {
-	admins, err := q.CountAdminsForUpdate(ctx, orgID)
-	if err != nil {
-		return err
-	}
-	if admins <= 1 {
-		return apperr.New(apperr.CodeLastAdmin, nil)
-	}
-	return nil
 }
 
 func (s *service) CreateInvite(ctx context.Context, p auth.Principal, in MemberInput) (Invite, error) {
@@ -354,7 +367,7 @@ func (s *service) CreateInvite(ctx context.Context, p auth.Principal, in MemberI
 		orgName = org.LegalName
 		if err := q.InsertInvite(ctx, store.InsertInviteParams{
 			ID: inv.ID, OrgID: p.OrgID, Email: email, Role: string(in.Role), TokenHash: inviteTokenHash(token),
-			InvitedBy: p.UserID, ExpiresAt: inv.ExpiresAt, CreatedAt: now,
+			InvitedBy: p.UserID, ExpiresAt: inv.ExpiresAt, CreatedAt: now, Source: inviteSourceManual,
 		}); err != nil {
 			return err
 		}
@@ -500,7 +513,26 @@ func (s *service) ApplyVerifiedIdentity(ctx context.Context, tx pgx.Tx, orgID uu
 	if n != 1 {
 		return apperr.New(apperr.CodeOrgNotFound, nil)
 	}
+	if id.DocType == DocTypeDNI {
+		return s.nameOwner(ctx, tx, orgID, name)
+	}
 	return nil
+}
+
+// nameOwner gives the person behind a KYC-approved personal org their verified name, unless they
+// already chose one (identity keeps the user's own choice).
+func (s *service) nameOwner(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, name string) error {
+	if s.deps.Names == nil {
+		return nil
+	}
+	org, err := store.New(tx).GetOrganization(ctx, orgID)
+	if err != nil {
+		return notFoundAs(err, apperr.CodeOrgNotFound)
+	}
+	if Kind(org.Kind) != KindPersonal {
+		return nil
+	}
+	return s.deps.Names.FillFullNameIfEmpty(ctx, tx, org.CreatedBy, name)
 }
 
 func (s *service) OrgCUIT(ctx context.Context, orgID uuid.UUID) (string, error) {

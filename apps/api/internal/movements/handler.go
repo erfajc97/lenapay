@@ -3,10 +3,10 @@ package movements
 import (
 	"context"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
 )
 
 // Handler implements the movements operations of api.StrictServerInterface (HTTP only: generated

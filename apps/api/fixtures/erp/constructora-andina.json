@@ -4,7 +4,60 @@
   "cuit": "30715532014",
   "users": [
     {
-      "username": "obras@constructoraandina.com.ar"
+      "username": "obras@constructoraandina.com.ar",
+      "email": "obras@constructoraandina.com.ar",
+      "fullName": "Hernán Quiroga",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@constructoraandina.com.ar",
+      "email": "tesoreria@constructoraandina.com.ar",
+      "fullName": "Paula Sosa",
+      "admin": false,
+      "permissions": [
+        "CONSTRUCTORA_PAYMENTS_PAYOUTS",
+        "CONSTRUCTORA_PAYMENTS_CREATE_CVU",
+        "CONSTRUCTORA_GENERAL_TESORERIA"
+      ]
+    },
+    {
+      "username": "conciliaciones@constructoraandina.com.ar",
+      "email": "conciliaciones@constructoraandina.com.ar",
+      "fullName": "Gabriel Funes",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "CONTABILIDAD"
+      ]
+    },
+    {
+      "username": "contable@constructoraandina.com.ar",
+      "email": "contable@constructoraandina.com.ar",
+      "fullName": "Lorena Videla",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS",
+        "CONTABILIDAD"
+      ]
+    },
+    {
+      "username": "compras@constructoraandina.com.ar",
+      "email": "compras@constructoraandina.com.ar",
+      "fullName": "Matías Lucero",
+      "admin": false,
+      "permissions": [
+        "CONSTRUCTORA_COMPRAS",
+        "CONSTRUCTORA_PROVEEDORES"
+      ]
     }
   ],
   "projects": [

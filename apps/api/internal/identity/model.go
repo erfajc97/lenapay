@@ -5,14 +5,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/config"
 )
 
-// SignupInput is a new user's credentials.
+// SignupInput is a new user's credentials and optional display name.
 type SignupInput struct {
 	Email    string
 	Password config.Secret
+	FullName *string
 }
 
 // LoginInput is a login attempt.
@@ -79,6 +80,7 @@ type Device struct {
 type User struct {
 	ID            uuid.UUID
 	Email         string
+	FullName      *string
 	EmailVerified bool
 	MFAEnabled    bool
 	CreatedAt     time.Time
@@ -94,8 +96,50 @@ type MembershipSummary struct {
 	KYCStatus string
 }
 
-// Me is the current user and their memberships.
+// Me is the current user, their memberships and preferences.
 type Me struct {
 	User        User
 	Memberships []MembershipSummary
+	Preferences Preferences
+}
+
+// Caps of the profile and preferences (contract UpdateMeRequest, UserPreferences; DB CHECKs).
+const maxFullName = 120
+
+// validLocale and validTheme mirror the DB CHECKs user_preferences.locale / theme (the
+// contract enums reject anything else first).
+func validLocale(s string) bool { return s == "es-AR" || s == "en-US" }
+
+func validTheme(s string) bool { return s == "system" || s == "light" || s == "dark" }
+
+// Preferences are a user's app defaults; every field is nil until set.
+type Preferences struct {
+	DefaultOrgID     *uuid.UUID
+	DefaultAccountID *uuid.UUID
+	Locale           *string
+	Theme            *string
+	UpdatedAt        *time.Time
+}
+
+// Patch is one field of a partial update (A4): Set false keeps the stored value; Set with a
+// nil Value clears it (JSON null).
+type Patch[T any] struct {
+	Set   bool
+	Value *T
+}
+
+// apply returns the merged value of a field.
+func (p Patch[T]) apply(stored *T) *T {
+	if !p.Set {
+		return stored
+	}
+	return p.Value
+}
+
+// PreferencesPatch is a PATCH /me/preferences body.
+type PreferencesPatch struct {
+	DefaultOrgID     Patch[uuid.UUID]
+	DefaultAccountID Patch[uuid.UUID]
+	Locale           Patch[string]
+	Theme            Patch[string]
 }

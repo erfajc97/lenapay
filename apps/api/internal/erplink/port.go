@@ -6,10 +6,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Directory is the ERP port (JSON fixtures in provider/fake now; a CDC read model or the ERP
@@ -25,6 +26,19 @@ type Directory interface {
 	Buyers(ctx context.Context, erpOrgID string) ([]Buyer, error)
 	// Installments lists one buyer's installments (cuotas) by number; none for an unknown buyer.
 	Installments(ctx context.Context, erpOrgID, buyerRef string) ([]Installment, error)
+	// Users lists the ERP org's users with their ERP permissions (the import invites them).
+	Users(ctx context.Context, erpOrgID string) ([]User, error)
+}
+
+// User is an ERP user: the permission codes are Lebane's PermisoUsuario names
+// (PAYMENTS_PAYOUTS, CONFIGURACION_ORGANIZACION, CONTABILIDAD, …) and Admin is the ERP's
+// organization-admin flag.
+type User struct {
+	Username    string
+	Email       string
+	FullName    string
+	Admin       bool
+	Permissions []string
 }
 
 // IdentityEntry is one row of the identity index.
@@ -81,6 +95,11 @@ type Orgs interface {
 // idempotent by the ERP project ref).
 type ProjectImporter interface {
 	ImportProject(ctx context.Context, orgID uuid.UUID, name, erpProjectRef string) (accounts.Account, error)
+}
+
+// UserInviter invites the ERP users of a linked org (implemented by orgs.Service).
+type UserInviter interface {
+	InviteERPUsers(ctx context.Context, in orgs.ERPInviteInput) (orgs.ERPInviteResult, error)
 }
 
 // PayerImporter creates the payer of an ERP buyer (implemented by payers.Service; idempotent by

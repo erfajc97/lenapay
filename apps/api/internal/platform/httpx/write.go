@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/platform/apperr"
+	applog "lenapay/apps/api/internal/platform/log"
 )
 
 // Envelope is the error body of every non-2xx answer: {"error":{code,message,details,requestId}}

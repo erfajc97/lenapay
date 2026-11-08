@@ -4,7 +4,38 @@
   "cuit": "30709834122",
   "users": [
     {
-      "username": "administracion@grupoparana.com.ar"
+      "username": "administracion@grupoparana.com.ar",
+      "email": "administracion@grupoparana.com.ar",
+      "fullName": "Andrea Toledo",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@grupoparana.com.ar",
+      "email": "tesoreria@grupoparana.com.ar",
+      "fullName": "Lucas Romero",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "conciliaciones@grupoparana.com.ar",
+      "email": "conciliaciones@grupoparana.com.ar",
+      "fullName": "Mariana Castro",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS_MASTER"
+      ]
     }
   ],
   "projects": [

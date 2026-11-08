@@ -13,14 +13,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/idempotency"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/payers/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/idempotency"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/psp"
 )
 
 // statusCreated is the createCvu answer a replay repeats (201; services do not import net/http).

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/httpx"
 )
 
 type webhookStub struct {

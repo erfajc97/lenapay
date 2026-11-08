@@ -44,14 +44,14 @@ func (q *Queries) ApplyVerifiedIdentity(ctx context.Context, arg ApplyVerifiedId
 	return result.RowsAffected(), nil
 }
 
-const countAdminsForUpdate = `-- name: CountAdminsForUpdate :one
-SELECT count(*) FROM (
-    SELECT 1 FROM memberships WHERE org_id = $1 AND role = 'admin' FOR UPDATE
-) admins
+const countApproversBesidesOwner = `-- name: CountApproversBesidesOwner :one
+SELECT count(*) FROM memberships WHERE org_id = $1 AND role IN ('approver', 'admin')
 `
 
-func (q *Queries) CountAdminsForUpdate(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countAdminsForUpdate, orgID)
+// Members other than the owner who can approve payouts (role approver or admin): owner
+// self-approval is effective only while there are none.
+func (q *Queries) CountApproversBesidesOwner(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countApproversBesidesOwner, orgID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -86,8 +86,27 @@ func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipPara
 	return result.RowsAffected(), nil
 }
 
+const getApprovalPolicy = `-- name: GetApprovalPolicy :one
+SELECT org_id, mode, threshold_ars_minor, threshold_usd_minor, allow_owner_self_approval, updated_by, updated_at FROM approval_policies WHERE org_id = $1
+`
+
+func (q *Queries) GetApprovalPolicy(ctx context.Context, orgID uuid.UUID) (ApprovalPolicy, error) {
+	row := q.db.QueryRow(ctx, getApprovalPolicy, orgID)
+	var i ApprovalPolicy
+	err := row.Scan(
+		&i.OrgID,
+		&i.Mode,
+		&i.ThresholdArsMinor,
+		&i.ThresholdUsdMinor,
+		&i.AllowOwnerSelfApproval,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getInviteByTokenHashForUpdate = `-- name: GetInviteByTokenHashForUpdate :one
-SELECT id, org_id, email, role, token_hash, invited_by, expires_at, accepted_at, accepted_by, created_at FROM invites WHERE token_hash = $1 FOR UPDATE
+SELECT id, org_id, email, role, token_hash, invited_by, expires_at, accepted_at, accepted_by, created_at, source FROM invites WHERE token_hash = $1 FOR UPDATE
 `
 
 func (q *Queries) GetInviteByTokenHashForUpdate(ctx context.Context, tokenHash []byte) (Invite, error) {
@@ -104,12 +123,13 @@ func (q *Queries) GetInviteByTokenHashForUpdate(ctx context.Context, tokenHash [
 		&i.AcceptedAt,
 		&i.AcceptedBy,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
 }
 
 const getMember = `-- name: GetMember :one
-SELECT m.user_id, u.email, m.role, m.created_at
+SELECT m.user_id, u.email, u.full_name, m.role, m.created_at
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.user_id = $2
@@ -123,6 +143,7 @@ type GetMemberParams struct {
 type GetMemberRow struct {
 	UserID    uuid.UUID
 	Email     string
+	FullName  *string
 	Role      string
 	CreatedAt time.Time
 }
@@ -133,6 +154,7 @@ func (q *Queries) GetMember(ctx context.Context, arg GetMemberParams) (GetMember
 	err := row.Scan(
 		&i.UserID,
 		&i.Email,
+		&i.FullName,
 		&i.Role,
 		&i.CreatedAt,
 	)
@@ -253,10 +275,32 @@ func (q *Queries) GetOrganizationForUser(ctx context.Context, arg GetOrganizatio
 	return i, err
 }
 
+const hasPendingInvite = `-- name: HasPendingInvite :one
+SELECT EXISTS (
+    SELECT 1 FROM invites
+    WHERE org_id = $1 AND lower(email) = lower($2) AND accepted_at IS NULL
+      AND expires_at > $3
+)
+`
+
+type HasPendingInviteParams struct {
+	OrgID uuid.UUID
+	Email string
+	Now   time.Time
+}
+
+// An unexpired, unaccepted invite of this email to this org (the ERP import never duplicates).
+func (q *Queries) HasPendingInvite(ctx context.Context, arg HasPendingInviteParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPendingInvite, arg.OrgID, arg.Email, arg.Now)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertInvite = `-- name: InsertInvite :exec
-INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at, created_at)
+INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at, created_at, source)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8)
+        $7, $8, $9)
 `
 
 type InsertInviteParams struct {
@@ -268,6 +312,7 @@ type InsertInviteParams struct {
 	InvitedBy uuid.UUID
 	ExpiresAt time.Time
 	CreatedAt time.Time
+	Source    string
 }
 
 func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) error {
@@ -280,6 +325,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) erro
 		arg.InvitedBy,
 		arg.ExpiresAt,
 		arg.CreatedAt,
+		arg.Source,
 	)
 	return err
 }
@@ -338,7 +384,7 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT m.user_id, u.email, m.role, m.created_at
+SELECT m.user_id, u.email, u.full_name, m.role, m.created_at
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
@@ -348,6 +394,7 @@ ORDER BY m.created_at, m.user_id
 type ListMembersRow struct {
 	UserID    uuid.UUID
 	Email     string
+	FullName  *string
 	Role      string
 	CreatedAt time.Time
 }
@@ -364,6 +411,7 @@ func (q *Queries) ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembe
 		if err := rows.Scan(
 			&i.UserID,
 			&i.Email,
+			&i.FullName,
 			&i.Role,
 			&i.CreatedAt,
 		); err != nil {
@@ -433,6 +481,53 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, userID uuid.UUID
 	return items, nil
 }
 
+const listPendingERPInvitesForUpdate = `-- name: ListPendingERPInvitesForUpdate :many
+SELECT id, org_id, email, role, token_hash, invited_by, expires_at, accepted_at, accepted_by, created_at, source FROM invites
+WHERE lower(email) = lower($1) AND source = 'erp_import' AND accepted_at IS NULL
+  AND expires_at > $2
+ORDER BY created_at, id
+FOR UPDATE
+`
+
+type ListPendingERPInvitesForUpdateParams struct {
+	Email string
+	Now   time.Time
+}
+
+// ERP import invites of an email still acceptable, oldest first (auto-accepted on email
+// verification and login).
+func (q *Queries) ListPendingERPInvitesForUpdate(ctx context.Context, arg ListPendingERPInvitesForUpdateParams) ([]Invite, error) {
+	rows, err := q.db.Query(ctx, listPendingERPInvitesForUpdate, arg.Email, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invite{}
+	for rows.Next() {
+		var i Invite
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Email,
+			&i.Role,
+			&i.TokenHash,
+			&i.InvitedBy,
+			&i.ExpiresAt,
+			&i.AcceptedAt,
+			&i.AcceptedBy,
+			&i.CreatedAt,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markInviteAccepted = `-- name: MarkInviteAccepted :execrows
 UPDATE invites SET accepted_at = $1, accepted_by = $2
 WHERE id = $3 AND accepted_at IS NULL
@@ -491,4 +586,49 @@ func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembership
 		arg.UserID,
 	)
 	return err
+}
+
+const upsertApprovalPolicy = `-- name: UpsertApprovalPolicy :one
+INSERT INTO approval_policies (org_id, mode, threshold_ars_minor, threshold_usd_minor, allow_owner_self_approval,
+                               updated_by, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7)
+ON CONFLICT (org_id) DO UPDATE
+SET mode = EXCLUDED.mode, threshold_ars_minor = EXCLUDED.threshold_ars_minor,
+    threshold_usd_minor = EXCLUDED.threshold_usd_minor, allow_owner_self_approval = EXCLUDED.allow_owner_self_approval,
+    updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+RETURNING org_id, mode, threshold_ars_minor, threshold_usd_minor, allow_owner_self_approval, updated_by, updated_at
+`
+
+type UpsertApprovalPolicyParams struct {
+	OrgID                  uuid.UUID
+	Mode                   string
+	ThresholdArsMinor      *int64
+	ThresholdUsdMinor      *int64
+	AllowOwnerSelfApproval bool
+	UpdatedBy              uuid.UUID
+	UpdatedAt              time.Time
+}
+
+func (q *Queries) UpsertApprovalPolicy(ctx context.Context, arg UpsertApprovalPolicyParams) (ApprovalPolicy, error) {
+	row := q.db.QueryRow(ctx, upsertApprovalPolicy,
+		arg.OrgID,
+		arg.Mode,
+		arg.ThresholdArsMinor,
+		arg.ThresholdUsdMinor,
+		arg.AllowOwnerSelfApproval,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	var i ApprovalPolicy
+	err := row.Scan(
+		&i.OrgID,
+		&i.Mode,
+		&i.ThresholdArsMinor,
+		&i.ThresholdUsdMinor,
+		&i.AllowOwnerSelfApproval,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

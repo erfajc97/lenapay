@@ -24,7 +24,7 @@ SELECT * FROM payouts WHERE id = sqlc.arg(id) FOR UPDATE;
 -- name: ApprovePayout :execrows
 UPDATE payouts
 SET status = 'approved', approved_by = sqlc.arg(approved_by), approved_at = sqlc.arg(approved_at),
-    updated_at = sqlc.arg(approved_at)
+    self_approved = sqlc.arg(self_approved), updated_at = sqlc.arg(approved_at)
 WHERE id = sqlc.arg(id) AND org_id = sqlc.arg(org_id) AND status = 'pending_approval';
 
 -- name: RejectPayout :execrows

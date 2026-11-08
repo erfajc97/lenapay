@@ -24,7 +24,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/db"
 )
 
 const (

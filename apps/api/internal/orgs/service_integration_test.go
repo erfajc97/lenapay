@@ -15,17 +15,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	kycfake "github.com/erfajc97/lenapay/apps/api/internal/kyc/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/kyc"
+	kycfake "lenapay/apps/api/internal/kyc/provider/fake"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db/dbtest"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 var pg *dbtest.Postgres
@@ -76,6 +76,9 @@ func newEnv(t *testing.T, personal bool) env {
 		Pool: pool, Clock: clk, Issuer: issuer, Codes: box, Config: cfg,
 		Memberships: identity.MembershipsFunc(func(ctx context.Context, id uuid.UUID) ([]identity.MembershipSummary, error) {
 			return e.orgs.MembershipsForUser(ctx, id)
+		}),
+		Invites: identity.InviteAcceptorFunc(func(ctx context.Context, tx pgx.Tx, id uuid.UUID, email string) (int, error) {
+			return e.orgs.AcceptERPInvites(ctx, tx, id, email)
 		}),
 	})
 	var kycSvc kyc.Service
@@ -129,7 +132,7 @@ func TestCreateOrgOpensKYCCaseAndAudits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if org.LegalName != "Constructora Sur SA" || org.Role != auth.RoleAdmin || org.KYCStatus != auth.KYCDraft {
+	if org.LegalName != "Constructora Sur SA" || org.Role != auth.RoleOwner || org.KYCStatus != auth.KYCDraft {
 		t.Fatalf("org %+v", org)
 	}
 	var caseKind, caseStatus string
@@ -224,7 +227,7 @@ func TestInvitesAndMembers(t *testing.T) {
 	wantCode(t, err, apperr.CodeUserNotFound)
 
 	members, err := e.orgs.ListMembers(ctx, admin)
-	if err != nil || len(members) != 3 || members[0].UserID != ana.UserID || members[0].Role != auth.RoleAdmin {
+	if err != nil || len(members) != 3 || members[0].UserID != ana.UserID || members[0].Role != auth.RoleOwner {
 		t.Fatalf("members %+v %v", members, err)
 	}
 	list, err := e.orgs.List(ctx, carla)
@@ -285,95 +288,6 @@ func TestOtherTenant(t *testing.T) {
 	me, err := e.ids.Me(ctx, ana)
 	if err != nil || len(me.Memberships) != 1 || me.Memberships[0].OrgID != orgA.ID {
 		t.Fatalf("/me of ana %+v %v", me, err)
-	}
-}
-
-// Role changes and removals: never above the caller, never losing the last admin, tenant
-// scoped (a member of another org is member.not_found), audited.
-func TestUpdateAndRemoveMembers(t *testing.T) {
-	t.Parallel()
-	e := newEnv(t, false)
-	ctx := t.Context()
-	ana := e.user(t, "ana@example.com")
-	org, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Constructora Sur"})
-	admin := in(ana, org.ID, auth.RoleAdmin)
-	bruno := e.user(t, "bruno@example.com")
-	if _, err := e.orgs.AddMember(ctx, admin, orgs.MemberInput{Email: "bruno@example.com", Role: auth.RoleOperator}); err != nil {
-		t.Fatal(err)
-	}
-
-	// The only admin cannot demote or remove themselves.
-	_, err := e.orgs.UpdateMemberRole(ctx, admin, ana.UserID, auth.RoleViewer)
-	wantCode(t, err, apperr.CodeLastAdmin)
-	wantCode(t, e.orgs.RemoveMember(ctx, admin, ana.UserID), apperr.CodeLastAdmin)
-
-	// An approver cannot grant admin nor touch an admin.
-	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleApprover), bruno.UserID, auth.RoleAdmin)
-	wantCode(t, err, apperr.CodeRoleEscalation)
-	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleApprover), ana.UserID, auth.RoleViewer)
-	wantCode(t, err, apperr.CodeRoleEscalation)
-
-	m, err := e.orgs.UpdateMemberRole(ctx, admin, bruno.UserID, auth.RoleAdmin)
-	if err != nil || m.Role != auth.RoleAdmin || m.Email != "bruno@example.com" {
-		t.Fatalf("promote %+v %v", m, err)
-	}
-	// Two admins now: ana can step down, then bruno is the last one.
-	if _, err := e.orgs.UpdateMemberRole(ctx, admin, ana.UserID, auth.RoleApprover); err != nil {
-		t.Fatalf("demote with another admin: %v", err)
-	}
-	wantCode(t, e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), bruno.UserID), apperr.CodeLastAdmin)
-	if err := e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID); err != nil {
-		t.Fatalf("remove: %v", err)
-	}
-	members, _ := e.orgs.ListMembers(ctx, in(bruno, org.ID, auth.RoleAdmin))
-	if len(members) != 1 || members[0].UserID != bruno.UserID {
-		t.Fatalf("members %+v", members)
-	}
-	wantCode(t, e.orgs.RemoveMember(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID), apperr.CodeMemberNotFound)
-
-	// Another org's member is not found from here (T).
-	other, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Otra SA"})
-	_, err = e.orgs.UpdateMemberRole(ctx, in(bruno, org.ID, auth.RoleAdmin), ana.UserID, auth.RoleViewer)
-	wantCode(t, err, apperr.CodeMemberNotFound)
-	if _, err := e.orgs.Get(ctx, in(ana, other.ID, auth.RoleAdmin)); err != nil {
-		t.Fatal(err)
-	}
-	var audits int
-	if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM audit_log WHERE org_id = $1 AND action IN ('member.role_change', 'member.remove')", org.ID).Scan(&audits); err != nil || audits != 3 {
-		t.Fatalf("audit rows %d (%v)", audits, err)
-	}
-}
-
-// Concurrent demotions of the only two admins: exactly one succeeds (the count locks).
-func TestConcurrentDemotionsKeepOneAdmin(t *testing.T) {
-	t.Parallel()
-	e := newEnv(t, false)
-	ctx := t.Context()
-	ana := e.user(t, "ana@example.com")
-	org, _ := e.orgs.Create(ctx, ana, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: "Constructora Sur"})
-	bruno := e.user(t, "bruno@example.com")
-	if _, err := e.orgs.AddMember(ctx, in(ana, org.ID, auth.RoleAdmin), orgs.MemberInput{Email: "bruno@example.com", Role: auth.RoleAdmin}); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	errs := make([]error, 2)
-	for i, pair := range [][2]auth.Principal{{ana, bruno}, {bruno, ana}} {
-		wg.Go(func() {
-			_, errs[i] = e.orgs.UpdateMemberRole(ctx, in(pair[0], org.ID, auth.RoleAdmin), pair[1].UserID, auth.RoleViewer)
-		})
-	}
-	wg.Wait()
-	ok := 0
-	for _, err := range errs {
-		if err == nil {
-			ok++
-		} else if !apperr.IsCode(err, apperr.CodeLastAdmin) {
-			t.Fatalf("unexpected: %v", err)
-		}
-	}
-	var admins int
-	if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE org_id = $1 AND role = 'admin'", org.ID).Scan(&admins); err != nil || ok != 1 || admins != 1 {
-		t.Fatalf("ok %d admins %d (%v)", ok, admins, err)
 	}
 }
 
@@ -447,7 +361,7 @@ func TestCreatePersonalForUser(t *testing.T) {
 			}
 			continue
 		}
-		if len(list) != 1 || list[0].ID != orgID || list[0].Kind != orgs.KindPersonal || list[0].Role != auth.RoleAdmin ||
+		if len(list) != 1 || list[0].ID != orgID || list[0].Kind != orgs.KindPersonal || list[0].Role != auth.RoleOwner ||
 			list[0].KYCStatus != auth.KYCDraft || list[0].LegalName != "hook-true@persona.test" {
 			t.Fatalf("personal org = %+v", list)
 		}

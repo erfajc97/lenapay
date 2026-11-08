@@ -12,9 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/db/dbtest"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 var pg *dbtest.Postgres

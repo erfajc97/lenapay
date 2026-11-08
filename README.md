@@ -49,14 +49,17 @@ changes nothing.
 
 | User (password `Lenapay2026!`, **demo only**) | Role |
 |---|---|
-| `demo@lenapay.app` | admin of **Desarrollos Del Sur SA** (CUIT 30-71234567-8, KYC approved, found in the ERP fixture index) |
-| `approver@lenapay.app` | approver of the same org; created the two payouts waiting for `demo@` to approve |
+| `demo@lenapay.app` | "Ricardo Benítez", **owner** of **Desarrollos Del Sur SA** (CUIT 30-71234567-8, KYC approved, found in the ERP fixture index); its approval policy approves company payouts strictly below ARS 500.000 without a second person |
+| `approver@lenapay.app` | "Carolina Méndez", approver of the same org; created the two payouts waiting for `demo@` to approve (made before the policy) and one below the threshold that settled at once |
 | `persona@lenapay.app` | personal wallet "Lucía Fernández" (personal mode on, DNI 30.123.456), with ARS and USD CVUs and ARS 3.000.000 to pay with; "Mis pagos" shows 2 companies |
-| `andina@lenapay.app` | admin of **Constructora Andina SRL** (CUIT 30-71553201-4), linked to its ERP org (fixtures `erp-org-002`) |
+| `andina@lenapay.app` | "Hernán Quiroga", owner of **Constructora Andina SRL** (CUIT 30-71553201-4), linked to its ERP org (fixtures `erp-org-002`); the import invited its 4 ERP users with payments permissions |
+| `tesoreria@constructoraandina.com.ar` | "Paula Sosa", an ERP user the Andina import invited as operator: she joined just by signing up and verifying her email |
 
 Dataset: project accounts "Torre Palermo" and "Barrio Nordelta Lote 12"; 8 payers with ARS CVUs
-(3 also USD), one of them Lucía by her DNI; 17 payins credited through the ledger; 3 payouts (2 pending approval, 1 settled
-with its proof PDF); an internal transfer; a reconciliation run. "Mis pagos": the ERP import
+(3 also USD), one of them Lucía by her DNI; 17 payins credited through the ledger; 4 payouts (2 pending approval, 1 settled
+with its proof PDF, 1 below the ARS 500.000 threshold approved at creation and settled); an internal transfer; a reconciliation run.
+Roles: every org has exactly one owner (its creator); only the owner changes the approval policy,
+transfers ownership and demotes/removes admins. "Mis pagos": the ERP import
 of Constructora Andina creates Lucía as a buyer by her CUIT 27-30123456-8 (12 CAC installments in
 the fixture), with an ARS CVU and 2 payins, so `GET /me/payments/companies` as `persona@` lists
 both companies with history, and the Andina one with installments. Email codes are always `123456`
@@ -69,9 +72,10 @@ A payout to a Lenapay CVU or alias is on-us (`rail: internal`): it never reaches
 settles at once (after the 4-eyes approval for companies), and the receiver sees a credited payin.
 
 `node scripts/smoke.mjs` walks the whole path with fresh users (signup → KYC → CVU → payin →
-SSE → payout → second approver → settle → attachment + proof → reconciliation → "Mis pagos":
-a verified person sees, hides/shows and pays the company on-us) and exits 1 on
-any failure; `node scripts/p95.mjs` times the hot reads (R-NF-1) on the seeded stack.
+SSE → payout → second approver → settle → attachment + proof → reconciliation → approval policy
+threshold (an approver changing it gets 403) → ownership transfer and back → profile and preferences
+→ the seeded Andina ERP users import and its auto-accepted invites → "Mis pagos": a verified person
+sees, hides/shows and pays the company on-us) and exits 1 on any failure (run the seed first); `node scripts/p95.mjs` times the hot reads (R-NF-1) on the seeded stack.
 
 ## Testing
 

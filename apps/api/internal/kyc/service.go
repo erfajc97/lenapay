@@ -15,17 +15,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
+	"lenapay/apps/api/internal/kyc/store"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/jobs"
+	applog "lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/platform/upload"
 )
 
 // Service is the KYC API used by the handler, the review job and orgs.

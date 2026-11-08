@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc/provider/fake"
+	"lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/kyc/provider/fake"
 )
 
 // R-KYC-2: the fake approves valid-looking data and rejects the configured DNI list.

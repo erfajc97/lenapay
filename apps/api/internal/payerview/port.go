@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/auth"
 )
 
 // ERP answers whether companies are ERP-linked and a buyer's installments (erplink.Service).

@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/fees"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/fees"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // The fixtures pin the rounding direction (FT13): a third decimal of exactly 5 rounds up, just

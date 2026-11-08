@@ -4,23 +4,23 @@ import (
 	"context"
 	"errors"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	erpfake "github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/movements"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/erplink"
+	erpfake "lenapay/apps/api/internal/erplink/provider/fake"
+	"lenapay/apps/api/internal/movements"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
 )
 
 // andinaCompany is the second company of "Mis pagos": approved, linked to its ERP org (the
 // worker imports the projects and buyers, the persona's CUIT among them), with an ARS CVU for
 // her and two of her payins, so the persona sees a company with history AND installments.
 func (sd *seeder) andinaCompany(ctx context.Context) error {
-	owner, err := sd.user(ctx, andinaEmail)
+	owner, err := sd.user(ctx, andinaEmail, "Hernán Quiroga")
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func (sd *seeder) andinaCompany(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sd.andina = auth.Principal{UserID: owner, OrgID: orgID, Role: auth.RoleAdmin, KYCStatus: auth.KYCApproved, StepUp: true}
+	sd.andina = auth.Principal{UserID: owner, OrgID: orgID, Role: auth.RoleOwner, KYCStatus: auth.KYCApproved, StepUp: true}
 	if err := sd.linkAndina(ctx); err != nil {
 		return err
 	}

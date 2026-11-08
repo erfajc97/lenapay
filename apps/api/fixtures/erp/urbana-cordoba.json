@@ -4,7 +4,47 @@
   "cuit": "30714487201",
   "users": [
     {
-      "username": "finanzas@urbanacba.com.ar"
+      "username": "finanzas@urbanacba.com.ar",
+      "email": "finanzas@urbanacba.com.ar",
+      "fullName": "Jorge Medina",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "pagos@urbanacba.com.ar",
+      "email": "pagos@urbanacba.com.ar",
+      "fullName": "Agustín Correa",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_CVU"
+      ]
+    },
+    {
+      "username": "conciliaciones@urbanacba.com.ar",
+      "email": "conciliaciones@urbanacba.com.ar",
+      "fullName": "Sofía Bustos",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS_MASTER"
+      ]
+    },
+    {
+      "username": "contable@urbanacba.com.ar",
+      "email": "contable@urbanacba.com.ar",
+      "fullName": "Laura Arias",
+      "admin": false,
+      "permissions": [
+        "CONTABILIDAD"
+      ]
     }
   ],
   "projects": [

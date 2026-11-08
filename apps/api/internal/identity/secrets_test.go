@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 // Passwords are stored as argon2id PHC strings and only the right password verifies.

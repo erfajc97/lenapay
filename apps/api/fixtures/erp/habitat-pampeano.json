@@ -4,7 +4,38 @@
   "cuit": "30712665544",
   "users": [
     {
-      "username": "contacto@habitatpampeano.com.ar"
+      "username": "contacto@habitatpampeano.com.ar",
+      "email": "contacto@habitatpampeano.com.ar",
+      "fullName": "Oscar Peralta",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "cobranzas@habitatpampeano.com.ar",
+      "email": "cobranzas@habitatpampeano.com.ar",
+      "fullName": "Florencia Díaz",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_CREATE_CVU",
+        "CUENTA_CORRIENTE_CLIENTES"
+      ]
+    },
+    {
+      "username": "contable@habitatpampeano.com.ar",
+      "email": "contable@habitatpampeano.com.ar",
+      "fullName": "Pablo Aguirre",
+      "admin": false,
+      "permissions": [
+        "CONTABILIDAD"
+      ]
     }
   ],
   "projects": [

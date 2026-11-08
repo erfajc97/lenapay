@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 // NewPool opens the pool with server-side timeouts, so a stuck query or an idle transaction

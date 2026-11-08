@@ -4,7 +4,38 @@
   "cuit": "30713998067",
   "users": [
     {
-      "username": "admin@norteconstrucciones.com.ar"
+      "username": "admin@norteconstrucciones.com.ar",
+      "email": "admin@norteconstrucciones.com.ar",
+      "fullName": "Alberto Cáceres",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@norteconstrucciones.com.ar",
+      "email": "tesoreria@norteconstrucciones.com.ar",
+      "fullName": "Daniela Rojas",
+      "admin": false,
+      "permissions": [
+        "CONSTRUCTORA_PAYMENTS_PAYOUTS",
+        "CONSTRUCTORA_PAYMENTS_ACCOUNT_MOVEMENTS"
+      ]
+    },
+    {
+      "username": "compras@norteconstrucciones.com.ar",
+      "email": "compras@norteconstrucciones.com.ar",
+      "fullName": "Martín Suárez",
+      "admin": false,
+      "permissions": [
+        "CONSTRUCTORA_COMPRAS"
+      ]
     }
   ],
   "projects": [

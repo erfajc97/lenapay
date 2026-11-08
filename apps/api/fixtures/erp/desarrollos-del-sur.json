@@ -4,7 +4,61 @@
   "cuit": "30712345678",
   "users": [
     {
-      "username": "admin@desarrollosdelsur.com.ar"
+      "username": "admin@desarrollosdelsur.com.ar",
+      "email": "admin@desarrollosdelsur.com.ar",
+      "fullName": "Ricardo Benítez",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@desarrollosdelsur.com.ar",
+      "email": "tesoreria@desarrollosdelsur.com.ar",
+      "fullName": "Carolina Méndez",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_ACCOUNT_MOVEMENTS",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "cuentas@desarrollosdelsur.com.ar",
+      "email": "cuentas@desarrollosdelsur.com.ar",
+      "fullName": "Federico Ríos",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "CLIENTES"
+      ]
+    },
+    {
+      "username": "contable@desarrollosdelsur.com.ar",
+      "email": "contable@desarrollosdelsur.com.ar",
+      "fullName": "Natalia Herrera",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS",
+        "CONTABILIDAD"
+      ]
+    },
+    {
+      "username": "obra@desarrollosdelsur.com.ar",
+      "email": "obra@desarrollosdelsur.com.ar",
+      "fullName": "Sergio Molina",
+      "admin": false,
+      "permissions": [
+        "PROJECT_MANAGEMENT",
+        "COMPRAS"
+      ]
     }
   ],
   "projects": [

@@ -9,12 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
+	"lenapay/apps/api/internal/payouts/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/upload"
 )
 
 // MaxAttachments is how many documents one payout can carry.

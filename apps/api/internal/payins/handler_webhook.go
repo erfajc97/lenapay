@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
+	"lenapay/apps/api/internal/platform/httpx"
 )
 
 // Headers of a signed PSP webhook (contract: receivePspTransferWebhook).

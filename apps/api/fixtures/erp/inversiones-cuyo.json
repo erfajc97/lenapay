@@ -4,7 +4,38 @@
   "cuit": "30706014859",
   "users": [
     {
-      "username": "tesoreria@inversionescuyo.com.ar"
+      "username": "tesoreria@inversionescuyo.com.ar",
+      "email": "tesoreria@inversionescuyo.com.ar",
+      "fullName": "Graciela Vera",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "pagos@inversionescuyo.com.ar",
+      "email": "pagos@inversionescuyo.com.ar",
+      "fullName": "Ignacio Moreno",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS"
+      ]
+    },
+    {
+      "username": "contable@inversionescuyo.com.ar",
+      "email": "contable@inversionescuyo.com.ar",
+      "fullName": "Cecilia Navarro",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS",
+        "CONTABILIDAD"
+      ]
     }
   ],
   "projects": [

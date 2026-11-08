@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/bank"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/simulator"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/simulator/provider/webhook"
+	"lenapay/apps/bind-mock/internal/bank"
+	"lenapay/apps/bind-mock/internal/simulator"
+	"lenapay/apps/bind-mock/internal/simulator/provider/webhook"
 )
 
 const secret = "test-webhook-secret-0123"

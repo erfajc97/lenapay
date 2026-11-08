@@ -16,14 +16,14 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/notifications/provider/fake"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/db/dbtest"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 var pg *dbtest.Postgres

@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
 )
 
 // Type of movement (contract MovementType).

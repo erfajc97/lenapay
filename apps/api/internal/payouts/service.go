@@ -11,22 +11,23 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/fees"
-	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/idempotency"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/fees"
+	"lenapay/apps/api/internal/ledger"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payouts/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/idempotency"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/jobs"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/psp"
 )
 
 // Service is the payouts API used by the handler, the worker and reconciliation.
@@ -73,6 +74,8 @@ type Deps struct {
 	// CVUs and Credits route payouts to Lenapay CVUs on the internal rail (nil: always bank).
 	CVUs    CVUs
 	Credits Credits
+	// Policies are the org's approval rules (nil: strict 4-eyes, no threshold, no self-approval).
+	Policies Policies
 	// Location is the business time zone of the proof's dates (UTC when nil).
 	Location *time.Location
 }
@@ -224,10 +227,12 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 	if err != nil {
 		return Payout{}, err
 	}
-	// Personal wallets send directly; company payouts wait for a second person (R-OUT-4).
-	personal := pr.account.Kind == accounts.KindPersonal
+	status, reason, err := s.initialStatus(ctx, p, pr.account, in.Amount)
+	if err != nil {
+		return Payout{}, err
+	}
 	var approvers []uuid.UUID
-	if !personal {
+	if status == StatusPendingApproval {
 		if approvers, err = s.approvers(ctx, p); err != nil {
 			return Payout{}, err
 		}
@@ -251,15 +256,11 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 		if err != nil {
 			return err
 		}
-		status := StatusPendingApproval
-		if personal {
-			status = StatusApproved
-		}
 		q := store.New(tx)
 		if err := q.InsertPayout(ctx, insertParams(id, p, in, concept, pr, status, holdID, now)); err != nil {
 			return fmt.Errorf("payouts: insert: %w", err)
 		}
-		if err := s.event(ctx, q, id, p.OrgID, nil, status, &p.UserID, nil); err != nil {
+		if err := s.event(ctx, q, id, p.OrgID, nil, status, &p.UserID, reason); err != nil {
 			return err
 		}
 		if err := s.afterCreate(ctx, tx, p, id, in, status, pr.rail, approvers); err != nil {
@@ -271,6 +272,40 @@ func (s *service) Create(ctx context.Context, p auth.Principal, in CreateInput) 
 		return complete(ctx, s.deps.Idempotency, tx, key, replayStatusCreated, out)
 	})
 	return out, err
+}
+
+// reasonPolicyThreshold is the event reason of a company payout approved at creation because
+// its amount is below the org's threshold.
+const reasonPolicyThreshold = "policy_threshold"
+
+// initialStatus decides whether a new payout waits for approval (R-OUT-4 and the org's approval
+// policy): personal wallets send directly; a company payout strictly below its currency's
+// threshold (threshold mode) is approved at once; everything else waits for a second person.
+func (s *service) initialStatus(ctx context.Context, p auth.Principal, account accounts.Account, amount money.Amount) (Status, *string, error) {
+	if account.Kind == accounts.KindPersonal {
+		return StatusApproved, nil, nil
+	}
+	rules, err := s.approvalRules(ctx, p.OrgID)
+	if err != nil {
+		return "", nil, err
+	}
+	if rules.AutoApproves(amount) {
+		reason := reasonPolicyThreshold
+		return StatusApproved, &reason, nil
+	}
+	return StatusPendingApproval, nil, nil
+}
+
+// approvalRules reads the org's rules; without a policy source it is strict 4-eyes.
+func (s *service) approvalRules(ctx context.Context, orgID uuid.UUID) (orgs.ApprovalRules, error) {
+	if s.deps.Policies == nil {
+		return orgs.ApprovalRules{Policy: orgs.ApprovalPolicy{Mode: orgs.ApprovalAlways}}, nil
+	}
+	rules, err := s.deps.Policies.ApprovalRules(ctx, orgID)
+	if err != nil {
+		return orgs.ApprovalRules{}, fmt.Errorf("payouts: approval rules: %w", err)
+	}
+	return rules, nil
 }
 
 func validateCreate(key, concept string) error {
@@ -354,6 +389,10 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 	if err != nil {
 		return Payout{}, err
 	}
+	selfAllowed, err := s.ownerMaySelfApprove(ctx, p)
+	if err != nil {
+		return Payout{}, err
+	}
 	var out Payout
 	err = db.WithSerializable(ctx, s.deps.Pool, func(tx pgx.Tx) error {
 		replay, err := s.deps.Idempotency.Claim(ctx, tx, key)
@@ -365,11 +404,14 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 		if err != nil {
 			return err
 		}
-		if row.CreatedBy == p.UserID {
+		self := row.CreatedBy == p.UserID
+		if self && !selfAllowed {
 			return apperr.New(apperr.CodePayoutSelfApproval, map[string]any{"payoutId": payoutID.String()})
 		}
 		now := s.deps.Clock.Now()
-		rows, err := q.ApprovePayout(ctx, store.ApprovePayoutParams{ApprovedBy: &p.UserID, ApprovedAt: &now, ID: payoutID, OrgID: p.OrgID})
+		rows, err := q.ApprovePayout(ctx, store.ApprovePayoutParams{
+			ApprovedBy: &p.UserID, ApprovedAt: &now, SelfApproved: self, ID: payoutID, OrgID: p.OrgID,
+		})
 		if err != nil {
 			return fmt.Errorf("payouts: approve: %w", err)
 		}
@@ -380,7 +422,11 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 		if err := s.event(ctx, q, payoutID, p.OrgID, &from, StatusApproved, &p.UserID, nil); err != nil {
 			return err
 		}
-		if err := s.audit(ctx, tx, p.OrgID, &p.UserID, "payout.approve", payoutID, idempotencyKey); err != nil {
+		action := "payout.approve"
+		if self {
+			action = "payout.self_approval"
+		}
+		if err := s.audit(ctx, tx, p.OrgID, &p.UserID, action, payoutID, idempotencyKey); err != nil {
 			return err
 		}
 		if err := s.release(ctx, tx, payoutID, Rail(row.Rail)); err != nil {
@@ -395,6 +441,19 @@ func (s *service) Approve(ctx context.Context, p auth.Principal, payoutID uuid.U
 		return complete(ctx, s.deps.Idempotency, tx, key, replayStatusOK, out)
 	})
 	return out, err
+}
+
+// ownerMaySelfApprove: only the owner, only when the policy allows it and nobody else in the
+// org can approve (otherwise 4-eyes holds for everyone).
+func (s *service) ownerMaySelfApprove(ctx context.Context, p auth.Principal) (bool, error) {
+	if p.Role != auth.RoleOwner {
+		return false, nil
+	}
+	rules, err := s.approvalRules(ctx, p.OrgID)
+	if err != nil {
+		return false, err
+	}
+	return rules.OwnerMaySelfApprove(), nil
 }
 
 func (s *service) Reject(ctx context.Context, p auth.Principal, payoutID uuid.UUID, reason string) (Payout, error) {

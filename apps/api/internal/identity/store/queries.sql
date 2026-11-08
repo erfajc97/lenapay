@@ -1,8 +1,8 @@
 -- Identity queries (users, sessions, refresh tokens, devices, email codes, step-up challenges).
 
 -- name: InsertUser :exec
-INSERT INTO users (id, email, password_hash, created_at, updated_at)
-VALUES (sqlc.arg(id), sqlc.arg(email), sqlc.arg(password_hash), sqlc.arg(created_at), sqlc.arg(created_at));
+INSERT INTO users (id, email, password_hash, full_name, created_at, updated_at)
+VALUES (sqlc.arg(id), sqlc.arg(email), sqlc.arg(password_hash), sqlc.narg(full_name), sqlc.arg(created_at), sqlc.arg(created_at));
 
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = sqlc.arg(id);
@@ -86,3 +86,23 @@ FOR UPDATE;
 
 -- name: MarkStepUpChallengeUsed :execrows
 UPDATE step_up_challenges SET used_at = sqlc.arg(used_at) WHERE id = sqlc.arg(id) AND used_at IS NULL;
+
+-- name: SetUserFullName :execrows
+UPDATE users SET full_name = sqlc.narg(full_name), updated_at = sqlc.arg(updated_at) WHERE id = sqlc.arg(id);
+
+-- name: FillUserFullNameIfEmpty :execrows
+-- The person KYC approval names the user only when they have not named themselves.
+UPDATE users SET full_name = sqlc.arg(full_name), updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND full_name IS NULL;
+
+-- name: GetUserPreferences :one
+SELECT * FROM user_preferences WHERE user_id = sqlc.arg(user_id);
+
+-- name: UpsertUserPreferences :one
+INSERT INTO user_preferences (user_id, default_org_id, default_account_id, locale, theme, updated_at)
+VALUES (sqlc.arg(user_id), sqlc.narg(default_org_id), sqlc.narg(default_account_id), sqlc.narg(locale),
+        sqlc.narg(theme), sqlc.arg(updated_at))
+ON CONFLICT (user_id) DO UPDATE
+SET default_org_id = EXCLUDED.default_org_id, default_account_id = EXCLUDED.default_account_id,
+    locale = EXCLUDED.locale, theme = EXCLUDED.theme, updated_at = EXCLUDED.updated_at
+RETURNING *;

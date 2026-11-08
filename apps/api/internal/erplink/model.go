@@ -5,7 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/config"
 )
 
 // Caps of the ERP credentials (contract CreateErpLinkRequest).
@@ -47,4 +48,23 @@ type Link struct {
 	LinkedAt     time.Time
 	ImportStatus ImportStatus
 	ImportedAt   *time.Time
+	// Summary is what the import copied and who it invited; nil until the import has run.
+	Summary *ImportSummary
+}
+
+// ImportSummary is the result of a link's import.
+type ImportSummary struct {
+	Projects                   int
+	Buyers                     int
+	SkippedBuyers              int
+	UsersInvited               int
+	UsersAlreadyMembers        int
+	UsersWithoutPaymentsAccess int
+	InvitedUsers               []InvitedUser
+}
+
+// InvitedUser is an ERP user the import invited, with the role after the linker cap.
+type InvitedUser struct {
+	Email string    `json:"email"`
+	Role  auth.Role `json:"role"`
 }

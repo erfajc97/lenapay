@@ -52,5 +52,7 @@ linters:
 formatters:
   enable: [gofumpt, goimports]
   settings:
+    gofumpt:
+      module-path: lenapay/apps/bind-mock # the module path has no dot: without it gofumpt reads lenapay/... as std
     goimports:
-      local-prefixes: [github.com/erfajc97/lenapay]
+      local-prefixes: [lenapay]

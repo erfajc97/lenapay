@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
-	platformrealtime "github.com/erfajc97/lenapay/apps/api/internal/platform/realtime"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/httpx"
+	platformrealtime "lenapay/apps/api/internal/platform/realtime"
 )
 
 // StreamHandler serves the SSE stream of the principal's org (R-IN-3). The guard resolved the

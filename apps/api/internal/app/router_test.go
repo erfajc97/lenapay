@@ -14,24 +14,24 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	"github.com/erfajc97/lenapay/apps/api/internal/movements"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/realtime"
-	"github.com/erfajc97/lenapay/apps/api/internal/reconciliation"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/movements"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/httpx"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/realtime"
+	"lenapay/apps/api/internal/reconciliation"
 )
 
 type pinger struct{ err error }
@@ -254,6 +254,20 @@ func TestCORSPreflight(t *testing.T) {
 	f.h.ServeHTTP(rec, r)
 	if rec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:8081" {
 		t.Fatalf("preflight headers %v", rec.Header())
+	}
+
+	// The web SSE client (react-native-sse) sends these on GET /orgs/{orgId}/events.
+	sse := httptest.NewRequest(http.MethodOptions, "/orgs/00000000-0000-0000-0000-000000000001/events", nil)
+	sse.Header.Set("Origin", "http://localhost:8081")
+	sse.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	sse.Header.Set("Access-Control-Request-Headers", "authorization, cache-control, x-requested-with, last-event-id")
+	rec = httptest.NewRecorder()
+	f.h.ServeHTTP(rec, sse)
+	allowed := strings.ToLower(rec.Header().Get("Access-Control-Allow-Headers"))
+	for _, h := range []string{"cache-control", "x-requested-with", "last-event-id"} {
+		if !strings.Contains(allowed, h) {
+			t.Fatalf("SSE preflight does not allow %s: %q", h, allowed)
+		}
 	}
 	r.Header.Set("Origin", "https://evil.example")
 	rec = httptest.NewRecorder()

@@ -19,23 +19,23 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/fees"
-	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	payoutfake "github.com/erfajc97/lenapay/apps/api/internal/payouts/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/idempotency"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/fees"
+	"lenapay/apps/api/internal/ledger"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payouts"
+	payoutfake "lenapay/apps/api/internal/payouts/provider/fake"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/db/dbtest"
+	"lenapay/apps/api/internal/platform/idempotency"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/psp"
 )
 
 var pg *dbtest.Postgres
@@ -57,6 +57,7 @@ type env struct {
 	svc       payouts.Service
 	psp       *fakePSP
 	notifier  *recordingNotifier
+	policies  *fakePolicies
 	docs      *payoutfake.DiskDocumentStore
 	org       uuid.UUID
 	otherOrg  uuid.UUID
@@ -82,7 +83,10 @@ func setup(t *testing.T) *env {
 	if err := feeSvc.EnsureDefaultPlan(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{pool: pool, clock: clk, ledger: led, psp: newFakePSP(), notifier: &recordingNotifier{}, docs: payoutfake.NewDiskDocumentStore(t.TempDir())}
+	e := &env{
+		pool: pool, clock: clk, ledger: led, psp: newFakePSP(), notifier: &recordingNotifier{}, policies: &fakePolicies{},
+		docs: payoutfake.NewDiskDocumentStore(t.TempDir()),
+	}
 	e.creator, e.approver = e.user(t), e.user(t)
 	e.org, e.otherOrg, e.personOrg = e.newOrg(t, "company"), e.newOrg(t, "company"), e.newOrg(t, "personal")
 	e.account = e.newAccount(t, e.org, "project")
@@ -108,6 +112,7 @@ func setup(t *testing.T) *env {
 		Orgs: fakeMembers{members: map[uuid.UUID][]orgs.Member{e.org: {
 			{UserID: e.creator, Role: auth.RoleOperator}, {UserID: e.approver, Role: auth.RoleApprover},
 		}}},
+		Policies: e.policies,
 	})
 	return e
 }

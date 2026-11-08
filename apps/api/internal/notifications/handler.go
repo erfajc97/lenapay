@@ -3,8 +3,8 @@ package notifications
 import (
 	"context"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/auth"
 )
 
 // Handler implements the notifications operations of api.StrictServerInterface (HTTP only:

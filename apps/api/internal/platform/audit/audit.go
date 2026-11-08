@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/ids"
+	applog "lenapay/apps/api/internal/platform/log"
 )
 
 // ActorKind says who acted.

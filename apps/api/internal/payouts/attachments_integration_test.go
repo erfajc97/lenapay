@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/realtime"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/upload"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/realtime"
+	"lenapay/apps/api/internal/platform/upload"
 )
 
 func pdf(n int) payouts.AttachmentUpload {

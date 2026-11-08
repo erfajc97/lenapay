@@ -15,21 +15,23 @@ import (
 const approvePayout = `-- name: ApprovePayout :execrows
 UPDATE payouts
 SET status = 'approved', approved_by = $1, approved_at = $2,
-    updated_at = $2
-WHERE id = $3 AND org_id = $4 AND status = 'pending_approval'
+    self_approved = $3, updated_at = $2
+WHERE id = $4 AND org_id = $5 AND status = 'pending_approval'
 `
 
 type ApprovePayoutParams struct {
-	ApprovedBy *uuid.UUID
-	ApprovedAt *time.Time
-	ID         uuid.UUID
-	OrgID      uuid.UUID
+	ApprovedBy   *uuid.UUID
+	ApprovedAt   *time.Time
+	SelfApproved bool
+	ID           uuid.UUID
+	OrgID        uuid.UUID
 }
 
 func (q *Queries) ApprovePayout(ctx context.Context, arg ApprovePayoutParams) (int64, error) {
 	result, err := q.db.Exec(ctx, approvePayout,
 		arg.ApprovedBy,
 		arg.ApprovedAt,
+		arg.SelfApproved,
 		arg.ID,
 		arg.OrgID,
 	)
@@ -126,7 +128,7 @@ func (q *Queries) FailPayout(ctx context.Context, arg FailPayoutParams) (int64, 
 }
 
 const getPayout = `-- name: GetPayout :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 AND org_id = $2
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail, self_approved FROM payouts WHERE id = $1 AND org_id = $2
 `
 
 type GetPayoutParams struct {
@@ -170,12 +172,13 @@ func (q *Queries) GetPayout(ctx context.Context, arg GetPayoutParams) (Payout, e
 		&i.SettledAt,
 		&i.FailedAt,
 		&i.Rail,
+		&i.SelfApproved,
 	)
 	return i, err
 }
 
 const getPayoutForUpdate = `-- name: GetPayoutForUpdate :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 FOR UPDATE
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail, self_approved FROM payouts WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetPayoutForUpdate(ctx context.Context, id uuid.UUID) (Payout, error) {
@@ -214,12 +217,13 @@ func (q *Queries) GetPayoutForUpdate(ctx context.Context, id uuid.UUID) (Payout,
 		&i.SettledAt,
 		&i.FailedAt,
 		&i.Rail,
+		&i.SelfApproved,
 	)
 	return i, err
 }
 
 const getPayoutForUpdateInOrg = `-- name: GetPayoutForUpdateInOrg :one
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts WHERE id = $1 AND org_id = $2 FOR UPDATE
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail, self_approved FROM payouts WHERE id = $1 AND org_id = $2 FOR UPDATE
 `
 
 type GetPayoutForUpdateInOrgParams struct {
@@ -263,6 +267,7 @@ func (q *Queries) GetPayoutForUpdateInOrg(ctx context.Context, arg GetPayoutForU
 		&i.SettledAt,
 		&i.FailedAt,
 		&i.Rail,
+		&i.SelfApproved,
 	)
 	return i, err
 }
@@ -485,7 +490,7 @@ func (q *Queries) ListPayoutEvents(ctx context.Context, arg ListPayoutEventsPara
 }
 
 const listPendingApprovals = `-- name: ListPendingApprovals :many
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail, self_approved FROM payouts
 WHERE org_id = $1 AND status = 'pending_approval'
   AND ($2::timestamptz IS NULL
        OR (created_at, id) < ($2::timestamptz, $3::uuid))
@@ -547,6 +552,7 @@ func (q *Queries) ListPendingApprovals(ctx context.Context, arg ListPendingAppro
 			&i.SettledAt,
 			&i.FailedAt,
 			&i.Rail,
+			&i.SelfApproved,
 		); err != nil {
 			return nil, err
 		}
@@ -589,7 +595,7 @@ func (q *Queries) ListSendingPayouts(ctx context.Context, arg ListSendingPayouts
 }
 
 const listSettledPayoutsBetween = `-- name: ListSettledPayoutsBetween :many
-SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail FROM payouts
+SELECT id, org_id, account_id, currency, amount_minor, fee_minor, fee_plan_id, destination_type, destination_value, destination_account, destination_holder_name, destination_holder_cuit, destination_bank_name, concept, status, created_by, approved_by, rejected_by, reject_reason, hold_id, attempt_count, provider_attempt_id, provider_transfer_id, failure_code, ledger_transaction_id, idempotency_key, created_at, updated_at, approved_at, settled_at, failed_at, rail, self_approved FROM payouts
 WHERE currency = $1 AND status = 'settled' AND rail = 'bank'
   AND settled_at >= $2 AND settled_at < $3
 ORDER BY settled_at, id
@@ -644,6 +650,7 @@ func (q *Queries) ListSettledPayoutsBetween(ctx context.Context, arg ListSettled
 			&i.SettledAt,
 			&i.FailedAt,
 			&i.Rail,
+			&i.SelfApproved,
 		); err != nil {
 			return nil, err
 		}

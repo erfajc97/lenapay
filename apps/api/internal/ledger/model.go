@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Errors that are caller bugs or facts the caller must handle (errors.Is). Business failures

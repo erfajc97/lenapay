@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 func decodeEnvelope(t *testing.T, body io.Reader) EnvelopeBody {

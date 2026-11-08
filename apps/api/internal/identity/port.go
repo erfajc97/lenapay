@@ -41,3 +41,32 @@ type SignupHookFunc func(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email
 func (f SignupHookFunc) OnUserCreated(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) error {
 	return f(ctx, tx, userID, email)
 }
+
+// Accounts checks the account a user prefers as default (implemented by accounts.Service through
+// a cmd/api adapter): archived reports an archived account; a missing or foreign one is
+// account.not_found.
+type Accounts interface {
+	AccountArchived(ctx context.Context, orgID, accountID uuid.UUID) (archived bool, err error)
+}
+
+// AccountsFunc adapts a function to Accounts (identity is built before accounts).
+type AccountsFunc func(ctx context.Context, orgID, accountID uuid.UUID) (bool, error)
+
+// AccountArchived implements Accounts.
+func (f AccountsFunc) AccountArchived(ctx context.Context, orgID, accountID uuid.UUID) (bool, error) {
+	return f(ctx, orgID, accountID)
+}
+
+// InviteAcceptor accepts the pending invites of the ERP users import for a user whose email is
+// verified, inside the caller's transaction (implemented by orgs.Service).
+type InviteAcceptor interface {
+	AcceptERPInvites(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (accepted int, err error)
+}
+
+// InviteAcceptorFunc adapts a function to InviteAcceptor (orgs is built after identity).
+type InviteAcceptorFunc func(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (int, error)
+
+// AcceptERPInvites implements InviteAcceptor.
+func (f InviteAcceptorFunc) AcceptERPInvites(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (int, error) {
+	return f(ctx, tx, userID, email)
+}

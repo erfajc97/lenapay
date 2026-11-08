@@ -9,23 +9,31 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 // Role is a member's role inside an organization.
 type Role string
 
-// Roles from least to most privileged (R-ORG, PRD §2).
+// Roles from least to most privileged (R-ORG, PRD §2). The owner is ONE member per org (its
+// creator or whoever received a transfer); it is never granted by invite or role change.
 const (
 	RoleViewer   Role = "viewer"
 	RoleOperator Role = "operator"
 	RoleApprover Role = "approver"
 	RoleAdmin    Role = "admin"
+	RoleOwner    Role = "owner"
 )
 
 // Roles returns every role in privilege order. This ordering is the ONE permission matrix (T4).
 func Roles() []Role {
-	return []Role{RoleViewer, RoleOperator, RoleApprover, RoleAdmin}
+	return []Role{RoleViewer, RoleOperator, RoleApprover, RoleAdmin, RoleOwner}
+}
+
+// Grantable reports whether r can be given through an invite, add member or role change
+// (every role but the owner, which only moves through an ownership transfer).
+func (r Role) Grantable() bool {
+	return r != RoleOwner && slices.Contains(Roles(), r)
 }
 
 // ParseRole validates a role.

@@ -10,16 +10,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/erplink/store"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/jobs"
+	applog "lenapay/apps/api/internal/platform/log"
 )
 
 // Service is the ERP link API used by the handler and the worker.
@@ -30,7 +31,8 @@ type Service interface {
 	Link(ctx context.Context, p auth.Principal, c Credentials) (Link, error)
 	// Get returns the org's link (erp_link.not_found when none).
 	Get(ctx context.Context, p auth.Principal) (Link, error)
-	// Import is the erp_import job: projects → accounts, buyers → payers (R-ERP-3).
+	// Import is the erp_import job: projects → accounts, buyers → payers (R-ERP-3), ERP users →
+	// invites with the role their ERP permissions map to.
 	Import(ctx context.Context, orgID uuid.UUID) error
 	// LoadIdentityIndex refreshes erp_identity_index from the Directory (periodic job).
 	LoadIdentityIndex(ctx context.Context) error
@@ -52,6 +54,8 @@ type Deps struct {
 	Orgs      Orgs
 	Accounts  ProjectImporter
 	Payers    PayerImporter
+	// Invites invites the ERP org's users (nil: users are not imported).
+	Invites UserInviter
 }
 
 type service struct {
@@ -184,12 +188,17 @@ func (s *service) Get(ctx context.Context, p auth.Principal) (Link, error) {
 	return fromRow(row), nil
 }
 
-// importSummary is the snapshot stored on the link after an import (counts and refs only).
+// importSummary is the snapshot stored on the link after an import (counts, and the invited
+// users' emails and roles).
 type importSummary struct {
-	Projects      int    `json:"projects"`
-	Buyers        int    `json:"buyers"`
-	SkippedBuyers int    `json:"skippedBuyers"`
-	Error         string `json:"error,omitempty"`
+	Projects                   int           `json:"projects"`
+	Buyers                     int           `json:"buyers"`
+	SkippedBuyers              int           `json:"skippedBuyers"`
+	UsersInvited               int           `json:"usersInvited"`
+	UsersAlreadyMembers        int           `json:"usersAlreadyMembers"`
+	UsersWithoutPaymentsAccess int           `json:"usersWithoutPaymentsAccess"`
+	InvitedUsers               []InvitedUser `json:"invitedUsers"`
+	Error                      string        `json:"error,omitempty"`
 }
 
 func (s *service) Import(ctx context.Context, orgID uuid.UUID) error {
@@ -208,6 +217,9 @@ func (s *service) Import(ctx context.Context, orgID uuid.UUID) error {
 		return err
 	}
 	summary, err := s.copySnapshot(ctx, orgID, link.ErpOrgID)
+	if err == nil {
+		err = s.inviteUsers(ctx, link, &summary)
+	}
 	if err != nil {
 		summary.Error = string(apperr.CodeOf(err))
 		if serr := s.setStatus(ctx, orgID, ImportFailed, summary); serr != nil {
@@ -254,6 +266,39 @@ func (s *service) copySnapshot(ctx context.Context, orgID uuid.UUID, erpOrgID st
 		sum.Buyers++
 	}
 	return sum, nil
+}
+
+// inviteUsers invites the ERP org's users on behalf of the admin who linked it: the role comes
+// from their ERP permissions (RoleForERPUser); users without payments access are counted, not
+// invited; orgs caps the role at the linker's and skips members.
+func (s *service) inviteUsers(ctx context.Context, link store.ErpLink, sum *importSummary) error {
+	sum.InvitedUsers = []InvitedUser{}
+	if s.deps.Invites == nil {
+		return nil
+	}
+	users, err := s.deps.Directory.Users(ctx, link.ErpOrgID)
+	if err != nil {
+		return fmt.Errorf("erplink: users: %w", err)
+	}
+	in := orgs.ERPInviteInput{OrgID: link.OrgID, InvitedBy: link.LinkedBy}
+	for _, u := range users {
+		role, ok := RoleForERPUser(u)
+		if !ok || strings.TrimSpace(u.Email) == "" {
+			sum.UsersWithoutPaymentsAccess++
+			continue
+		}
+		in.Invitees = append(in.Invitees, orgs.ERPInvitee{Email: u.Email, Role: role})
+	}
+	res, err := s.deps.Invites.InviteERPUsers(ctx, in)
+	if err != nil {
+		return fmt.Errorf("erplink: invite users: %w", err)
+	}
+	sum.UsersAlreadyMembers = res.AlreadyMembers
+	for _, inv := range res.Invited {
+		sum.InvitedUsers = append(sum.InvitedUsers, InvitedUser{Email: inv.Email, Role: inv.Role})
+	}
+	sum.UsersInvited = len(sum.InvitedUsers)
+	return nil
 }
 
 func (s *service) setStatus(ctx context.Context, orgID uuid.UUID, st ImportStatus, sum importSummary) error {
@@ -338,6 +383,28 @@ func digits(s string) string {
 func fromRow(r store.ErpLink) Link {
 	return Link{
 		ID: r.ID, ERPOrgID: r.ErpOrgID, DisplayName: r.DisplayName, LinkedBy: r.LinkedBy, LinkedAt: r.LinkedAt,
-		ImportStatus: ImportStatus(r.ImportStatus), ImportedAt: r.ImportedAt,
+		ImportStatus: ImportStatus(r.ImportStatus), ImportedAt: r.ImportedAt, Summary: summaryOf(r),
+	}
+}
+
+// summaryOf decodes the stored snapshot once the import has run (completed or failed); before
+// that, or for a snapshot that does not decode, there is none.
+func summaryOf(r store.ErpLink) *ImportSummary {
+	st := ImportStatus(r.ImportStatus)
+	if st != ImportCompleted && st != ImportFailed {
+		return nil
+	}
+	var sum importSummary
+	if err := json.Unmarshal(r.Snapshot, &sum); err != nil {
+		return nil
+	}
+	invited := sum.InvitedUsers
+	if invited == nil {
+		invited = []InvitedUser{}
+	}
+	return &ImportSummary{
+		Projects: sum.Projects, Buyers: sum.Buyers, SkippedBuyers: sum.SkippedBuyers, UsersInvited: sum.UsersInvited,
+		UsersAlreadyMembers: sum.UsersAlreadyMembers, UsersWithoutPaymentsAccess: sum.UsersWithoutPaymentsAccess,
+		InvitedUsers: invited,
 	}
 }

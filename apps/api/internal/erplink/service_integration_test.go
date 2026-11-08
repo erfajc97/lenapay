@@ -5,6 +5,7 @@ package erplink_test
 import (
 	"context"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -15,17 +16,18 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db/dbtest"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/erplink/provider/fake"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db/dbtest"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 var pg *dbtest.Postgres
@@ -62,9 +64,23 @@ func (r *recordingImporters) ImportPayer(_ context.Context, orgID uuid.UUID, in 
 	return payers.Payer{ID: ids.New(), OrgID: orgID, AccountID: in.AccountID, Name: in.Name}, nil
 }
 
+// recordingInviter stands in for orgs.InviteERPUsers: it invites everyone as mapped.
+type recordingInviter struct {
+	mu    sync.Mutex
+	calls []orgs.ERPInviteInput
+}
+
+func (r *recordingInviter) InviteERPUsers(_ context.Context, in orgs.ERPInviteInput) (orgs.ERPInviteResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, in)
+	return orgs.ERPInviteResult{Invited: in.Invitees}, nil
+}
+
 type env struct {
 	pool      *pgxpool.Pool
 	svc       erplink.Service
+	invites   *recordingInviter
 	imports   *recordingImporters
 	dds       uuid.UUID // org with the CUIT of Desarrollos Del Sur SA
 	unindexed uuid.UUID
@@ -74,7 +90,7 @@ type env struct {
 func setup(t *testing.T) *env {
 	t.Helper()
 	pool := pg.NewDatabase(t)
-	e := &env{pool: pool, imports: &recordingImporters{projects: map[string]uuid.UUID{}, payers: map[string]payers.ImportInput{}}}
+	e := &env{pool: pool, invites: &recordingInviter{}, imports: &recordingImporters{projects: map[string]uuid.UUID{}, payers: map[string]payers.ImportInput{}}}
 	e.admin = ids.New()
 	e.exec(t, `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'x')`, e.admin, e.admin.String()+"@test.local")
 	e.dds, e.unindexed = ids.New(), ids.New()
@@ -89,7 +105,7 @@ func setup(t *testing.T) *env {
 	e.svc = erplink.NewService(erplink.Deps{
 		Pool: pool, Clock: clk, Audit: audit.NewLogger(clk), Jobs: inserter, Directory: fake.NewDirectory("../../fixtures/erp"),
 		Orgs:     fakeOrgs{e.dds: "30-71234567-8", e.unindexed: "30999999990"},
-		Accounts: e.imports, Payers: e.imports,
+		Accounts: e.imports, Payers: e.imports, Invites: e.invites,
 	})
 	if err := e.svc.LoadIdentityIndex(t.Context()); err != nil {
 		t.Fatal(err)
@@ -192,10 +208,24 @@ func TestImportCopiesTheSnapshotOnce(t *testing.T) {
 	if buyer.AccountID != e.imports.projects["erp-org-001-prj-pal"] || buyer.DocType != payers.DocCUIT || buyer.DocNumber != "30700036525" {
 		t.Fatalf("company buyer = %+v", buyer)
 	}
-	var snapshot string
-	if err := e.pool.QueryRow(t.Context(), `SELECT snapshot::text FROM erp_links WHERE org_id = $1`, e.dds).Scan(&snapshot); err != nil ||
-		snapshot != `{"buyers": 5, "projects": 3, "skippedBuyers": 0}` {
-		t.Fatalf("snapshot = %s (%v)", snapshot, err)
+	// ERP users: the admin, two payments operators, a reconciliations reader and a site manager
+	// without payments access (desarrollos-del-sur.json), invited on behalf of the linker.
+	if len(e.invites.calls) != 1 || e.invites.calls[0].InvitedBy != e.admin || e.invites.calls[0].OrgID != e.dds {
+		t.Fatalf("invite calls = %+v", e.invites.calls)
+	}
+	want := []orgs.ERPInvitee{
+		{Email: "admin@desarrollosdelsur.com.ar", Role: auth.RoleAdmin},
+		{Email: "tesoreria@desarrollosdelsur.com.ar", Role: auth.RoleOperator},
+		{Email: "cuentas@desarrollosdelsur.com.ar", Role: auth.RoleOperator},
+		{Email: "contable@desarrollosdelsur.com.ar", Role: auth.RoleViewer},
+	}
+	if !slices.Equal(e.invites.calls[0].Invitees, want) {
+		t.Fatalf("invitees = %+v", e.invites.calls[0].Invitees)
+	}
+	sum := link.Summary
+	if sum == nil || sum.Projects != 3 || sum.Buyers != 5 || sum.UsersInvited != 4 || sum.UsersWithoutPaymentsAccess != 1 ||
+		sum.UsersAlreadyMembers != 0 || len(sum.InvitedUsers) != 4 || sum.InvitedUsers[3] != (erplink.InvitedUser{Email: "contable@desarrollosdelsur.com.ar", Role: auth.RoleViewer}) {
+		t.Fatalf("summary = %+v", sum)
 	}
 	e.imports.payers = map[string]payers.ImportInput{}
 	if err := e.svc.Import(t.Context(), e.dds); err != nil || len(e.imports.payers) != 0 {

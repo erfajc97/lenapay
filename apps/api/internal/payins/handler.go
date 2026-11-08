@@ -3,9 +3,9 @@ package payins
 import (
 	"context"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Handler implements the payins operations of api.StrictServerInterface (HTTP only: generated

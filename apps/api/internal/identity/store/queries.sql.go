@@ -65,6 +65,26 @@ func (q *Queries) CountEmailCodesSince(ctx context.Context, arg CountEmailCodesS
 	return count, err
 }
 
+const fillUserFullNameIfEmpty = `-- name: FillUserFullNameIfEmpty :execrows
+UPDATE users SET full_name = $1, updated_at = $2
+WHERE id = $3 AND full_name IS NULL
+`
+
+type FillUserFullNameIfEmptyParams struct {
+	FullName  *string
+	UpdatedAt time.Time
+	ID        uuid.UUID
+}
+
+// The person KYC approval names the user only when they have not named themselves.
+func (q *Queries) FillUserFullNameIfEmpty(ctx context.Context, arg FillUserFullNameIfEmptyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, fillUserFullNameIfEmpty, arg.FullName, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveEmailCodeForUpdate = `-- name: GetActiveEmailCodeForUpdate :one
 SELECT id, user_id, purpose, code_hash, attempts, expires_at, consumed_at, created_at FROM email_codes
 WHERE user_id = $1
@@ -187,7 +207,7 @@ func (q *Queries) GetStepUpChallengeForUpdate(ctx context.Context, arg GetStepUp
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, email_verified_at, totp_secret, totp_enabled_at, status, created_at, updated_at FROM users WHERE lower(email) = lower($1)
+SELECT id, email, password_hash, email_verified_at, totp_secret, totp_enabled_at, status, created_at, updated_at, full_name FROM users WHERE lower(email) = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -203,12 +223,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FullName,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, email_verified_at, totp_secret, totp_enabled_at, status, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, password_hash, email_verified_at, totp_secret, totp_enabled_at, status, created_at, updated_at, full_name FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -223,6 +244,25 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.TotpEnabledAt,
 		&i.Status,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FullName,
+	)
+	return i, err
+}
+
+const getUserPreferences = `-- name: GetUserPreferences :one
+SELECT user_id, default_org_id, default_account_id, locale, theme, updated_at FROM user_preferences WHERE user_id = $1
+`
+
+func (q *Queries) GetUserPreferences(ctx context.Context, userID uuid.UUID) (UserPreference, error) {
+	row := q.db.QueryRow(ctx, getUserPreferences, userID)
+	var i UserPreference
+	err := row.Scan(
+		&i.UserID,
+		&i.DefaultOrgID,
+		&i.DefaultAccountID,
+		&i.Locale,
+		&i.Theme,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -363,14 +403,15 @@ func (q *Queries) InsertStepUpChallenge(ctx context.Context, arg InsertStepUpCha
 
 const insertUser = `-- name: InsertUser :exec
 
-INSERT INTO users (id, email, password_hash, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $4)
+INSERT INTO users (id, email, password_hash, full_name, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $5)
 `
 
 type InsertUserParams struct {
 	ID           uuid.UUID
 	Email        string
 	PasswordHash string
+	FullName     *string
 	CreatedAt    time.Time
 }
 
@@ -380,6 +421,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 		arg.ID,
 		arg.Email,
 		arg.PasswordHash,
+		arg.FullName,
 		arg.CreatedAt,
 	)
 	return err
@@ -450,6 +492,24 @@ func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) er
 	return err
 }
 
+const setUserFullName = `-- name: SetUserFullName :execrows
+UPDATE users SET full_name = $1, updated_at = $2 WHERE id = $3
+`
+
+type SetUserFullNameParams struct {
+	FullName  *string
+	UpdatedAt time.Time
+	ID        uuid.UUID
+}
+
+func (q *Queries) SetUserFullName(ctx context.Context, arg SetUserFullNameParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserFullName, arg.FullName, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const touchSession = `-- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = $1 WHERE id = $2
 `
@@ -462,4 +522,44 @@ type TouchSessionParams struct {
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
 	_, err := q.db.Exec(ctx, touchSession, arg.LastSeenAt, arg.ID)
 	return err
+}
+
+const upsertUserPreferences = `-- name: UpsertUserPreferences :one
+INSERT INTO user_preferences (user_id, default_org_id, default_account_id, locale, theme, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6)
+ON CONFLICT (user_id) DO UPDATE
+SET default_org_id = EXCLUDED.default_org_id, default_account_id = EXCLUDED.default_account_id,
+    locale = EXCLUDED.locale, theme = EXCLUDED.theme, updated_at = EXCLUDED.updated_at
+RETURNING user_id, default_org_id, default_account_id, locale, theme, updated_at
+`
+
+type UpsertUserPreferencesParams struct {
+	UserID           uuid.UUID
+	DefaultOrgID     *uuid.UUID
+	DefaultAccountID *uuid.UUID
+	Locale           *string
+	Theme            *string
+	UpdatedAt        time.Time
+}
+
+func (q *Queries) UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error) {
+	row := q.db.QueryRow(ctx, upsertUserPreferences,
+		arg.UserID,
+		arg.DefaultOrgID,
+		arg.DefaultAccountID,
+		arg.Locale,
+		arg.Theme,
+		arg.UpdatedAt,
+	)
+	var i UserPreference
+	err := row.Scan(
+		&i.UserID,
+		&i.DefaultOrgID,
+		&i.DefaultAccountID,
+		&i.Locale,
+		&i.Theme,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

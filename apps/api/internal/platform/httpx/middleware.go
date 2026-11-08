@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/platform/apperr"
+	applog "lenapay/apps/api/internal/platform/log"
 )
 
 // RequestIDHeader is accepted from clients when safe and always echoed back (A15).
@@ -129,7 +129,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// CORSAllowedHeaders lists every custom request header the app sends (A12).
+// CORSAllowedHeaders lists every custom request header the app sends (A12). The last three are
+// what the web build's EventSource polyfill (react-native-sse) sends on the SSE stream.
 func CORSAllowedHeaders() []string {
-	return []string{"Authorization", "Content-Type", "Idempotency-Key", "X-Step-Up-Token", RequestIDHeader, "X-App-Version"}
+	return []string{
+		"Authorization", "Content-Type", "Idempotency-Key", "X-Step-Up-Token", RequestIDHeader, "X-App-Version",
+		"Cache-Control", "X-Requested-With", "Last-Event-ID",
+	}
 }

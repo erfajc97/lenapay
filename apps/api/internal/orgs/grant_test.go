@@ -3,8 +3,8 @@ package orgs
 import (
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
 )
 
 // T4: nobody grants a role above their own; equal is allowed (the last passing value).

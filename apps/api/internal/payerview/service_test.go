@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/payerview/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/payerview/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 func TestDNI8PadsSevenDigitsAndRejectsNonDNIs(t *testing.T) {

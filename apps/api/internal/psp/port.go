@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Errors every adapter maps its failures to.

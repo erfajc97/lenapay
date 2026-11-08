@@ -7,12 +7,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/ledger"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/payouts/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // failureDestinationUnavailable: the on-us destination CVU stopped receiving (or changed

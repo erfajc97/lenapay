@@ -5,9 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // validateEntry is the code-side barrier before any row is locked; the database repeats the

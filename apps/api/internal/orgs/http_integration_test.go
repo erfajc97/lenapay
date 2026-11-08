@@ -22,15 +22,15 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	kycfake "github.com/erfajc97/lenapay/apps/api/internal/kyc/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/kyc"
+	kycfake "lenapay/apps/api/internal/kyc/provider/fake"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
 )
 
 const internalKey = "internal-key-0123456789"
@@ -244,12 +244,12 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	a.fail(t, call{method: http.MethodPost, path: orgPath + "/members", token: bea, body: map[string]any{"email": "carlos@example.com", "role": "viewer"}},
 		http.StatusForbidden, "auth.forbidden")
 	added := a.must(t, call{method: http.MethodPost, path: orgPath + "/members", token: tok, body: map[string]any{"email": "carlos@example.com", "role": "operator"}},
-		http.StatusCreated, "userId", "email", "role", "joinedAt")
+		http.StatusCreated, "userId", "email", "fullName", "role", "joinedAt")
 	carlosPath := orgPath + "/members/" + added["userId"].(string)
 	a.fail(t, call{method: http.MethodPatch, path: carlosPath, token: bea, body: map[string]any{"role": "viewer"}}, http.StatusForbidden, "auth.forbidden")
 	a.fail(t, call{method: http.MethodPatch, path: carlosPath, token: tok, body: map[string]any{"role": "owner"}}, http.StatusUnprocessableEntity, "validation.failed")
 	changed := a.must(t, call{method: http.MethodPatch, path: carlosPath, token: tok, body: map[string]any{"role": "approver"}},
-		http.StatusOK, "userId", "email", "role", "joinedAt")
+		http.StatusOK, "userId", "email", "fullName", "role", "joinedAt")
 	if changed["role"] != "approver" {
 		t.Fatalf("role change %v", changed)
 	}
@@ -258,7 +258,7 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	a.must(t, call{method: http.MethodDelete, path: carlosPath, token: tok}, http.StatusNoContent)
 	a.fail(t, call{method: http.MethodDelete, path: carlosPath, token: tok}, http.StatusNotFound, "member.not_found")
 	a.must(t, call{method: http.MethodPost, path: orgPath + "/members", token: tok, body: map[string]any{"email": "carlos@example.com", "role": "operator"}},
-		http.StatusCreated, "userId", "email", "role", "joinedAt")
+		http.StatusCreated, "userId", "email", "fullName", "role", "joinedAt")
 	a.must(t, call{method: http.MethodPost, path: "/auth/resend-code", body: map[string]any{"email": "nobody@example.com"}}, http.StatusAccepted)
 
 	kycCase := completeCompanyKYC(t, a, tok, orgPath)
@@ -272,14 +272,14 @@ func TestHTTPLaneAFlow(t *testing.T) {
 	if decided["status"] != "approved" {
 		t.Fatalf("decision %v", decided)
 	}
-	me := a.must(t, call{method: http.MethodGet, path: "/me", token: tok}, http.StatusOK, "user", "memberships")
-	if m := me["memberships"].([]any)[0].(map[string]any); m["kycStatus"] != "approved" || m["role"] != "admin" {
+	me := a.must(t, call{method: http.MethodGet, path: "/me", token: tok}, http.StatusOK, "user", "memberships", "preferences")
+	if m := me["memberships"].([]any)[0].(map[string]any); m["kycStatus"] != "approved" || m["role"] != "owner" {
 		t.Fatalf("membership %v", m)
 	}
 
 	next := a.must(t, call{method: http.MethodPost, path: "/auth/refresh", body: map[string]any{"refreshToken": ana["refreshToken"]}}, http.StatusOK,
 		"accessToken", "accessTokenExpiresAt", "refreshToken", "refreshTokenExpiresAt", "tokenType")
-	a.must(t, call{method: http.MethodGet, path: "/me", token: next["accessToken"].(string)}, http.StatusOK, "user", "memberships")
+	a.must(t, call{method: http.MethodGet, path: "/me", token: next["accessToken"].(string)}, http.StatusOK, "user", "memberships", "preferences")
 	a.fail(t, call{method: http.MethodPost, path: "/auth/refresh", body: map[string]any{"refreshToken": ana["refreshToken"]}},
 		http.StatusUnauthorized, "auth.refresh_invalid")
 	a.fail(t, call{method: http.MethodGet, path: "/me", token: next["accessToken"].(string)}, http.StatusUnauthorized, "auth.unauthenticated")
@@ -291,7 +291,7 @@ func TestHTTPLaneAFlow(t *testing.T) {
 // me0 is the caller's user id (GET /me).
 func me0(t *testing.T, a api, tok string) string {
 	t.Helper()
-	me := a.must(t, call{method: http.MethodGet, path: "/me", token: tok}, http.StatusOK, "user", "memberships")
+	me := a.must(t, call{method: http.MethodGet, path: "/me", token: tok}, http.StatusOK, "user", "memberships", "preferences")
 	return me["user"].(map[string]any)["id"].(string)
 }
 

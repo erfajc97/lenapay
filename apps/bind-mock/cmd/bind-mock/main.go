@@ -13,11 +13,11 @@ import (
 	"time"
 	_ "time/tzdata" // the bank's time zone must load in minimal containers
 
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/bank"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/config"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/httpapi"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/simulator"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/simulator/provider/webhook"
+	"lenapay/apps/bind-mock/internal/bank"
+	"lenapay/apps/bind-mock/internal/config"
+	"lenapay/apps/bind-mock/internal/httpapi"
+	"lenapay/apps/bind-mock/internal/simulator"
+	"lenapay/apps/bind-mock/internal/simulator/provider/webhook"
 )
 
 func main() {

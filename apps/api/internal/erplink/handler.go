@@ -3,10 +3,12 @@ package erplink
 import (
 	"context"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/config"
 )
 
 // Handler implements the erplink operations of api.StrictServerInterface (HTTP only: generated
@@ -63,6 +65,21 @@ func (h *Handler) GetErpLink(ctx context.Context, _ api.GetErpLinkRequestObject)
 func linkToAPI(l Link) api.ErpLink {
 	return api.ErpLink{
 		Id: l.ID, ErpOrgId: l.ERPOrgID, DisplayName: l.DisplayName, LinkedBy: l.LinkedBy, LinkedAt: l.LinkedAt,
-		ImportStatus: api.ErpImportStatus(l.ImportStatus), ImportedAt: l.ImportedAt,
+		ImportStatus: api.ErpImportStatus(l.ImportStatus), ImportedAt: l.ImportedAt, ImportSummary: summaryToAPI(l.Summary),
 	}
+}
+
+func summaryToAPI(s *ImportSummary) *api.ErpImportSummary {
+	if s == nil {
+		return nil
+	}
+	out := &api.ErpImportSummary{
+		Projects: s.Projects, Buyers: s.Buyers, SkippedBuyers: s.SkippedBuyers, UsersInvited: s.UsersInvited,
+		UsersAlreadyMembers: s.UsersAlreadyMembers, UsersWithoutPaymentsAccess: s.UsersWithoutPaymentsAccess,
+		InvitedUsers: make([]api.ErpInvitedUser, 0, len(s.InvitedUsers)),
+	}
+	for _, u := range s.InvitedUsers {
+		out.InvitedUsers = append(out.InvitedUsers, api.ErpInvitedUser{Email: openapi_types.Email(u.Email), Role: api.Role(u.Role)})
+	}
+	return out
 }

@@ -10,17 +10,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/payerview/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/payerview/store"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
 )
 
 // Service is the "Mis pagos" API used by the handler and, as an approval hook, by kyc.
@@ -310,7 +310,7 @@ func (s *service) Pay(ctx context.Context, p auth.Principal, linkID uuid.UUID, i
 	}
 	// The payout belongs to the personal org the caller owns (resolved above, never from input).
 	owner := auth.Principal{
-		UserID: p.UserID, SessionID: p.SessionID, OrgID: who.orgID, Role: auth.RoleAdmin, KYCStatus: auth.KYCApproved, StepUp: p.StepUp,
+		UserID: p.UserID, SessionID: p.SessionID, OrgID: who.orgID, Role: auth.RoleOwner, KYCStatus: auth.KYCApproved, StepUp: p.StepUp,
 	}
 	return s.deps.Payouts.Create(ctx, owner, payouts.CreateInput{
 		AccountID: accountID, Amount: in.Amount, To: cvu, Concept: concept, IdempotencyKey: in.IdempotencyKey,

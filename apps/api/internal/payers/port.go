@@ -3,8 +3,8 @@ package payers
 import (
 	"context"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/platform/auth"
 )
 
 // Orgs is the part of orgs.Service payers needs: the org is the holder of its CVUs at the PSP

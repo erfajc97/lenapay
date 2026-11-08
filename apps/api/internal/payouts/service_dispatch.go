@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/ledger"
+	"lenapay/apps/api/internal/payouts/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/db"
+	applog "lenapay/apps/api/internal/platform/log"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/psp"
 )
 
 // Sweep tuning (R-OUT-5).

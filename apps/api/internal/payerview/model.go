@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Link statuses (DB CHECK payer_links.status): a hidden company stays linked but out of the list.

@@ -4,7 +4,50 @@
   "cuit": "30715003771",
   "users": [
     {
-      "username": "cobranzas@bahiadesarrollos.com.ar"
+      "username": "cobranzas@bahiadesarrollos.com.ar",
+      "email": "cobranzas@bahiadesarrollos.com.ar",
+      "fullName": "Marcela Ibáñez",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@bahiadesarrollos.com.ar",
+      "email": "tesoreria@bahiadesarrollos.com.ar",
+      "fullName": "Julián Ortega",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_ACCOUNT_MOVEMENTS",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "contable@bahiadesarrollos.com.ar",
+      "email": "contable@bahiadesarrollos.com.ar",
+      "fullName": "Romina Paz",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS",
+        "CONTABILIDAD"
+      ]
+    },
+    {
+      "username": "compras@bahiadesarrollos.com.ar",
+      "email": "compras@bahiadesarrollos.com.ar",
+      "fullName": "Diego Ferreyra",
+      "admin": false,
+      "permissions": [
+        "COMPRAS",
+        "PROVEEDORES"
+      ]
     }
   ],
   "projects": [

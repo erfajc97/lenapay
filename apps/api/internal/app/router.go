@@ -14,11 +14,11 @@ import (
 	"github.com/go-chi/httprate"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	openapi "github.com/erfajc97/lenapay/apps/api/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
+	openapi "lenapay/apps/api/api"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/httpx"
 )
 
 // Hand-mounted paths (in the contract, excluded from generation, AG2).

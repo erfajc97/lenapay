@@ -7,14 +7,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/fees"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/fees"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // The narrow slices of other features' services that payouts calls (P5). The full services
@@ -61,4 +61,10 @@ type CVUs interface {
 // (payins.Service).
 type Credits interface {
 	CreditInternal(ctx context.Context, tx pgx.Tx, in payins.InternalCredit) error
+}
+
+// Policies reads the org's approval rules (orgs.Service): whether a company payout skips
+// approval (threshold) and whether the owner may approve their own.
+type Policies interface {
+	ApprovalRules(ctx context.Context, orgID uuid.UUID) (orgs.ApprovalRules, error)
 }

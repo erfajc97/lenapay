@@ -8,7 +8,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
-	openapi "github.com/erfajc97/lenapay/apps/api/api"
+	openapi "lenapay/apps/api/api"
 )
 
 // P1: the embedded copy is exactly contracts/openapi.yaml (run `make gen` after editing it).

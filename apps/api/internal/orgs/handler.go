@@ -5,9 +5,10 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/api"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Handler implements the orgs operations of api.StrictServerInterface (HTTP only: generated
@@ -66,7 +67,7 @@ func (h *Handler) GetOrg(ctx context.Context, _ api.GetOrgRequestObject) (api.Ge
 func organizationToAPI(o Organization) api.Organization {
 	return api.Organization{
 		Id: o.ID, Kind: api.OrgKind(o.Kind), LegalName: o.LegalName, Cuit: o.CUIT,
-		KycStatus: api.KycStatus(o.KYCStatus), Role: api.Role(o.Role), CreatedAt: o.CreatedAt,
+		KycStatus: api.KycStatus(o.KYCStatus), Role: api.MemberRole(o.Role), CreatedAt: o.CreatedAt,
 	}
 }
 
@@ -126,7 +127,9 @@ func (h *Handler) RemoveMember(ctx context.Context, req api.RemoveMemberRequestO
 }
 
 func memberToAPI(m Member) api.Member {
-	return api.Member{UserId: m.UserID, Email: openapi_types.Email(m.Email), Role: api.Role(m.Role), JoinedAt: m.JoinedAt}
+	return api.Member{
+		UserId: m.UserID, Email: openapi_types.Email(m.Email), FullName: m.FullName, Role: api.MemberRole(m.Role), JoinedAt: m.JoinedAt,
+	}
 }
 
 // CreateInvite implements api.StrictServerInterface.
@@ -155,4 +158,60 @@ func (h *Handler) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestO
 		return nil, err
 	}
 	return api.AcceptInvite200JSONResponse(identity.MembershipToAPI(m)), nil
+}
+
+// TransferOwnership implements api.StrictServerInterface.
+func (h *Handler) TransferOwnership(ctx context.Context, req api.TransferOwnershipRequestObject) (api.TransferOwnershipResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	previous, owner, err := h.svc.TransferOwnership(ctx, p, req.Body.UserId)
+	if err != nil {
+		return nil, err
+	}
+	return api.TransferOwnership200JSONResponse{PreviousOwner: memberToAPI(previous), Owner: memberToAPI(owner)}, nil
+}
+
+// GetApprovalPolicy implements api.StrictServerInterface.
+func (h *Handler) GetApprovalPolicy(ctx context.Context, _ api.GetApprovalPolicyRequestObject) (api.GetApprovalPolicyResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	policy, effective, err := h.svc.ApprovalPolicy(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetApprovalPolicy200JSONResponse(policyToAPI(policy, effective)), nil
+}
+
+// UpdateApprovalPolicy implements api.StrictServerInterface.
+func (h *Handler) UpdateApprovalPolicy(ctx context.Context, req api.UpdateApprovalPolicyRequestObject) (api.UpdateApprovalPolicyResponseObject, error) {
+	p, err := auth.RequirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := PolicyInput{Mode: ApprovalMode(req.Body.Mode), Thresholds: map[money.Currency]int64{}, AllowOwnerSelfApproval: req.Body.AllowOwnerSelfApproval}
+	if t := req.Body.ThresholdMinor; t != nil {
+		if t.ARS != nil {
+			in.Thresholds[money.ARS] = *t.ARS
+		}
+		if t.USD != nil {
+			in.Thresholds[money.USD] = *t.USD
+		}
+	}
+	policy, effective, err := h.svc.UpdateApprovalPolicy(ctx, p, in)
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateApprovalPolicy200JSONResponse(policyToAPI(policy, effective)), nil
+}
+
+func policyToAPI(p ApprovalPolicy, effective bool) api.ApprovalPolicy {
+	return api.ApprovalPolicy{
+		Mode: api.ApprovalMode(p.Mode), AllowOwnerSelfApproval: p.AllowOwnerSelfApproval, OwnerSelfApprovalEffective: effective,
+		ThresholdMinor: api.ApprovalThresholds{ARS: thresholdOf(p.Thresholds, money.ARS), USD: thresholdOf(p.Thresholds, money.USD)},
+		UpdatedBy:      p.UpdatedBy, UpdatedAt: p.UpdatedAt,
+	}
 }

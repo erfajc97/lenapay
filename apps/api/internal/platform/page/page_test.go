@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 func ptr[T any](v T) *T { return &v }

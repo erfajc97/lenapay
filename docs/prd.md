@@ -21,13 +21,19 @@ domain code.
 ## 2. Users and roles
 
 - **Company member** with a role inside an organization: `viewer`, `operator` (creates payouts,
-  CVUs), `approver` (approves payouts), `admin` (team, settings, onboarding).
+  CVUs), `approver` (approves payouts), `admin` (team, settings, onboarding), `owner` (exactly one
+  per organization: its creator; ownership, approval policy, admins).
 - **Person** (B2C, flag `personal_mode`): owner of a personal wallet.
 - **Lenapay ops** (internal, no UI in the MVP): reviews KYC through an internal endpoint.
 
 ## 3. Requirements
 
 ### Identity — Lebane ID
+- R-ID-5 Profile and preferences (owner's decision 2026-11-07): optional `fullName` at signup and
+  `PATCH /me {fullName}` (null clears; the person KYC approval fills it when empty); `/me` and the
+  member lists return it. `GET/PATCH /me/preferences {defaultOrgId, defaultAccountId, locale,
+  theme}` per user (the account must belong to that org, the user must be a member; a default org
+  the user left reads as unset); `/me` returns them.
 - R-ID-1 Sign up with email + password; email verified by a 6-digit code (sent through the
   notification adapter; local fake logs it and exposes it in dev).
 - R-ID-2 Login returns a short access token (15 min) + rotating refresh token; MFA by TOTP is
@@ -49,6 +55,13 @@ domain code.
 ### Organizations and team
 - R-ORG-1 A user can belong to several organizations and switch between them.
 - R-ORG-2 Admins invite members by email and set their role; invites expire in 7 days.
+- R-ORG-3 Single owner (owner's decision 2026-11-07): role ladder viewer < operator < approver <
+  admin < owner; the creator is the owner and every org has EXACTLY one (DB constraint; existing
+  orgs: the earliest admin became the owner). Only the owner demotes or removes admins; admins
+  manage the roles below admin (and may grant up to admin, never above their own); nobody removes
+  or demotes the owner through the member doors (`org.last_admin`); `owner` is never granted by
+  invite or role change. `POST /orgs/{org}/ownership-transfer {userId}` (owner + step-up) makes
+  another member the owner and the previous owner an admin; audited.
 
 ### Accounts and ledger
 - R-ACC-1 Each approved organization has a main account and one account per project; a person
@@ -86,6 +99,15 @@ domain code.
 - R-OUT-2 Fees are computed and shown before confirming; amount + fee is held on creation.
 - R-OUT-3 Client-generated Idempotency-Key is mandatory; same key + same payload replays the
   stored response; same key + different payload → 409.
+- R-OUT-7 Approval policy per org (owner's decision 2026-11-07): `GET/PUT /orgs/{org}/approval-policy`
+  (read by any member; changed only by the owner with step-up, audited) `{mode: always|threshold,
+  thresholdMinor per currency, allowOwnerSelfApproval}`. Default: `always` (4-eyes),
+  `allowOwnerSelfApproval: true` but effective only while no OTHER member has a role ≥ approver.
+  `threshold`: a company payout whose amount (fee not included) is STRICTLY below its currency's
+  threshold is approved and dispatched at creation (still Idempotency-Key + step-up + hold; event
+  reason `policy_threshold`); a currency without a threshold always needs approval. The owner may
+  approve their own payout only when self-approval is allowed and effective (audited
+  `payout.self_approval`; the DB keeps 4-eyes otherwise). Personal orgs never need approval.
 - R-OUT-4 Company payouts need 4-eyes approval: the creator cannot approve; approvers approve or
   reject with step-up. Personal payouts are sent directly.
 - R-OUT-5 Approved payouts are dispatched to the PSP asynchronously (job queue), never inside
@@ -134,6 +156,12 @@ domain code.
   milliseconds; it is loaded from a fixture now and from the ERP dump/CDC later.
 - R-ERP-2 After KYC approval, if the CUIT exists in the index, admins can link the org: an
   extra confirmation is required (ERP credentials check through the ERP adapter, fake in MVP).
+- R-ERP-4 ERP users import (owner's decision 2026-11-07): the link's import also invites the ERP
+  org's users with the role their Lebane permissions map to (architecture "ERP users import"): never
+  above the linking admin's role and never owner; users already members are skipped, users without
+  payments access are not invited. Those invites are accepted automatically when that email
+  verifies its Lenapay account or logs in. `GET /orgs/{org}/erp-link` → `importSummary` (counts and
+  the invited users with their roles).
 - R-ERP-3 A linked org imports ERP projects as project accounts and ERP buyers as payers
   (snapshot copy; the app never calls the ERP live).
 
@@ -149,6 +177,8 @@ domain code.
 - R-NF-3 Every money mutation is audited (who, what, idempotency key, request id).
 - R-NF-4 Everything runs with `docker compose up` (Postgres, API, BIND mock) + Expo dev client.
 - R-NF-5 Code, tests and commits in English; UI copy in es-AR through i18n files.
+- R-NF-6 Web realtime: CORS allows `Cache-Control`, `X-Requested-With` and `Last-Event-ID` (the web
+  EventSource polyfill's headers on the SSE stream).
 
 ## 4. Out of scope (MVP)
 Cash networks (Rapipago/Pago Fácil), prepaid card, investments/FCI for people, loans, bill

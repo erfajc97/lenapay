@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/psp"
 )
 
 // Destination formats (BCRA): a CBU or CVU is 22 digits and a CVU starts with "000"; an alias

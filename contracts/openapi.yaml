@@ -202,10 +202,59 @@ paths:
       tags: [identity]
       responses:
         '200':
-          description: Current user and memberships.
+          description: Current user, memberships and preferences.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Me' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateMe
+      tags: [identity]
+      description: |
+        Updates the caller's profile. `fullName`: a string sets it (trimmed, 1–120 characters),
+        `null` clears it, absent keeps it. The person KYC approval fills it when it is empty.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeRequest' }
+      responses:
+        '200':
+          description: The updated profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        default: { $ref: '#/components/responses/Error' }
+  /me/preferences:
+    get:
+      operationId: getMyPreferences
+      tags: [identity]
+      responses:
+        '200':
+          description: The caller's preferences (every field `null` until set).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateMyPreferences
+      tags: [identity]
+      description: |
+        Partial update: a value sets the field, `null` clears it, absent keeps it. The MERGED
+        state is validated: `defaultOrgId` must be an organization the caller belongs to
+        (`org.not_found` otherwise); `defaultAccountId` needs a `defaultOrgId` and must be a
+        non-archived account of that organization (`account.not_found`, `account.archived`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePreferencesRequest' }
+      responses:
+        '200':
+          description: The stored preferences.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
         default: { $ref: '#/components/responses/Error' }
 
   # ---------------------------------------------------------------- orgs
@@ -287,8 +336,10 @@ paths:
       operationId: updateMember
       tags: [orgs]
       description: |
-        Changes a member's role (admins only, never above the caller's role). Demoting the last
-        admin is `org.last_admin`.
+        Changes a member's role (admins only, never above the caller's role). Only the owner
+        changes an admin's role; an admin changing another admin is `role.escalation_forbidden`.
+        The owner's own role never changes here (`org.last_admin`, 409): ownership moves only
+        through `POST /orgs/{orgId}/ownership-transfer`. `owner` is not a grantable role.
       requestBody:
         required: true
         content:
@@ -304,9 +355,76 @@ paths:
     delete:
       operationId: removeMember
       tags: [orgs]
-      description: Removes a member (admins only). Removing the last admin is `org.last_admin`.
+      description: |
+        Removes a member (admins only). Only the owner removes an admin
+        (`role.escalation_forbidden` otherwise); nobody removes the owner (`org.last_admin`, 409).
       responses:
         '204': { description: Member removed. }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/ownership-transfer:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: transferOwnership
+      tags: [orgs]
+      description: |
+        The owner (step-up) makes another member the owner; the previous owner becomes admin.
+        A user who is not a member is `member.not_found`; the caller themselves is
+        `validation.failed`. Audited as `org.ownership_transfer`.
+      parameters:
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferOwnershipRequest' }
+      responses:
+        '200':
+          description: Ownership moved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OwnershipTransfer' }
+        default: { $ref: '#/components/responses/Error' }
+  /orgs/{orgId}/approval-policy:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getApprovalPolicy
+      tags: [orgs]
+      description: |
+        The organization's payout approval policy (defaults until the owner changes it: mode
+        `always`, no thresholds, `allowOwnerSelfApproval: true`). Personal organizations never
+        need approval, whatever the policy says.
+      responses:
+        '200':
+          description: The policy in force.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalPolicy' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateApprovalPolicy
+      tags: [orgs]
+      description: |
+        Replaces the policy (owner only, step-up; audited as `org.approval_policy_update`).
+        `mode: threshold` needs at least one threshold: a company payout whose amount (fee not
+        included) is STRICTLY below its currency's threshold is approved and dispatched at once;
+        a currency without a threshold always needs approval. Thresholds are kept but ignored
+        while the mode is `always`. `allowOwnerSelfApproval` lets the owner approve their own
+        payout only while no other member has a role ≥ approver.
+      parameters:
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateApprovalPolicyRequest' }
+      responses:
+        '200':
+          description: The stored policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalPolicy' }
         default: { $ref: '#/components/responses/Error' }
   /orgs/{orgId}/invites:
     parameters:
@@ -759,7 +877,10 @@ paths:
           description: |
             Payout created with amount + fee held (or the stored response replayed). To a Lenapay
             CVU or alias (`rail: internal`) it never reaches the PSP: a personal payout comes back
-            already `settled`, a company payout settles the moment it is approved.
+            already `settled`, a company payout settles the moment it is approved. A company
+            payout is `pending_approval` unless the org's approval policy is `threshold` and the
+            amount is strictly below its currency's threshold: then it is `approved` (and
+            dispatched) at once, with an event whose reason is `policy_threshold`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Payout' }
@@ -790,7 +911,11 @@ paths:
         - $ref: '#/components/parameters/StepUpTokenHeader'
       responses:
         '200':
-          description: Approved (never by its creator) and queued for dispatch.
+          description: |
+            Approved and queued for dispatch. Never by its creator
+            (`payout.self_approval_forbidden`), except the owner when the approval policy allows
+            owner self-approval and no other member has a role ≥ approver (audited as
+            `payout.self_approval`).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Payout' }
@@ -1037,7 +1162,12 @@ paths:
       tags: [erplink]
       responses:
         '200':
-          description: Current link and import status.
+          description: |
+            Current link and import status. `importSummary` (null until the import ran) counts
+            what was copied and the ERP users invited: each ERP user with a payments permission
+            gets an invite with the role mapped from it (never above the linking admin, never
+            owner); users already members are skipped. Invites of the import are accepted
+            automatically when that email verifies its account or logs in.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErpLink' }
@@ -1328,7 +1458,14 @@ components:
         currency: { $ref: '#/components/schemas/Currency' }
     Role:
       type: string
+      description: A role that can be granted (invites, add member, role change). `owner` is not one of them.
       enum: [viewer, operator, approver, admin]
+    MemberRole:
+      type: string
+      description: |
+        A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+        Exactly one owner per organization (its creator, or whoever received a transfer).
+      enum: [viewer, operator, approver, admin, owner]
     OrgKind:
       type: string
       enum: [company, personal]
@@ -1359,6 +1496,11 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 254 }
         password: { type: string, minLength: 10, maxLength: 128 }
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Optional display name (trimmed; blank is `validation.failed`).
     SignupResponse:
       type: object
       additionalProperties: false
@@ -1500,6 +1642,11 @@ components:
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
+        fullName:
+          type: string
+          nullable: true
+          x-omitempty: false
+          description: Always present (`null` when unset).
         emailVerified: { type: boolean }
         mfaEnabled: { type: boolean }
         createdAt: { type: string, format: date-time }
@@ -1511,7 +1658,7 @@ components:
         orgId: { type: string, format: uuid }
         orgName: { type: string }
         orgKind: { $ref: '#/components/schemas/OrgKind' }
-        role: { $ref: '#/components/schemas/Role' }
+        role: { $ref: '#/components/schemas/MemberRole' }
         kycStatus: { $ref: '#/components/schemas/KycStatus' }
     Me:
       type: object
@@ -1522,6 +1669,70 @@ components:
         memberships:
           type: array
           items: { $ref: '#/components/schemas/Membership' }
+        preferences:
+          description: Always present (every field `null` until set).
+          allOf: [{ $ref: '#/components/schemas/UserPreferences' }]
+    UpdateMeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          nullable: true
+          description: '`null` clears the name; absent keeps it.'
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
+    Locale:
+      type: string
+      enum: [es-AR, en-US]
+    Theme:
+      type: string
+      enum: [system, light, dark]
+    UserPreferences:
+      type: object
+      additionalProperties: false
+      required: [defaultOrgId, defaultAccountId, locale, theme, updatedAt]
+      properties:
+        defaultOrgId: { type: string, format: uuid, nullable: true }
+        defaultAccountId: { type: string, format: uuid, nullable: true }
+        locale: { type: string, enum: [es-AR, en-US], nullable: true }
+        theme: { type: string, enum: [system, light, dark], nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    UpdatePreferencesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        defaultOrgId:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
+        defaultAccountId:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
+        locale:
+          type: string
+          enum: [es-AR, en-US]
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
+        theme:
+          type: string
+          enum: [system, light, dark]
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-import: { path: github.com/oapi-codegen/nullable }
+          x-go-type-skip-optional-pointer: true
 
     # ---------- orgs
     Organization:
@@ -1534,7 +1745,7 @@ components:
         legalName: { type: string }
         cuit: { type: string, nullable: true }
         kycStatus: { $ref: '#/components/schemas/KycStatus' }
-        role: { $ref: '#/components/schemas/Role' }
+        role: { $ref: '#/components/schemas/MemberRole' }
         createdAt: { type: string, format: date-time }
     OrganizationList:
       type: object
@@ -1559,7 +1770,12 @@ components:
       properties:
         userId: { type: string, format: uuid }
         email: { type: string, format: email }
-        role: { $ref: '#/components/schemas/Role' }
+        fullName:
+          type: string
+          nullable: true
+          x-omitempty: false
+          description: Always present (`null` when the user has not set one).
+        role: { $ref: '#/components/schemas/MemberRole' }
         joinedAt: { type: string, format: date-time }
     MemberList:
       type: object
@@ -1599,6 +1815,58 @@ components:
         role: { $ref: '#/components/schemas/Role' }
         expiresAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
+    TransferOwnershipRequest:
+      type: object
+      additionalProperties: false
+      required: [userId]
+      properties:
+        userId: { type: string, format: uuid }
+    OwnershipTransfer:
+      type: object
+      additionalProperties: false
+      required: [previousOwner, owner]
+      properties:
+        previousOwner: { $ref: '#/components/schemas/Member' }
+        owner: { $ref: '#/components/schemas/Member' }
+    ApprovalMode:
+      type: string
+      enum: [always, threshold]
+    ApprovalThresholds:
+      type: object
+      additionalProperties: false
+      required: [ARS, USD]
+      description: Per currency, in minor units; `null` = that currency always needs approval.
+      properties:
+        ARS: { type: integer, format: int64, nullable: true }
+        USD: { type: integer, format: int64, nullable: true }
+    ApprovalPolicy:
+      type: object
+      additionalProperties: false
+      required: [mode, thresholdMinor, allowOwnerSelfApproval, ownerSelfApprovalEffective, updatedBy, updatedAt]
+      properties:
+        mode: { $ref: '#/components/schemas/ApprovalMode' }
+        thresholdMinor: { $ref: '#/components/schemas/ApprovalThresholds' }
+        allowOwnerSelfApproval: { type: boolean }
+        ownerSelfApprovalEffective:
+          type: boolean
+          description: True when the owner may approve their own payouts right now (allowed and no other member with a role >= approver).
+        updatedBy: { type: string, format: uuid, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    UpdateApprovalThresholds:
+      type: object
+      additionalProperties: false
+      description: Thresholds in minor units (>= 1); an absent currency has none.
+      properties:
+        ARS: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        USD: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    UpdateApprovalPolicyRequest:
+      type: object
+      additionalProperties: false
+      required: [mode, allowOwnerSelfApproval]
+      properties:
+        mode: { $ref: '#/components/schemas/ApprovalMode' }
+        thresholdMinor: { $ref: '#/components/schemas/UpdateApprovalThresholds' }
+        allowOwnerSelfApproval: { type: boolean }
 
     # ---------- kyc
     KycCaseKind:
@@ -2215,6 +2483,32 @@ components:
         linkedAt: { type: string, format: date-time }
         importStatus: { $ref: '#/components/schemas/ErpImportStatus' }
         importedAt: { type: string, format: date-time, nullable: true }
+        importSummary:
+          description: Always present; `null` until the import has run.
+          nullable: true
+          x-omitempty: false
+          allOf: [{ $ref: '#/components/schemas/ErpImportSummary' }]
+    ErpInvitedUser:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+    ErpImportSummary:
+      type: object
+      additionalProperties: false
+      required: [projects, buyers, skippedBuyers, usersInvited, usersAlreadyMembers, usersWithoutPaymentsAccess, invitedUsers]
+      properties:
+        projects: { type: integer }
+        buyers: { type: integer }
+        skippedBuyers: { type: integer }
+        usersInvited: { type: integer }
+        usersAlreadyMembers: { type: integer }
+        usersWithoutPaymentsAccess: { type: integer }
+        invitedUsers:
+          type: array
+          items: { $ref: '#/components/schemas/ErpInvitedUser' }
 
     # ---------- my payments (payer view)
     MyPaymentCvu:

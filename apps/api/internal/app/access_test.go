@@ -7,9 +7,9 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
-	openapi "github.com/erfajc97/lenapay/apps/api/api"
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
+	openapi "lenapay/apps/api/api"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/platform/auth"
 )
 
 func hasHeader(op *openapi3.Operation, name string) bool {

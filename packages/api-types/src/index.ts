@@ -198,7 +198,33 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * @description Updates the caller's profile. `fullName`: a string sets it (trimmed, 1–120 characters),
+         *     `null` clears it, absent keeps it. The person KYC approval fills it when it is empty.
+         */
+        patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMyPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Partial update: a value sets the field, `null` clears it, absent keeps it. The MERGED
+         *     state is validated: `defaultOrgId` must be an organization the caller belongs to
+         *     (`org.not_found` otherwise); `defaultAccountId` needs a `defaultOrgId` and must be a
+         *     non-archived account of that organization (`account.not_found`, `account.archived`).
+         */
+        patch: operations["updateMyPreferences"];
         trace?: never;
     };
     "/orgs": {
@@ -267,15 +293,74 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Removes a member (admins only). Removing the last admin is `org.last_admin`. */
+        /**
+         * @description Removes a member (admins only). Only the owner removes an admin
+         *     (`role.escalation_forbidden` otherwise); nobody removes the owner (`org.last_admin`, 409).
+         */
         delete: operations["removeMember"];
         options?: never;
         head?: never;
         /**
-         * @description Changes a member's role (admins only, never above the caller's role). Demoting the last
-         *     admin is `org.last_admin`.
+         * @description Changes a member's role (admins only, never above the caller's role). Only the owner
+         *     changes an admin's role; an admin changing another admin is `role.escalation_forbidden`.
+         *     The owner's own role never changes here (`org.last_admin`, 409): ownership moves only
+         *     through `POST /orgs/{orgId}/ownership-transfer`. `owner` is not a grantable role.
          */
         patch: operations["updateMember"];
+        trace?: never;
+    };
+    "/orgs/{orgId}/ownership-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The owner (step-up) makes another member the owner; the previous owner becomes admin.
+         *     A user who is not a member is `member.not_found`; the caller themselves is
+         *     `validation.failed`. Audited as `org.ownership_transfer`.
+         */
+        post: operations["transferOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{orgId}/approval-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The organization's payout approval policy (defaults until the owner changes it: mode
+         *     `always`, no thresholds, `allowOwnerSelfApproval: true`). Personal organizations never
+         *     need approval, whatever the policy says.
+         */
+        get: operations["getApprovalPolicy"];
+        /**
+         * @description Replaces the policy (owner only, step-up; audited as `org.approval_policy_update`).
+         *     `mode: threshold` needs at least one threshold: a company payout whose amount (fee not
+         *     included) is STRICTLY below its currency's threshold is approved and dispatched at once;
+         *     a currency without a threshold always needs approval. Thresholds are kept but ignored
+         *     while the mode is `always`. `allowOwnerSelfApproval` lets the owner approve their own
+         *     payout only while no other member has a role ≥ approver.
+         */
+        put: operations["updateApprovalPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/orgs/{orgId}/invites": {
@@ -1104,8 +1189,17 @@ export interface components {
             minor: number;
             currency: components["schemas"]["Currency"];
         };
-        /** @enum {string} */
+        /**
+         * @description A role that can be granted (invites, add member, role change). `owner` is not one of them.
+         * @enum {string}
+         */
         Role: "viewer" | "operator" | "approver" | "admin";
+        /**
+         * @description A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+         *     Exactly one owner per organization (its creator, or whoever received a transfer).
+         * @enum {string}
+         */
+        MemberRole: "viewer" | "operator" | "approver" | "admin" | "owner";
         /** @enum {string} */
         OrgKind: "company" | "personal";
         /** @enum {string} */
@@ -1126,6 +1220,8 @@ export interface components {
             /** Format: email */
             email: string;
             password: string;
+            /** @description Optional display name (trimmed; blank is `validation.failed`). */
+            fullName?: string;
         };
         SignupResponse: {
             /** Format: uuid */
@@ -1229,6 +1325,8 @@ export interface components {
             id: string;
             /** Format: email */
             email: string;
+            /** @description Always present (`null` when unset). */
+            fullName?: string | null;
             emailVerified: boolean;
             mfaEnabled: boolean;
             /** Format: date-time */
@@ -1239,12 +1337,44 @@ export interface components {
             orgId: string;
             orgName: string;
             orgKind: components["schemas"]["OrgKind"];
-            role: components["schemas"]["Role"];
+            role: components["schemas"]["MemberRole"];
             kycStatus: components["schemas"]["KycStatus"];
         };
         Me: {
             user: components["schemas"]["User"];
             memberships: components["schemas"]["Membership"][];
+            /** @description Always present (every field `null` until set). */
+            preferences?: components["schemas"]["UserPreferences"];
+        };
+        UpdateMeRequest: {
+            /** @description `null` clears the name; absent keeps it. */
+            fullName?: string | null;
+        };
+        /** @enum {string} */
+        Locale: "es-AR" | "en-US";
+        /** @enum {string} */
+        Theme: "system" | "light" | "dark";
+        UserPreferences: {
+            /** Format: uuid */
+            defaultOrgId: string | null;
+            /** Format: uuid */
+            defaultAccountId: string | null;
+            /** @enum {string|null} */
+            locale: "es-AR" | "en-US" | null;
+            /** @enum {string|null} */
+            theme: "system" | "light" | "dark" | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        UpdatePreferencesRequest: {
+            /** Format: uuid */
+            defaultOrgId?: string | null;
+            /** Format: uuid */
+            defaultAccountId?: string | null;
+            /** @enum {string|null} */
+            locale?: "es-AR" | "en-US" | null;
+            /** @enum {string|null} */
+            theme?: "system" | "light" | "dark" | null;
         };
         Organization: {
             /** Format: uuid */
@@ -1253,7 +1383,7 @@ export interface components {
             legalName: string;
             cuit: string | null;
             kycStatus: components["schemas"]["KycStatus"];
-            role: components["schemas"]["Role"];
+            role: components["schemas"]["MemberRole"];
             /** Format: date-time */
             createdAt: string;
         };
@@ -1270,7 +1400,9 @@ export interface components {
             userId: string;
             /** Format: email */
             email: string;
-            role: components["schemas"]["Role"];
+            /** @description Always present (`null` when the user has not set one). */
+            fullName?: string | null;
+            role: components["schemas"]["MemberRole"];
             /** Format: date-time */
             joinedAt: string;
         };
@@ -1300,6 +1432,46 @@ export interface components {
             expiresAt: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        TransferOwnershipRequest: {
+            /** Format: uuid */
+            userId: string;
+        };
+        OwnershipTransfer: {
+            previousOwner: components["schemas"]["Member"];
+            owner: components["schemas"]["Member"];
+        };
+        /** @enum {string} */
+        ApprovalMode: "always" | "threshold";
+        /** @description Per currency, in minor units; `null` = that currency always needs approval. */
+        ApprovalThresholds: {
+            /** Format: int64 */
+            ARS: number | null;
+            /** Format: int64 */
+            USD: number | null;
+        };
+        ApprovalPolicy: {
+            mode: components["schemas"]["ApprovalMode"];
+            thresholdMinor: components["schemas"]["ApprovalThresholds"];
+            allowOwnerSelfApproval: boolean;
+            /** @description True when the owner may approve their own payouts right now (allowed and no other member with a role >= approver). */
+            ownerSelfApprovalEffective: boolean;
+            /** Format: uuid */
+            updatedBy: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        /** @description Thresholds in minor units (>= 1); an absent currency has none. */
+        UpdateApprovalThresholds: {
+            /** Format: int64 */
+            ARS?: number;
+            /** Format: int64 */
+            USD?: number;
+        };
+        UpdateApprovalPolicyRequest: {
+            mode: components["schemas"]["ApprovalMode"];
+            thresholdMinor?: components["schemas"]["UpdateApprovalThresholds"];
+            allowOwnerSelfApproval: boolean;
         };
         /** @enum {string} */
         KycCaseKind: "company" | "person";
@@ -1757,6 +1929,22 @@ export interface components {
             importStatus: components["schemas"]["ErpImportStatus"];
             /** Format: date-time */
             importedAt: string | null;
+            /** @description Always present; `null` until the import has run. */
+            importSummary?: components["schemas"]["ErpImportSummary"] | null;
+        };
+        ErpInvitedUser: {
+            /** Format: email */
+            email: string;
+            role: components["schemas"]["Role"];
+        };
+        ErpImportSummary: {
+            projects: number;
+            buyers: number;
+            skippedBuyers: number;
+            usersInvited: number;
+            usersAlreadyMembers: number;
+            usersWithoutPaymentsAccess: number;
+            invitedUsers: components["schemas"]["ErpInvitedUser"][];
         };
         MyPaymentCvu: {
             currency: components["schemas"]["Currency"];
@@ -2157,13 +2345,84 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current user and memberships. */
+            /** @description Current user, memberships and preferences. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMyPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's preferences (every field `null` until set). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMyPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description The stored preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
                 };
             };
             default: components["responses"]["Error"];
@@ -2336,6 +2595,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    transferOwnership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes. */
+                "X-Step-Up-Token": components["parameters"]["StepUpTokenHeader"];
+            };
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnershipRequest"];
+            };
+        };
+        responses: {
+            /** @description Ownership moved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getApprovalPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicy"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateApprovalPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes. */
+                "X-Step-Up-Token": components["parameters"]["StepUpTokenHeader"];
+            };
+            path: {
+                orgId: components["parameters"]["OrgId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApprovalPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description The stored policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicy"];
                 };
             };
             default: components["responses"]["Error"];
@@ -3005,7 +3347,10 @@ export interface operations {
             /**
              * @description Payout created with amount + fee held (or the stored response replayed). To a Lenapay
              *     CVU or alias (`rail: internal`) it never reaches the PSP: a personal payout comes back
-             *     already `settled`, a company payout settles the moment it is approved.
+             *     already `settled`, a company payout settles the moment it is approved. A company
+             *     payout is `pending_approval` unless the org's approval policy is `threshold` and the
+             *     amount is strictly below its currency's threshold: then it is `approved` (and
+             *     dispatched) at once, with an event whose reason is `policy_threshold`.
              */
             201: {
                 headers: {
@@ -3059,7 +3404,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Approved (never by its creator) and queued for dispatch. */
+            /**
+             * @description Approved and queued for dispatch. Never by its creator
+             *     (`payout.self_approval_forbidden`), except the owner when the approval policy allows
+             *     owner self-approval and no other member has a role ≥ approver (audited as
+             *     `payout.self_approval`).
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3407,7 +3757,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current link and import status. */
+            /**
+             * @description Current link and import status. `importSummary` (null until the import ran) counts
+             *     what was copied and the ERP users invited: each ERP user with a payments permission
+             *     gets an invite with the role mapped from it (never above the linking admin, never
+             *     owner); users already members are skipped. Invites of the import are accepted
+             *     automatically when that email verifies its account or logs in.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;

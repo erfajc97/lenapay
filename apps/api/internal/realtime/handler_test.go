@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	platformrealtime "github.com/erfajc97/lenapay/apps/api/internal/platform/realtime"
+	"lenapay/apps/api/internal/platform/clock"
+	platformrealtime "lenapay/apps/api/internal/platform/realtime"
 )
 
 // The frame serves both clients: the contract's RealtimeEvent keys and, lifted, the members

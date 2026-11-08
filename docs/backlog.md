@@ -136,3 +136,46 @@ Deps: I1–I10. The app runs fully against the Go API (`EXPO_PUBLIC_API_MODE=liv
   and the API URL at runtime (persisted); default URL = Metro host on port 18080.
 - [x] L6 `pnpm test:live` against the running stack; live web tour screenshots in
   `docs/screens/live/` (closes the E9 screenshots item for the live app).
+
+## O — Owner decisions of 2026-11-07 (api) · 8 pts
+Requirements R-ORG-3, R-OUT-7, R-ERP-4, R-ID-5, R-NF-6 in `docs/prd.md`. Contract changes are
+additive (new operations, new optional response fields, the `MemberRole` enum on responses);
+`apps/mobile` is a separate lane.
+- [x] O0 Module paths away from the personal GitHub: `lenapay/apps/api`, `lenapay/apps/bind-mock`
+  (go.work, every import, golangci `local-prefixes` + gofumpt `module-path`). AC: build, vet and
+  tests green right after the mechanical rename.
+- [x] O1 Single owner (R-ORG-3): role `owner` above admin; creator is owner; migration
+  `20261111100000_owner_policy_prefs.sql` backfills the earliest admin as owner, unique partial
+  index + deferred constraint trigger keep exactly one; member ladder (only the owner touches
+  admins, nobody the owner → `org.last_admin`), `POST /orgs/{org}/ownership-transfer` (owner +
+  step-up, audited). AC: creator owner; admin cannot demote/remove an admin; owner cannot be
+  removed/demoted; transfer to a stranger 404, to oneself 422; two concurrent transfers → one wins;
+  the DB refuses a second owner and an org without owner.
+- [x] O2 Approval policy (R-OUT-7): `GET/PUT /orgs/{org}/approval-policy` (viewer reads, owner +
+  step-up writes, audited), `orgs.ApprovalRules` is the ONE place of the decision; payout create
+  approves strictly below the threshold; owner self-approval only when allowed and effective
+  (`payouts.self_approved` + `payouts_four_eyes_check`). AC: boundary (threshold − 1 approved and
+  dispatched, threshold pending), always-mode ignores thresholds, admin changing the policy → 403
+  (attacker), no step-up → `auth.step_up_required`, threshold mode without threshold → 422,
+  audit row; self-approval refused with another approver or when not allowed or for an admin.
+- [x] O3 ERP users import (R-ERP-4): fixtures carry users with Lebane `PermisoUsuario` codes,
+  `erplink.RoleForERPUser` maps them, `orgs.InviteERPUsers` writes `erp_import` invites (capped at
+  the linker, never owner, members skipped, no duplicates), `orgs.AcceptERPInvites` runs in the
+  email verification transaction and at login; `ErpLink.importSummary`. AC: mapping table test;
+  summary counts; new user joins at verification, existing user at login, expired invite never.
+- [x] O4 Preferences (R-ID-5): `GET/PATCH /me/preferences`, `/me.preferences`; merged state
+  validated. AC: account without org 422, foreign org 404, foreign account 404, archived 409,
+  null clears, absent keeps, a left org reads as unset.
+- [x] O5 fullName (R-ID-5): signup `fullName`, `PATCH /me`, `User.fullName`, `Member.fullName`;
+  person KYC approval fills an empty name. AC: trim, blank 422 at both doors, cap 120, null clears,
+  KYC never overwrites a chosen name.
+- [x] O6 CORS for web SSE (R-NF-6): `Cache-Control`, `X-Requested-With`, `Last-Event-ID`. AC:
+  preflight test.
+- [x] O7 Seed + smoke: demo@ is the owner of Desarrollos Del Sur with the threshold policy ARS
+  500.000 (a payout below it settles without approval); the Andina import invites 4 ERP users and
+  `tesoreria@constructoraandina.com.ar` joins by signing up; smoke steps for the policy (attacker
+  403), ownership transfer, profile/preferences and the ERP invites.
+- [ ] O8 Mobile (lane M): `MemberRole` `owner` label (es-AR/en-US), team screen rules (owner badge,
+  hide demote/remove for admins unless owner, transfer ownership with step-up), approval policy
+  screen (owner), preferences (default org/account, theme, locale), full name in profile/members,
+  ERP import summary on the ERP link screen. No new error codes.

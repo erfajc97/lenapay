@@ -36,6 +36,8 @@ linters:
           msg: pass the caller's ctx (AG6)
     exhaustive:
       default-signifies-exhaustive: true
+    misspell:
+      ignore-rules: [configuracion, organizacion, clientes] # Lebane ERP permission codes (Spanish)
   exclusions:
     generated: strict
     presets: [std-error-handling]
@@ -52,5 +54,7 @@ linters:
 formatters:
   enable: [gofumpt, goimports]
   settings:
+    gofumpt:
+      module-path: lenapay/apps/api # the module path has no dot: without it gofumpt reads lenapay/... as std
     goimports:
-      local-prefixes: [github.com/erfajc97/lenapay]
+      local-prefixes: [lenapay]

@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // DevPassword is the one password the fake ERP accepts for any of its users. It is a fixture
@@ -47,7 +47,11 @@ type fixtureOrg struct {
 }
 
 type fixtureUser struct {
-	Username string `json:"username"`
+	Username    string   `json:"username"`
+	Email       string   `json:"email"`
+	FullName    string   `json:"fullName"`
+	Admin       bool     `json:"admin"`
+	Permissions []string `json:"permissions"`
 }
 
 type fixtureBuyer struct {
@@ -137,6 +141,26 @@ func (d *Directory) VerifyCredentials(_ context.Context, erpOrgID, username stri
 		return apperr.New(apperr.CodeERPCredentialsInvalid, nil)
 	}
 	return nil
+}
+
+// Users implements erplink.Directory: the ERP org's users with their ERP permissions (Lebane's
+// PermisoUsuario codes). A user without an email falls back to the username when it is one.
+func (d *Directory) Users(_ context.Context, erpOrgID string) ([]erplink.User, error) {
+	o, ok, err := d.org(erpOrgID)
+	if err != nil || !ok {
+		return nil, notFound(erpOrgID, err)
+	}
+	out := make([]erplink.User, 0, len(o.Users))
+	for _, u := range o.Users {
+		email := u.Email
+		if email == "" && strings.Contains(u.Username, "@") {
+			email = u.Username
+		}
+		out = append(out, erplink.User{
+			Username: u.Username, Email: email, FullName: u.FullName, Admin: u.Admin, Permissions: slices.Clone(u.Permissions),
+		})
+	}
+	return out, nil
 }
 
 // Projects implements erplink.Directory.

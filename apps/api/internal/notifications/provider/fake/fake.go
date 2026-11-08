@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/notifications"
 )
 
 // Sender is the fake sender. Safe for concurrent use.

@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/psp"
 )
 
 // BIND paths (bank 322 = Banco Industrial).

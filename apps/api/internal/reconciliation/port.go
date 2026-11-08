@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // The narrow slices of other features' services that reconciliation reads (P5). The full

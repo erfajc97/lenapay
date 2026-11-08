@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/apperr"
 )
 
 // The whole state machine (R-KYC-1): every pair of statuses, so a new transition cannot

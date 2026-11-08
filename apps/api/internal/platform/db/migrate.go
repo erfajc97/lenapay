@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/erfajc97/lenapay/apps/api/migrations"
+	"lenapay/apps/api/migrations"
 )
 
 // Migrate applies every pending migration (embedded in the binary; River's tables are one of

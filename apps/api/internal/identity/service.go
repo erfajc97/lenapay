@@ -11,13 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/identity/store"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/identity/store"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 // Service is the identity API used by the handler and by other features.
@@ -44,8 +44,18 @@ type Service interface {
 	VerifyStepUp(ctx context.Context, p auth.Principal, in StepUpInput) (StepUpToken, error)
 	// RegisterDevice stores a device public key for biometric step-up.
 	RegisterDevice(ctx context.Context, p auth.Principal, in DeviceInput) (Device, error)
-	// Me returns the caller and their memberships.
+	// Me returns the caller, their memberships and preferences.
 	Me(ctx context.Context, p auth.Principal) (Me, error)
+	// UpdateProfile sets or clears the caller's full name (PATCH /me).
+	UpdateProfile(ctx context.Context, p auth.Principal, fullName Patch[string]) (Me, error)
+	// Preferences returns the caller's preferences (a default org they no longer belong to reads
+	// as unset).
+	Preferences(ctx context.Context, p auth.Principal) (Preferences, error)
+	// UpdatePreferences merges a partial update and validates the merged state (A4).
+	UpdatePreferences(ctx context.Context, p auth.Principal, in PreferencesPatch) (Preferences, error)
+	// FillFullNameIfEmpty names a user from a verified identity (person KYC approval) unless they
+	// already named themselves, inside the approval transaction.
+	FillFullNameIfEmpty(ctx context.Context, tx pgx.Tx, userID uuid.UUID, name string) error
 
 	// UserIDByEmail finds a registered user (orgs: add member, accept invite); user.not_found otherwise.
 	UserIDByEmail(ctx context.Context, email string) (uuid.UUID, error)
@@ -61,6 +71,10 @@ type Deps struct {
 	Config      config.Config
 	// OnSignup runs for each new user inside the signup transaction (nil: nothing).
 	OnSignup SignupHook
+	// Accounts checks a preferred default account.
+	Accounts Accounts
+	// Invites accepts the ERP import invites of a verified email (nil: nothing).
+	Invites InviteAcceptor
 }
 
 // Limits of the email code and the step-up challenge (R-ID-1, R-ID-3).
@@ -100,10 +114,15 @@ func normalizeEmail(email string) string { return strings.ToLower(strings.TrimSp
 // counted attempt, a session revoked on refresh-token reuse): returning the rejection from
 // fn would roll that write back.
 func (s *service) commitThen(ctx context.Context, fn func(q *store.Queries) (outcome error, err error)) error {
+	return s.commitThenTx(ctx, func(_ pgx.Tx, q *store.Queries) (error, error) { return fn(q) })
+}
+
+// commitThenTx is commitThen for steps that also hand the transaction to another feature.
+func (s *service) commitThenTx(ctx context.Context, fn func(tx pgx.Tx, q *store.Queries) (outcome error, err error)) error {
 	var outcome error
 	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		var err error
-		outcome, err = fn(store.New(tx))
+		outcome, err = fn(tx, store.New(tx))
 		return err
 	})
 	if err != nil {
@@ -114,11 +133,15 @@ func (s *service) commitThen(ctx context.Context, fn func(q *store.Queries) (out
 
 func (s *service) Signup(ctx context.Context, in SignupInput) (uuid.UUID, error) {
 	email := normalizeEmail(in.Email)
+	fullName, err := normalizeFullName(in.FullName)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	var userID uuid.UUID
 	var code string
-	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		id, created, err := s.signupUser(ctx, q, email, in.Password.Reveal())
+		id, created, err := s.signupUser(ctx, q, newUser{email: email, password: in.Password.Reveal(), fullName: fullName})
 		if err != nil {
 			return err
 		}
@@ -138,13 +161,19 @@ func (s *service) Signup(ctx context.Context, in SignupInput) (uuid.UUID, error)
 	return userID, nil
 }
 
+// newUser is a signup's normalized input.
+type newUser struct {
+	email, password string
+	fullName        *string
+}
+
 // signupUser inserts a new user (created = true), or returns the existing UNVERIFIED user
 // when the password matches (a re-sent code). Any other existing email is auth.email_taken.
-func (s *service) signupUser(ctx context.Context, q *store.Queries, email, password string) (id uuid.UUID, created bool, err error) {
-	existing, err := q.GetUserByEmail(ctx, email)
+func (s *service) signupUser(ctx context.Context, q *store.Queries, in newUser) (id uuid.UUID, created bool, err error) {
+	existing, err := q.GetUserByEmail(ctx, in.email)
 	switch {
 	case err == nil:
-		if existing.EmailVerifiedAt != nil || !verifyPassword(existing.PasswordHash, password) {
+		if existing.EmailVerifiedAt != nil || !verifyPassword(existing.PasswordHash, in.password) {
 			return uuid.Nil, false, apperr.New(apperr.CodeEmailTaken, nil)
 		}
 		return existing.ID, false, nil
@@ -152,7 +181,9 @@ func (s *service) signupUser(ctx context.Context, q *store.Queries, email, passw
 		return uuid.Nil, false, err
 	}
 	id = ids.New()
-	err = q.InsertUser(ctx, store.InsertUserParams{ID: id, Email: email, PasswordHash: hashPassword(password), CreatedAt: s.now()})
+	err = q.InsertUser(ctx, store.InsertUserParams{
+		ID: id, Email: in.email, PasswordHash: hashPassword(in.password), FullName: in.fullName, CreatedAt: s.now(),
+	})
 	if db.IsUniqueViolation(err, "") {
 		return uuid.Nil, false, apperr.Wrap(apperr.CodeEmailTaken, err, nil)
 	}
@@ -227,8 +258,10 @@ func (s *service) ResendEmailCode(ctx context.Context, email string) error {
 	return nil
 }
 
+// VerifyEmail consumes the code and, in the same transaction, accepts the ERP import invites
+// waiting for this email (they become memberships the moment the email is proven).
 func (s *service) VerifyEmail(ctx context.Context, email, code string) error {
-	return s.commitThen(ctx, func(q *store.Queries) (error, error) {
+	return s.commitThenTx(ctx, func(tx pgx.Tx, q *store.Queries) (error, error) {
 		user, err := q.GetUserByEmail(ctx, normalizeEmail(email))
 		if db.IsNoRows(err) {
 			return apperr.New(apperr.CodeCodeInvalid, nil), nil
@@ -239,8 +272,27 @@ func (s *service) VerifyEmail(ctx context.Context, email, code string) error {
 		if user.EmailVerifiedAt != nil {
 			return apperr.New(apperr.CodeCodeInvalid, nil), nil
 		}
-		return s.consumeEmailCode(ctx, q, user.ID, code)
+		outcome, err := s.consumeEmailCode(ctx, q, user.ID, code)
+		if outcome != nil || err != nil {
+			return outcome, err
+		}
+		return nil, s.acceptInvites(ctx, tx, user.ID, user.Email)
 	})
+}
+
+// acceptInvites turns the pending ERP import invites of a verified email into memberships.
+func (s *service) acceptInvites(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) error {
+	if s.deps.Invites == nil {
+		return nil
+	}
+	n, err := s.deps.Invites.AcceptERPInvites(ctx, tx, userID, email)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		slog.InfoContext(ctx, "erp invites accepted", "user_id", userID.String(), "count", n)
+	}
+	return nil
 }
 
 // consumeEmailCode checks the latest active code. A wrong code counts an attempt; the
@@ -294,7 +346,19 @@ func (s *service) Login(ctx context.Context, in LoginInput) (Tokens, error) {
 			return Tokens{}, notFoundAs(err, apperr.CodeDeviceNotFound)
 		}
 	}
+	s.acceptInvitesAtLogin(ctx, user.ID, user.Email)
 	return s.openSession(ctx, user.ID, in.DeviceID)
+}
+
+// acceptInvitesAtLogin covers users who already existed when the ERP import invited them. A
+// failure never blocks the login: it is logged and retried at the next login.
+func (s *service) acceptInvitesAtLogin(ctx context.Context, userID uuid.UUID, email string) {
+	err := db.WithTx(ctx, s.deps.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return s.acceptInvites(ctx, tx, userID, email)
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "accepting erp invites at login failed", "user_id", userID.String(), "err", err.Error())
+	}
 }
 
 // checkTOTP enforces the second factor of users who enabled TOTP (R-ID-2).
@@ -517,7 +581,8 @@ func (s *service) RegisterDevice(ctx context.Context, p auth.Principal, in Devic
 }
 
 func (s *service) Me(ctx context.Context, p auth.Principal) (Me, error) {
-	user, err := store.New(s.deps.Pool).GetUserByID(ctx, p.UserID)
+	q := store.New(s.deps.Pool)
+	user, err := q.GetUserByID(ctx, p.UserID)
 	if err != nil {
 		return Me{}, notFoundAs(err, apperr.CodeUnauthenticated)
 	}
@@ -525,12 +590,17 @@ func (s *service) Me(ctx context.Context, p auth.Principal) (Me, error) {
 	if err != nil {
 		return Me{}, err
 	}
+	prefs, err := s.storedPreferences(ctx, q, p.UserID, memberships)
+	if err != nil {
+		return Me{}, err
+	}
 	return Me{
 		User: User{
-			ID: user.ID, Email: user.Email, EmailVerified: user.EmailVerifiedAt != nil,
+			ID: user.ID, Email: user.Email, FullName: user.FullName, EmailVerified: user.EmailVerifiedAt != nil,
 			MFAEnabled: user.TotpEnabledAt != nil, CreatedAt: user.CreatedAt,
 		},
 		Memberships: memberships,
+		Preferences: prefs,
 	}, nil
 }
 

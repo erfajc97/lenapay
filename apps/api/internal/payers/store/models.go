@@ -73,6 +73,16 @@ type Account struct {
 	UpdatedAt     time.Time
 }
 
+type ApprovalPolicy struct {
+	OrgID                  uuid.UUID
+	Mode                   string
+	ThresholdArsMinor      *int64
+	ThresholdUsdMinor      *int64
+	AllowOwnerSelfApproval bool
+	UpdatedBy              uuid.UUID
+	UpdatedAt              time.Time
+}
+
 type AuditLog struct {
 	ID             uuid.UUID
 	OrgID          *uuid.UUID
@@ -194,6 +204,7 @@ type Invite struct {
 	AcceptedAt *time.Time
 	AcceptedBy *uuid.UUID
 	CreatedAt  time.Time
+	Source     string
 }
 
 type KycCase struct {
@@ -373,6 +384,7 @@ type Payout struct {
 	SettledAt             *time.Time
 	FailedAt              *time.Time
 	Rail                  string
+	SelfApproved          bool
 }
 
 type PayoutAttachment struct {
@@ -539,4 +551,14 @@ type User struct {
 	Status          string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	FullName        *string
+}
+
+type UserPreference struct {
+	UserID           uuid.UUID
+	DefaultOrgID     *uuid.UUID
+	DefaultAccountID *uuid.UUID
+	Locale           *string
+	Theme            *string
+	UpdatedAt        time.Time
 }

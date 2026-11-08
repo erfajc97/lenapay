@@ -13,8 +13,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/ids"
 )
 
 // Token uses. A token of one use is never accepted as another (a step-up token is not an

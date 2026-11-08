@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // Status of a payin (DB CHECK payins.status).

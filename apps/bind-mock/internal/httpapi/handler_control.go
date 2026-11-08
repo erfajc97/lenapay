@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/bank"
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/simulator"
+	"lenapay/apps/bind-mock/internal/bank"
+	"lenapay/apps/bind-mock/internal/simulator"
 )
 
 type incomingBody struct {

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/bind-mock/internal/bank"
+	"lenapay/apps/bind-mock/internal/bank"
 )
 
 type valueJSON struct {

@@ -4,7 +4,38 @@
   "cuit": "30717120937",
   "users": [
     {
-      "username": "pagos@patagoniaviviendas.com.ar"
+      "username": "pagos@patagoniaviviendas.com.ar",
+      "email": "pagos@patagoniaviviendas.com.ar",
+      "fullName": "Liliana Ponce",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "tesoreria@patagoniaviviendas.com.ar",
+      "email": "tesoreria@patagoniaviviendas.com.ar",
+      "fullName": "Esteban Luna",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS"
+      ]
+    },
+    {
+      "username": "contable@patagoniaviviendas.com.ar",
+      "email": "contable@patagoniaviviendas.com.ar",
+      "fullName": "Verónica Godoy",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS"
+      ]
     }
   ],
   "projects": [

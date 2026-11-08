@@ -59,6 +59,24 @@ func (e AdjustmentIndex) Valid() bool {
 	}
 }
 
+// Defines values for ApprovalMode.
+const (
+	Always    ApprovalMode = "always"
+	Threshold ApprovalMode = "threshold"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalMode enum.
+func (e ApprovalMode) Valid() bool {
+	switch e {
+	case Always:
+		return true
+	case Threshold:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Currency.
 const (
 	ARS Currency = "ARS"
@@ -341,6 +359,51 @@ func (e KycStatus) Valid() bool {
 	case KycStatusRejected:
 		return true
 	case KycStatusSubmitted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Locale.
+const (
+	LocaleEnUS Locale = "en-US"
+	LocaleEsAR Locale = "es-AR"
+)
+
+// Valid indicates whether the value is a known member of the Locale enum.
+func (e Locale) Valid() bool {
+	switch e {
+	case LocaleEnUS:
+		return true
+	case LocaleEsAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemberRole.
+const (
+	MemberRoleAdmin    MemberRole = "admin"
+	MemberRoleApprover MemberRole = "approver"
+	MemberRoleOperator MemberRole = "operator"
+	MemberRoleOwner    MemberRole = "owner"
+	MemberRoleViewer   MemberRole = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the MemberRole enum.
+func (e MemberRole) Valid() bool {
+	switch e {
+	case MemberRoleAdmin:
+		return true
+	case MemberRoleApprover:
+		return true
+	case MemberRoleOperator:
+		return true
+	case MemberRoleOwner:
+		return true
+	case MemberRoleViewer:
 		return true
 	default:
 		return false
@@ -649,22 +712,22 @@ func (e RegisterPushTokenRequestPlatform) Valid() bool {
 
 // Defines values for Role.
 const (
-	Admin    Role = "admin"
-	Approver Role = "approver"
-	Operator Role = "operator"
-	Viewer   Role = "viewer"
+	RoleAdmin    Role = "admin"
+	RoleApprover Role = "approver"
+	RoleOperator Role = "operator"
+	RoleViewer   Role = "viewer"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Admin:
+	case RoleAdmin:
 		return true
-	case Approver:
+	case RoleApprover:
 		return true
-	case Operator:
+	case RoleOperator:
 		return true
-	case Viewer:
+	case RoleViewer:
 		return true
 	default:
 		return false
@@ -689,6 +752,27 @@ func (e StepUpVerifyRequestMethod) Valid() bool {
 	}
 }
 
+// Defines values for Theme.
+const (
+	ThemeDark   Theme = "dark"
+	ThemeLight  Theme = "light"
+	ThemeSystem Theme = "system"
+)
+
+// Valid indicates whether the value is a known member of the Theme enum.
+func (e Theme) Valid() bool {
+	switch e {
+	case ThemeDark:
+		return true
+	case ThemeLight:
+		return true
+	case ThemeSystem:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TokenPairTokenType.
 const (
 	Bearer TokenPairTokenType = "Bearer"
@@ -698,6 +782,45 @@ const (
 func (e TokenPairTokenType) Valid() bool {
 	switch e {
 	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesLocale.
+const (
+	UserPreferencesLocaleEnUS UserPreferencesLocale = "en-US"
+	UserPreferencesLocaleEsAR UserPreferencesLocale = "es-AR"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesLocale enum.
+func (e UserPreferencesLocale) Valid() bool {
+	switch e {
+	case UserPreferencesLocaleEnUS:
+		return true
+	case UserPreferencesLocaleEsAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesTheme.
+const (
+	UserPreferencesThemeDark   UserPreferencesTheme = "dark"
+	UserPreferencesThemeLight  UserPreferencesTheme = "light"
+	UserPreferencesThemeSystem UserPreferencesTheme = "system"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesTheme enum.
+func (e UserPreferencesTheme) Valid() bool {
+	switch e {
+	case UserPreferencesThemeDark:
+		return true
+	case UserPreferencesThemeLight:
+		return true
+	case UserPreferencesThemeSystem:
 		return true
 	default:
 		return false
@@ -748,7 +871,9 @@ type AccountList struct {
 // AddMemberRequest defines model for AddMemberRequest.
 type AddMemberRequest struct {
 	Email openapi_types.Email `json:"email"`
-	Role  Role                `json:"role"`
+
+	// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
+	Role Role `json:"role"`
 }
 
 // Address defines model for Address.
@@ -764,6 +889,29 @@ type Address struct {
 
 // AdjustmentIndex Index the installment is adjusted by (CAC construction cost, UVA purchasing power).
 type AdjustmentIndex string
+
+// ApprovalMode defines model for ApprovalMode.
+type ApprovalMode string
+
+// ApprovalPolicy defines model for ApprovalPolicy.
+type ApprovalPolicy struct {
+	AllowOwnerSelfApproval bool         `json:"allowOwnerSelfApproval"`
+	Mode                   ApprovalMode `json:"mode"`
+
+	// OwnerSelfApprovalEffective True when the owner may approve their own payouts right now (allowed and no other member with a role >= approver).
+	OwnerSelfApprovalEffective bool `json:"ownerSelfApprovalEffective"`
+
+	// ThresholdMinor Per currency, in minor units; `null` = that currency always needs approval.
+	ThresholdMinor ApprovalThresholds  `json:"thresholdMinor"`
+	UpdatedAt      *time.Time          `json:"updatedAt"`
+	UpdatedBy      *openapi_types.UUID `json:"updatedBy"`
+}
+
+// ApprovalThresholds Per currency, in minor units; `null` = that currency always needs approval.
+type ApprovalThresholds struct {
+	ARS *int64 `json:"ARS"`
+	USD *int64 `json:"USD"`
+}
 
 // Balances defines model for Balances.
 type Balances struct {
@@ -798,7 +946,9 @@ type CreateErpLinkRequest struct {
 // CreateInviteRequest defines model for CreateInviteRequest.
 type CreateInviteRequest struct {
 	Email openapi_types.Email `json:"email"`
-	Role  Role                `json:"role"`
+
+	// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
+	Role Role `json:"role"`
 }
 
 // CreateOrgRequest defines model for CreateOrgRequest.
@@ -887,15 +1037,37 @@ type DocType string
 // ErpImportStatus defines model for ErpImportStatus.
 type ErpImportStatus string
 
+// ErpImportSummary defines model for ErpImportSummary.
+type ErpImportSummary struct {
+	Buyers                     int              `json:"buyers"`
+	InvitedUsers               []ErpInvitedUser `json:"invitedUsers"`
+	Projects                   int              `json:"projects"`
+	SkippedBuyers              int              `json:"skippedBuyers"`
+	UsersAlreadyMembers        int              `json:"usersAlreadyMembers"`
+	UsersInvited               int              `json:"usersInvited"`
+	UsersWithoutPaymentsAccess int              `json:"usersWithoutPaymentsAccess"`
+}
+
+// ErpInvitedUser defines model for ErpInvitedUser.
+type ErpInvitedUser struct {
+	Email openapi_types.Email `json:"email"`
+
+	// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
+	Role Role `json:"role"`
+}
+
 // ErpLink defines model for ErpLink.
 type ErpLink struct {
 	DisplayName  string             `json:"displayName"`
 	ErpOrgId     string             `json:"erpOrgId"`
 	Id           openapi_types.UUID `json:"id"`
 	ImportStatus ErpImportStatus    `json:"importStatus"`
-	ImportedAt   *time.Time         `json:"importedAt"`
-	LinkedAt     time.Time          `json:"linkedAt"`
-	LinkedBy     openapi_types.UUID `json:"linkedBy"`
+
+	// ImportSummary Always present; `null` until the import has run.
+	ImportSummary *ErpImportSummary  `json:"importSummary"`
+	ImportedAt    *time.Time         `json:"importedAt"`
+	LinkedAt      time.Time          `json:"linkedAt"`
+	LinkedBy      openapi_types.UUID `json:"linkedBy"`
 }
 
 // ErpLinkCandidate defines model for ErpLinkCandidate.
@@ -958,7 +1130,9 @@ type Invite struct {
 	Email     openapi_types.Email `json:"email"`
 	ExpiresAt time.Time           `json:"expiresAt"`
 	Id        openapi_types.UUID  `json:"id"`
-	Role      Role                `json:"role"`
+
+	// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
+	Role Role `json:"role"`
 }
 
 // Jwk defines model for Jwk.
@@ -1065,6 +1239,9 @@ type KycRepresentative struct {
 // KycStatus defines model for KycStatus.
 type KycStatus string
 
+// Locale defines model for Locale.
+type Locale string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// DeviceId Registered device of this phone, if any.
@@ -1079,15 +1256,24 @@ type LoginRequest struct {
 // Me defines model for Me.
 type Me struct {
 	Memberships []Membership `json:"memberships"`
-	User        User         `json:"user"`
+
+	// Preferences Always present (every field `null` until set).
+	Preferences *UserPreferences `json:"preferences,omitempty"`
+	User        User             `json:"user"`
 }
 
 // Member defines model for Member.
 type Member struct {
-	Email    openapi_types.Email `json:"email"`
-	JoinedAt time.Time           `json:"joinedAt"`
-	Role     Role                `json:"role"`
-	UserId   openapi_types.UUID  `json:"userId"`
+	Email openapi_types.Email `json:"email"`
+
+	// FullName Always present (`null` when the user has not set one).
+	FullName *string   `json:"fullName"`
+	JoinedAt time.Time `json:"joinedAt"`
+
+	// Role A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+	// Exactly one owner per organization (its creator, or whoever received a transfer).
+	Role   MemberRole         `json:"role"`
+	UserId openapi_types.UUID `json:"userId"`
 }
 
 // MemberList defines model for MemberList.
@@ -1095,13 +1281,20 @@ type MemberList struct {
 	Items []Member `json:"items"`
 }
 
+// MemberRole A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+// Exactly one owner per organization (its creator, or whoever received a transfer).
+type MemberRole string
+
 // Membership defines model for Membership.
 type Membership struct {
 	KycStatus KycStatus          `json:"kycStatus"`
 	OrgId     openapi_types.UUID `json:"orgId"`
 	OrgKind   OrgKind            `json:"orgKind"`
 	OrgName   string             `json:"orgName"`
-	Role      Role               `json:"role"`
+
+	// Role A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+	// Exactly one owner per organization (its creator, or whoever received a transfer).
+	Role MemberRole `json:"role"`
 }
 
 // Money defines model for Money.
@@ -1226,12 +1419,21 @@ type Organization struct {
 	Kind      OrgKind            `json:"kind"`
 	KycStatus KycStatus          `json:"kycStatus"`
 	LegalName string             `json:"legalName"`
-	Role      Role               `json:"role"`
+
+	// Role A member's role, least to most privileged: viewer < operator < approver < admin < owner.
+	// Exactly one owner per organization (its creator, or whoever received a transfer).
+	Role MemberRole `json:"role"`
 }
 
 // OrganizationList defines model for OrganizationList.
 type OrganizationList struct {
 	Items []Organization `json:"items"`
+}
+
+// OwnershipTransfer defines model for OwnershipTransfer.
+type OwnershipTransfer struct {
+	Owner         Member `json:"owner"`
+	PreviousOwner Member `json:"previousOwner"`
 }
 
 // PayMyPaymentCompanyRequest defines model for PayMyPaymentCompanyRequest.
@@ -1476,7 +1678,7 @@ type ResendCodeRequest struct {
 	Email openapi_types.Email `json:"email"`
 }
 
-// Role defines model for Role.
+// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
 type Role string
 
 // RunReconciliationRequest defines model for RunReconciliationRequest.
@@ -1487,8 +1689,11 @@ type RunReconciliationRequest struct {
 
 // SignupRequest defines model for SignupRequest.
 type SignupRequest struct {
-	Email    openapi_types.Email `json:"email"`
-	Password string              `json:"password"`
+	Email openapi_types.Email `json:"email"`
+
+	// FullName Optional display name (trimmed; blank is `validation.failed`).
+	FullName *string `json:"fullName,omitempty"`
+	Password string  `json:"password"`
 }
 
 // SignupResponse defines model for SignupResponse.
@@ -1533,6 +1738,9 @@ type StepUpVerifyRequest struct {
 // StepUpVerifyRequestMethod defines model for StepUpVerifyRequest.Method.
 type StepUpVerifyRequestMethod string
 
+// Theme defines model for Theme.
+type Theme string
+
 // TokenPair defines model for TokenPair.
 type TokenPair struct {
 	AccessToken           string             `json:"accessToken"`
@@ -1545,10 +1753,30 @@ type TokenPair struct {
 // TokenPairTokenType defines model for TokenPair.TokenType.
 type TokenPairTokenType string
 
+// TransferOwnershipRequest defines model for TransferOwnershipRequest.
+type TransferOwnershipRequest struct {
+	UserId openapi_types.UUID `json:"userId"`
+}
+
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
 	Archived *bool   `json:"archived,omitempty"`
 	Name     *string `json:"name,omitempty"`
+}
+
+// UpdateApprovalPolicyRequest defines model for UpdateApprovalPolicyRequest.
+type UpdateApprovalPolicyRequest struct {
+	AllowOwnerSelfApproval bool         `json:"allowOwnerSelfApproval"`
+	Mode                   ApprovalMode `json:"mode"`
+
+	// ThresholdMinor Thresholds in minor units (>= 1); an absent currency has none.
+	ThresholdMinor *UpdateApprovalThresholds `json:"thresholdMinor,omitempty"`
+}
+
+// UpdateApprovalThresholds Thresholds in minor units (>= 1); an absent currency has none.
+type UpdateApprovalThresholds struct {
+	ARS *int64 `json:"ARS,omitempty"`
+	USD *int64 `json:"USD,omitempty"`
 }
 
 // UpdateCvuRequest defines model for UpdateCvuRequest.
@@ -1562,8 +1790,15 @@ type UpdateKycRequest struct {
 	Person  *KycPersonData  `json:"person,omitempty"`
 }
 
+// UpdateMeRequest defines model for UpdateMeRequest.
+type UpdateMeRequest struct {
+	// FullName `null` clears the name; absent keeps it.
+	FullName nullable.Nullable[string] `json:"fullName,omitempty"`
+}
+
 // UpdateMemberRequest defines model for UpdateMemberRequest.
 type UpdateMemberRequest struct {
+	// Role A role that can be granted (invites, add member, role change). `owner` is not one of them.
 	Role Role `json:"role"`
 }
 
@@ -1579,14 +1814,40 @@ type UpdatePayerRequest struct {
 	Name  *string                   `json:"name,omitempty"`
 }
 
+// UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
+type UpdatePreferencesRequest struct {
+	DefaultAccountId nullable.Nullable[string] `json:"defaultAccountId,omitempty"`
+	DefaultOrgId     nullable.Nullable[string] `json:"defaultOrgId,omitempty"`
+	Locale           nullable.Nullable[string] `json:"locale,omitempty"`
+	Theme            nullable.Nullable[string] `json:"theme,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	CreatedAt     time.Time           `json:"createdAt"`
 	Email         openapi_types.Email `json:"email"`
 	EmailVerified bool                `json:"emailVerified"`
-	Id            openapi_types.UUID  `json:"id"`
-	MfaEnabled    bool                `json:"mfaEnabled"`
+
+	// FullName Always present (`null` when unset).
+	FullName   *string            `json:"fullName"`
+	Id         openapi_types.UUID `json:"id"`
+	MfaEnabled bool               `json:"mfaEnabled"`
 }
+
+// UserPreferences defines model for UserPreferences.
+type UserPreferences struct {
+	DefaultAccountId *openapi_types.UUID    `json:"defaultAccountId"`
+	DefaultOrgId     *openapi_types.UUID    `json:"defaultOrgId"`
+	Locale           *UserPreferencesLocale `json:"locale"`
+	Theme            *UserPreferencesTheme  `json:"theme"`
+	UpdatedAt        *time.Time             `json:"updatedAt"`
+}
+
+// UserPreferencesLocale defines model for UserPreferences.Locale.
+type UserPreferencesLocale string
+
+// UserPreferencesTheme defines model for UserPreferences.Theme.
+type UserPreferencesTheme string
 
 // VerifyEmailRequest defines model for VerifyEmailRequest.
 type VerifyEmailRequest struct {
@@ -1654,6 +1915,12 @@ type ListAccountsParams struct {
 	IncludeArchived *bool `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
 }
 
+// UpdateApprovalPolicyParams defines parameters for UpdateApprovalPolicy.
+type UpdateApprovalPolicyParams struct {
+	// XStepUpToken Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes.
+	XStepUpToken StepUpTokenHeader `json:"X-Step-Up-Token"`
+}
+
 // ListApprovalsParams defines parameters for ListApprovals.
 type ListApprovalsParams struct {
 	// Cursor Opaque cursor from a previous page's `nextCursor`.
@@ -1692,6 +1959,12 @@ type ListMovementsParams struct {
 	// Cursor Opaque cursor from a previous page's `nextCursor`.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// TransferOwnershipParams defines parameters for TransferOwnership.
+type TransferOwnershipParams struct {
+	// XStepUpToken Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes.
+	XStepUpToken StepUpTokenHeader `json:"X-Step-Up-Token"`
 }
 
 // ListPayersParams defines parameters for ListPayers.
@@ -1785,11 +2058,17 @@ type DecideKycJSONRequestBody = KycDecisionRequest
 // RunReconciliationJSONRequestBody defines body for RunReconciliation for application/json ContentType.
 type RunReconciliationJSONRequestBody = RunReconciliationRequest
 
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody = UpdateMeRequest
+
 // UpdateMyPaymentCompanyJSONRequestBody defines body for UpdateMyPaymentCompany for application/json ContentType.
 type UpdateMyPaymentCompanyJSONRequestBody = UpdateMyPaymentCompanyRequest
 
 // PayMyPaymentCompanyJSONRequestBody defines body for PayMyPaymentCompany for application/json ContentType.
 type PayMyPaymentCompanyJSONRequestBody = PayMyPaymentCompanyRequest
+
+// UpdateMyPreferencesJSONRequestBody defines body for UpdateMyPreferences for application/json ContentType.
+type UpdateMyPreferencesJSONRequestBody = UpdatePreferencesRequest
 
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = CreateOrgRequest
@@ -1802,6 +2081,9 @@ type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
 // UpdateAccountCvuJSONRequestBody defines body for UpdateAccountCvu for application/json ContentType.
 type UpdateAccountCvuJSONRequestBody = UpdateCvuRequest
+
+// UpdateApprovalPolicyJSONRequestBody defines body for UpdateApprovalPolicy for application/json ContentType.
+type UpdateApprovalPolicyJSONRequestBody = UpdateApprovalPolicyRequest
 
 // UpdateCvuJSONRequestBody defines body for UpdateCvu for application/json ContentType.
 type UpdateCvuJSONRequestBody = UpdateCvuRequest
@@ -1826,6 +2108,9 @@ type AddMemberJSONRequestBody = AddMemberRequest
 
 // UpdateMemberJSONRequestBody defines body for UpdateMember for application/json ContentType.
 type UpdateMemberJSONRequestBody = UpdateMemberRequest
+
+// TransferOwnershipJSONRequestBody defines body for TransferOwnership for application/json ContentType.
+type TransferOwnershipJSONRequestBody = TransferOwnershipRequest
 
 // CreatePayerJSONRequestBody defines body for CreatePayer for application/json ContentType.
 type CreatePayerJSONRequestBody = CreatePayerRequest
@@ -1902,6 +2187,9 @@ type ServerInterface interface {
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
 
+	// (PATCH /me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
+
 	// (GET /me/payments/companies)
 	ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams)
 
@@ -1916,6 +2204,12 @@ type ServerInterface interface {
 
 	// (GET /me/payments/companies/{linkId}/payins)
 	ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request, linkId LinkId, params ListMyPaymentCompanyPayinsParams)
+
+	// (GET /me/preferences)
+	GetMyPreferences(w http.ResponseWriter, r *http.Request)
+
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(w http.ResponseWriter, r *http.Request)
 
 	// (GET /orgs)
 	ListOrgs(w http.ResponseWriter, r *http.Request)
@@ -1937,6 +2231,12 @@ type ServerInterface interface {
 
 	// (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
 	UpdateAccountCvu(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId, cvuId CvuId)
+
+	// (GET /orgs/{orgId}/approval-policy)
+	GetApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId)
+
+	// (PUT /orgs/{orgId}/approval-policy)
+	UpdateApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId, params UpdateApprovalPolicyParams)
 
 	// (GET /orgs/{orgId}/approvals)
 	ListApprovals(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListApprovalsParams)
@@ -1997,6 +2297,9 @@ type ServerInterface interface {
 
 	// (GET /orgs/{orgId}/movements/{movementId})
 	GetMovement(w http.ResponseWriter, r *http.Request, orgId OrgId, movementId openapi_types.UUID)
+
+	// (POST /orgs/{orgId}/ownership-transfer)
+	TransferOwnership(w http.ResponseWriter, r *http.Request, orgId OrgId, params TransferOwnershipParams)
 
 	// (GET /orgs/{orgId}/payers)
 	ListPayers(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListPayersParams)
@@ -2132,6 +2435,11 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// (PATCH /me)
+func (_ Unimplemented) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /me/payments/companies)
 func (_ Unimplemented) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -2154,6 +2462,16 @@ func (_ Unimplemented) PayMyPaymentCompany(w http.ResponseWriter, r *http.Reques
 
 // (GET /me/payments/companies/{linkId}/payins)
 func (_ Unimplemented) ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request, linkId LinkId, params ListMyPaymentCompanyPayinsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /me/preferences)
+func (_ Unimplemented) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PATCH /me/preferences)
+func (_ Unimplemented) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2189,6 +2507,16 @@ func (_ Unimplemented) UpdateAccount(w http.ResponseWriter, r *http.Request, org
 
 // (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
 func (_ Unimplemented) UpdateAccountCvu(w http.ResponseWriter, r *http.Request, orgId OrgId, accountId AccountId, cvuId CvuId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /orgs/{orgId}/approval-policy)
+func (_ Unimplemented) GetApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PUT /orgs/{orgId}/approval-policy)
+func (_ Unimplemented) UpdateApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId, params UpdateApprovalPolicyParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2289,6 +2617,11 @@ func (_ Unimplemented) ListMovements(w http.ResponseWriter, r *http.Request, org
 
 // (GET /orgs/{orgId}/movements/{movementId})
 func (_ Unimplemented) GetMovement(w http.ResponseWriter, r *http.Request, orgId OrgId, movementId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /orgs/{orgId}/ownership-transfer)
+func (_ Unimplemented) TransferOwnership(w http.ResponseWriter, r *http.Request, orgId OrgId, params TransferOwnershipParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2625,6 +2958,20 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMyPaymentCompanies operation middleware
 func (siw *ServerInterfaceWrapper) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request) {
 
@@ -2842,6 +3189,34 @@ func (siw *ServerInterfaceWrapper) ListMyPaymentCompanyPayins(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// GetMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyPreferences(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMyPreferences(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrgs operation middleware
 func (siw *ServerInterfaceWrapper) ListOrgs(w http.ResponseWriter, r *http.Request) {
 
@@ -3034,6 +3409,86 @@ func (siw *ServerInterfaceWrapper) UpdateAccountCvu(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAccountCvu(w, r, orgId, accountId, cvuId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetApprovalPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetApprovalPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetApprovalPolicy(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateApprovalPolicy operation middleware
+func (siw *ServerInterfaceWrapper) UpdateApprovalPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateApprovalPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Step-Up-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Step-Up-Token")]; found {
+		var XStepUpToken StepUpTokenHeader
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Step-Up-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Step-Up-Token", valueList[0], &XStepUpToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Step-Up-Token", Err: err})
+			return
+		}
+
+		params.XStepUpToken = XStepUpToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Step-Up-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Step-Up-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateApprovalPolicy(w, r, orgId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3802,6 +4257,60 @@ func (siw *ServerInterfaceWrapper) GetMovement(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMovement(w, r, orgId, movementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TransferOwnership operation middleware
+func (siw *ServerInterfaceWrapper) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orgId" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orgId", chi.URLParam(r, "orgId"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orgId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TransferOwnershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Step-Up-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Step-Up-Token")]; found {
+		var XStepUpToken StepUpTokenHeader
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Step-Up-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Step-Up-Token", valueList[0], &XStepUpToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Step-Up-Token", Err: err})
+			return
+		}
+
+		params.XStepUpToken = XStepUpToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Step-Up-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Step-Up-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TransferOwnership(w, r, orgId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4823,6 +5332,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me", wrapper.UpdateMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/preferences", wrapper.GetMyPreferences)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me/preferences", wrapper.UpdateMyPreferences)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orgs", wrapper.ListOrgs)
 	})
 	r.Group(func(r chi.Router) {
@@ -4842,6 +5360,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/orgs/{orgId}/members/{userId}", wrapper.UpdateMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orgs/{orgId}/ownership-transfer", wrapper.TransferOwnership)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orgs/{orgId}/approval-policy", wrapper.GetApprovalPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/orgs/{orgId}/approval-policy", wrapper.UpdateApprovalPolicy)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orgs/{orgId}/invites", wrapper.CreateInvite)
@@ -5551,6 +6078,45 @@ func (response GetMedefaultJSONResponse) VisitGetMeResponse(w http.ResponseWrite
 	return err
 }
 
+type UpdateMeRequestObject struct {
+	Body *UpdateMeJSONRequestBody
+}
+
+type UpdateMeResponseObject interface {
+	VisitUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type UpdateMe200JSONResponse Me
+
+func (response UpdateMe200JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateMedefaultJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMyPaymentCompaniesRequestObject struct {
 	Params ListMyPaymentCompaniesParams
 }
@@ -5739,6 +6305,83 @@ type ListMyPaymentCompanyPayinsdefaultJSONResponse struct {
 }
 
 func (response ListMyPaymentCompanyPayinsdefaultJSONResponse) VisitListMyPaymentCompanyPayinsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferencesRequestObject struct {
+}
+
+type GetMyPreferencesResponseObject interface {
+	VisitGetMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type GetMyPreferences200JSONResponse UserPreferences
+
+func (response GetMyPreferences200JSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferencesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetMyPreferencesdefaultJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesRequestObject struct {
+	Body *UpdateMyPreferencesJSONRequestBody
+}
+
+type UpdateMyPreferencesResponseObject interface {
+	VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type UpdateMyPreferences200JSONResponse UserPreferences
+
+func (response UpdateMyPreferences200JSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateMyPreferencesdefaultJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6018,6 +6661,86 @@ type UpdateAccountCvudefaultJSONResponse struct {
 }
 
 func (response UpdateAccountCvudefaultJSONResponse) VisitUpdateAccountCvuResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetApprovalPolicyRequestObject struct {
+	OrgId OrgId `json:"orgId"`
+}
+
+type GetApprovalPolicyResponseObject interface {
+	VisitGetApprovalPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetApprovalPolicy200JSONResponse ApprovalPolicy
+
+func (response GetApprovalPolicy200JSONResponse) VisitGetApprovalPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetApprovalPolicydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetApprovalPolicydefaultJSONResponse) VisitGetApprovalPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateApprovalPolicyRequestObject struct {
+	OrgId  OrgId `json:"orgId"`
+	Params UpdateApprovalPolicyParams
+	Body   *UpdateApprovalPolicyJSONRequestBody
+}
+
+type UpdateApprovalPolicyResponseObject interface {
+	VisitUpdateApprovalPolicyResponse(w http.ResponseWriter) error
+}
+
+type UpdateApprovalPolicy200JSONResponse ApprovalPolicy
+
+func (response UpdateApprovalPolicy200JSONResponse) VisitUpdateApprovalPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateApprovalPolicydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateApprovalPolicydefaultJSONResponse) VisitUpdateApprovalPolicyResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6814,6 +7537,47 @@ func (response GetMovementdefaultJSONResponse) VisitGetMovementResponse(w http.R
 	return err
 }
 
+type TransferOwnershipRequestObject struct {
+	OrgId  OrgId `json:"orgId"`
+	Params TransferOwnershipParams
+	Body   *TransferOwnershipJSONRequestBody
+}
+
+type TransferOwnershipResponseObject interface {
+	VisitTransferOwnershipResponse(w http.ResponseWriter) error
+}
+
+type TransferOwnership200JSONResponse OwnershipTransfer
+
+func (response TransferOwnership200JSONResponse) VisitTransferOwnershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TransferOwnershipdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response TransferOwnershipdefaultJSONResponse) VisitTransferOwnershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListPayersRequestObject struct {
 	OrgId  OrgId `json:"orgId"`
 	Params ListPayersParams
@@ -7590,6 +8354,9 @@ type StrictServerInterface interface {
 	// (GET /me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
 
+	// (PATCH /me)
+	UpdateMe(ctx context.Context, request UpdateMeRequestObject) (UpdateMeResponseObject, error)
+
 	// (GET /me/payments/companies)
 	ListMyPaymentCompanies(ctx context.Context, request ListMyPaymentCompaniesRequestObject) (ListMyPaymentCompaniesResponseObject, error)
 
@@ -7604,6 +8371,12 @@ type StrictServerInterface interface {
 
 	// (GET /me/payments/companies/{linkId}/payins)
 	ListMyPaymentCompanyPayins(ctx context.Context, request ListMyPaymentCompanyPayinsRequestObject) (ListMyPaymentCompanyPayinsResponseObject, error)
+
+	// (GET /me/preferences)
+	GetMyPreferences(ctx context.Context, request GetMyPreferencesRequestObject) (GetMyPreferencesResponseObject, error)
+
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(ctx context.Context, request UpdateMyPreferencesRequestObject) (UpdateMyPreferencesResponseObject, error)
 
 	// (GET /orgs)
 	ListOrgs(ctx context.Context, request ListOrgsRequestObject) (ListOrgsResponseObject, error)
@@ -7625,6 +8398,12 @@ type StrictServerInterface interface {
 
 	// (PATCH /orgs/{orgId}/accounts/{accountId}/cvus/{cvuId})
 	UpdateAccountCvu(ctx context.Context, request UpdateAccountCvuRequestObject) (UpdateAccountCvuResponseObject, error)
+
+	// (GET /orgs/{orgId}/approval-policy)
+	GetApprovalPolicy(ctx context.Context, request GetApprovalPolicyRequestObject) (GetApprovalPolicyResponseObject, error)
+
+	// (PUT /orgs/{orgId}/approval-policy)
+	UpdateApprovalPolicy(ctx context.Context, request UpdateApprovalPolicyRequestObject) (UpdateApprovalPolicyResponseObject, error)
 
 	// (GET /orgs/{orgId}/approvals)
 	ListApprovals(ctx context.Context, request ListApprovalsRequestObject) (ListApprovalsResponseObject, error)
@@ -7685,6 +8464,9 @@ type StrictServerInterface interface {
 
 	// (GET /orgs/{orgId}/movements/{movementId})
 	GetMovement(ctx context.Context, request GetMovementRequestObject) (GetMovementResponseObject, error)
+
+	// (POST /orgs/{orgId}/ownership-transfer)
+	TransferOwnership(ctx context.Context, request TransferOwnershipRequestObject) (TransferOwnershipResponseObject, error)
 
 	// (GET /orgs/{orgId}/payers)
 	ListPayers(ctx context.Context, request ListPayersRequestObject) (ListPayersResponseObject, error)
@@ -8214,6 +8996,37 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UpdateMe operation middleware
+func (sh *strictHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMeRequestObject
+
+	var body UpdateMeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMe(ctx, request.(UpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMeResponseObject); ok {
+		if err := validResponse.VisitUpdateMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMyPaymentCompanies operation middleware
 func (sh *strictHandler) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams) {
 	var request ListMyPaymentCompaniesRequestObject
@@ -8353,6 +9166,61 @@ func (sh *strictHandler) ListMyPaymentCompanyPayins(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMyPaymentCompanyPayinsResponseObject); ok {
 		if err := validResponse.VisitListMyPaymentCompanyPayinsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMyPreferences operation middleware
+func (sh *strictHandler) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+	var request GetMyPreferencesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyPreferences(ctx, request.(GetMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitGetMyPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMyPreferences operation middleware
+func (sh *strictHandler) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMyPreferencesRequestObject
+
+	var body UpdateMyPreferencesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMyPreferences(ctx, request.(UpdateMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitUpdateMyPreferencesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8563,6 +9431,66 @@ func (sh *strictHandler) UpdateAccountCvu(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAccountCvuResponseObject); ok {
 		if err := validResponse.VisitUpdateAccountCvuResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetApprovalPolicy operation middleware
+func (sh *strictHandler) GetApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetApprovalPolicyRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApprovalPolicy(ctx, request.(GetApprovalPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApprovalPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetApprovalPolicyResponseObject); ok {
+		if err := validResponse.VisitGetApprovalPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateApprovalPolicy operation middleware
+func (sh *strictHandler) UpdateApprovalPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId, params UpdateApprovalPolicyParams) {
+	var request UpdateApprovalPolicyRequestObject
+
+	request.OrgId = orgId
+	request.Params = params
+
+	var body UpdateApprovalPolicyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateApprovalPolicy(ctx, request.(UpdateApprovalPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateApprovalPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateApprovalPolicyResponseObject); ok {
+		if err := validResponse.VisitUpdateApprovalPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9148,6 +10076,40 @@ func (sh *strictHandler) GetMovement(w http.ResponseWriter, r *http.Request, org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMovementResponseObject); ok {
 		if err := validResponse.VisitGetMovementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TransferOwnership operation middleware
+func (sh *strictHandler) TransferOwnership(w http.ResponseWriter, r *http.Request, orgId OrgId, params TransferOwnershipParams) {
+	var request TransferOwnershipRequestObject
+
+	request.OrgId = orgId
+	request.Params = params
+
+	var body TransferOwnershipJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TransferOwnership(ctx, request.(TransferOwnershipRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TransferOwnership")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TransferOwnershipResponseObject); ok {
+		if err := validResponse.VisitTransferOwnershipResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

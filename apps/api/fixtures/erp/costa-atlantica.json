@@ -4,7 +4,38 @@
   "cuit": "30718221486",
   "users": [
     {
-      "username": "obras@costaatlantica.com.ar"
+      "username": "obras@costaatlantica.com.ar",
+      "email": "obras@costaatlantica.com.ar",
+      "fullName": "Silvina Acosta",
+      "admin": true,
+      "permissions": [
+        "CONFIGURACION_ORGANIZACION",
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_ACCOUNTS",
+        "PAYMENTS_CREATE_CVU",
+        "PAYMENTS_RECONCILIATIONS_MASTER",
+        "DASHBOARD",
+        "TESORERIA"
+      ]
+    },
+    {
+      "username": "pagos@costaatlantica.com.ar",
+      "email": "pagos@costaatlantica.com.ar",
+      "fullName": "Tomás Giménez",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_PAYOUTS",
+        "PAYMENTS_CREATE_CVU"
+      ]
+    },
+    {
+      "username": "contable@costaatlantica.com.ar",
+      "email": "contable@costaatlantica.com.ar",
+      "fullName": "Valeria Ruiz",
+      "admin": false,
+      "permissions": [
+        "PAYMENTS_RECONCILIATIONS"
+      ]
     }
   ],
   "projects": [

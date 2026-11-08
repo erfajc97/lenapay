@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/erplink/provider/fake"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/money"
 )
 
 // The real fixtures of apps/api/fixtures/erp, so a malformed fixture fails here first.

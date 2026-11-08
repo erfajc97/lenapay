@@ -37,31 +37,26 @@ VALUES (sqlc.arg(org_id), sqlc.arg(user_id), sqlc.arg(role), sqlc.arg(created_at
 SELECT * FROM memberships WHERE org_id = sqlc.arg(org_id) AND user_id = sqlc.arg(user_id);
 
 -- name: GetMember :one
-SELECT m.user_id, u.email, m.role, m.created_at
+SELECT m.user_id, u.email, u.full_name, m.role, m.created_at
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 WHERE m.org_id = sqlc.arg(org_id) AND m.user_id = sqlc.arg(user_id);
 
 -- name: ListMembers :many
-SELECT m.user_id, u.email, m.role, m.created_at
+SELECT m.user_id, u.email, u.full_name, m.role, m.created_at
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 WHERE m.org_id = sqlc.arg(org_id)
 ORDER BY m.created_at, m.user_id;
-
--- name: CountAdminsForUpdate :one
-SELECT count(*) FROM (
-    SELECT 1 FROM memberships WHERE org_id = sqlc.arg(org_id) AND role = 'admin' FOR UPDATE
-) admins;
 
 -- name: UpdateMembershipRole :exec
 UPDATE memberships SET role = sqlc.arg(role), updated_at = sqlc.arg(updated_at)
 WHERE org_id = sqlc.arg(org_id) AND user_id = sqlc.arg(user_id);
 
 -- name: InsertInvite :exec
-INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at, created_at)
+INSERT INTO invites (id, org_id, email, role, token_hash, invited_by, expires_at, created_at, source)
 VALUES (sqlc.arg(id), sqlc.arg(org_id), sqlc.arg(email), sqlc.arg(role), sqlc.arg(token_hash), sqlc.arg(invited_by),
-        sqlc.arg(expires_at), sqlc.arg(created_at));
+        sqlc.arg(expires_at), sqlc.arg(created_at), sqlc.arg(source));
 
 -- name: GetInviteByTokenHashForUpdate :one
 SELECT * FROM invites WHERE token_hash = sqlc.arg(token_hash) FOR UPDATE;
@@ -82,3 +77,39 @@ UPDATE organizations
 SET legal_name = sqlc.arg(legal_name), cuit = COALESCE(sqlc.narg(cuit), cuit),
     doc_type = sqlc.arg(doc_type), doc_number = sqlc.arg(doc_number), updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id);
+
+-- name: CountApproversBesidesOwner :one
+-- Members other than the owner who can approve payouts (role approver or admin): owner
+-- self-approval is effective only while there are none.
+SELECT count(*) FROM memberships WHERE org_id = sqlc.arg(org_id) AND role IN ('approver', 'admin');
+
+-- name: GetApprovalPolicy :one
+SELECT * FROM approval_policies WHERE org_id = sqlc.arg(org_id);
+
+-- name: UpsertApprovalPolicy :one
+INSERT INTO approval_policies (org_id, mode, threshold_ars_minor, threshold_usd_minor, allow_owner_self_approval,
+                               updated_by, updated_at)
+VALUES (sqlc.arg(org_id), sqlc.arg(mode), sqlc.narg(threshold_ars_minor), sqlc.narg(threshold_usd_minor),
+        sqlc.arg(allow_owner_self_approval), sqlc.arg(updated_by), sqlc.arg(updated_at))
+ON CONFLICT (org_id) DO UPDATE
+SET mode = EXCLUDED.mode, threshold_ars_minor = EXCLUDED.threshold_ars_minor,
+    threshold_usd_minor = EXCLUDED.threshold_usd_minor, allow_owner_self_approval = EXCLUDED.allow_owner_self_approval,
+    updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+RETURNING *;
+
+-- name: HasPendingInvite :one
+-- An unexpired, unaccepted invite of this email to this org (the ERP import never duplicates).
+SELECT EXISTS (
+    SELECT 1 FROM invites
+    WHERE org_id = sqlc.arg(org_id) AND lower(email) = lower(sqlc.arg(email)) AND accepted_at IS NULL
+      AND expires_at > sqlc.arg(now)
+);
+
+-- name: ListPendingERPInvitesForUpdate :many
+-- ERP import invites of an email still acceptable, oldest first (auto-accepted on email
+-- verification and login).
+SELECT * FROM invites
+WHERE lower(email) = lower(sqlc.arg(email)) AND source = 'erp_import' AND accepted_at IS NULL
+  AND expires_at > sqlc.arg(now)
+ORDER BY created_at, id
+FOR UPDATE;

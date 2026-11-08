@@ -17,16 +17,16 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/db"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/httpx"
-	applog "github.com/erfajc97/lenapay/apps/api/internal/platform/log"
-	platformrealtime "github.com/erfajc97/lenapay/apps/api/internal/platform/realtime"
-	"github.com/erfajc97/lenapay/apps/api/internal/realtime"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/db"
+	"lenapay/apps/api/internal/platform/httpx"
+	applog "lenapay/apps/api/internal/platform/log"
+	platformrealtime "lenapay/apps/api/internal/platform/realtime"
+	"lenapay/apps/api/internal/realtime"
 )
 
 func main() {

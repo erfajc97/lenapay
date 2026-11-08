@@ -6,8 +6,10 @@
 // quote + payout → a second user approves → dispatch settles → attachment + proof PDF →
 // reconciliation run → "Mis pagos" (a verified person sees the company that registered their
 // CUIT, its payins, hides/shows it and pays it on-us from the personal wallet: personal org
-// and account at signup, personal CVUs on the account, alias change). Prints a PASS/FAIL
-// table; exit code 1 when any step fails.
+// and account at signup, personal CVUs on the account, alias change), and the owner decisions
+// (approval policy threshold with the attacker case, ownership transfer, profile and preferences,
+// the seeded ERP users import with its auto-accepted invites). Prints a PASS/FAIL table; exit
+// code 1 when any step fails. The ERP step needs the seed (`make seed`).
 //
 //   node scripts/smoke.mjs
 //   LENAPAY_API_URL=http://localhost:18080 BINDMOCK_URL=http://localhost:8090 node scripts/smoke.mjs
@@ -287,6 +289,87 @@ async function main() {
     check(done.status === 'completed' && done.matchedCount === 2 && items.items.length === done.matchedCount + done.missingInLedgerCount + done.missingAtPspCount,
       `run ${JSON.stringify(done)} items ${items.items.length}`);
     return `matched ${done.matchedCount}, diff ${done.difference.minor}`;
+  });
+
+  await step('owner: approval policy threshold (attacker 403)', async () => {
+    const me = await must('GET', '/me', 200, { token: ctx.token });
+    check(me.memberships.find((m) => m.orgId === ctx.org)?.role === 'owner' && 'preferences' in me, `the creator is the owner ${JSON.stringify(me.memberships)}`);
+    const policyPath = `${ctx.orgPath}/approval-policy`;
+    const threshold = { mode: 'threshold', thresholdMinor: { ARS: 100_001 }, allowOwnerSelfApproval: true };
+    const attacker = await call('PUT', policyPath, { token: ctx.approverToken, body: threshold, headers: { 'X-Step-Up-Token': await stepUp(ctx.approverToken) } });
+    check(attacker.status === 403 && attacker.json?.error?.code === 'auth.forbidden', `an approver changing the policy → ${attacker.status}`);
+    const policy = await must('PUT', policyPath, 200, { token: ctx.token, body: threshold, headers: { 'X-Step-Up-Token': await stepUp(ctx.token) } });
+    check(policy.mode === 'threshold' && policy.thresholdMinor.ARS === 100_001 && policy.thresholdMinor.USD === null && policy.ownerSelfApprovalEffective === false,
+      `policy ${JSON.stringify(policy)}`);
+    const su = await stepUp(ctx.token);
+    const pay = (minor, label) => must('POST', `${ctx.orgPath}/payouts`, 201, {
+      token: ctx.token, body: { accountId: ctx.account, amount: { minor, currency: 'ARS' }, to: 'proveedor.smoke', concept: `Umbral ${label}` },
+      headers: { 'Idempotency-Key': key(`threshold-${label}`), 'X-Step-Up-Token': su },
+    });
+    const below = await pay(100_000, 'below');
+    check(below.status !== 'pending_approval' && below.events[0]?.reason === 'policy_threshold', `below the threshold ${JSON.stringify(below).slice(0, 200)}`);
+    const at = await pay(100_001, 'at');
+    check(at.status === 'pending_approval', `at the threshold ${at.status}`);
+    await must('POST', `${ctx.orgPath}/payouts/${at.id}/cancel`, 200, { token: ctx.token });
+    await waitFor('payout below the threshold settled', async () => {
+      const p = await must('GET', `${ctx.orgPath}/payouts/${below.id}`, 200, { token: ctx.token });
+      return p.status === 'settled';
+    });
+    await must('PUT', policyPath, 200, { token: ctx.token, body: { mode: 'always', allowOwnerSelfApproval: true }, headers: { 'X-Step-Up-Token': su } });
+    return 'ARS 1000.00 approved at creation and settled; ARS 1000.01 waited';
+  });
+
+  await step('owner: ownership transfer and back', async () => {
+    const approverId = (await must('GET', '/me', 200, { token: ctx.approverToken })).user.id;
+    const ownerId = (await must('GET', '/me', 200, { token: ctx.token })).user.id;
+    const transfer = `${ctx.orgPath}/ownership-transfer`;
+    const notOwner = await call('POST', transfer, { token: ctx.approverToken, body: { userId: approverId }, headers: { 'X-Step-Up-Token': await stepUp(ctx.approverToken) } });
+    check(notOwner.status === 403 && notOwner.json?.error?.code === 'auth.forbidden', `a non-owner transfers → ${notOwner.status}`);
+    const moved = await must('POST', transfer, 200, { token: ctx.token, body: { userId: approverId }, headers: { 'X-Step-Up-Token': await stepUp(ctx.token) } });
+    check(moved.owner.userId === approverId && moved.owner.role === 'owner' && moved.previousOwner.role === 'admin', `transfer ${JSON.stringify(moved)}`);
+    const removeOwner = await call('DELETE', `${ctx.orgPath}/members/${approverId}`, { token: ctx.token });
+    check(removeOwner.status === 403 && removeOwner.json?.error?.code === 'role.escalation_forbidden', `an admin removes the owner → ${removeOwner.status}`);
+    const back = await must('POST', transfer, 200, { token: ctx.approverToken, body: { userId: ownerId }, headers: { 'X-Step-Up-Token': await stepUp(ctx.approverToken) } });
+    check(back.owner.userId === ownerId, `transfer back ${JSON.stringify(back)}`);
+    await must('PATCH', `${ctx.orgPath}/members/${approverId}`, 200, { token: ctx.token, body: { role: 'approver' } });
+    return 'owner → approver → owner';
+  });
+
+  await step('profile + preferences', async () => {
+    const named = await must('PATCH', '/me', 200, { token: ctx.token, body: { fullName: '  Smoke Owner  ' } });
+    check(named.user.fullName === 'Smoke Owner', `fullName ${named.user.fullName}`);
+    const prefs = await must('PATCH', '/me/preferences', 200, { token: ctx.token, body: { defaultOrgId: ctx.org, defaultAccountId: ctx.account, locale: 'es-AR', theme: 'dark' } });
+    check(prefs.defaultOrgId === ctx.org && prefs.defaultAccountId === ctx.account && prefs.theme === 'dark', `preferences ${JSON.stringify(prefs)}`);
+    const merged = await call('PATCH', '/me/preferences', { token: ctx.token, body: { defaultOrgId: null } });
+    check(merged.status === 422 && merged.json?.error?.code === 'validation.failed', `an account without its org → ${merged.status}`);
+    const me = await must('GET', '/me', 200, { token: ctx.token });
+    check(me.preferences.defaultAccountId === ctx.account && me.user.fullName === 'Smoke Owner', `me ${JSON.stringify(me.preferences)}`);
+    const members = await must('GET', `${ctx.orgPath}/members`, 200, { token: ctx.approverToken });
+    check(members.items.some((m) => m.role === 'owner' && m.fullName === 'Smoke Owner'), 'members list the owner by name');
+  });
+
+  await step('ERP users import (seeded Andina) + auto-accept', async () => {
+    const login = await call('POST', '/auth/login', { body: { email: 'andina@lenapay.app', password: 'Lenapay2026!' } });
+    check(login.status === 200, `andina@lenapay.app cannot log in (${login.status}): run the seed first`);
+    const token = login.json.accessToken;
+    const list = await must('GET', '/orgs', 200, { token });
+    const andina = list.items.find((o) => o.legalName === 'Constructora Andina SRL');
+    check(andina && andina.role === 'owner', `Andina ${JSON.stringify(andina)}`);
+    const link = await must('GET', `/orgs/${andina.id}/erp-link`, 200, { token });
+    const sum = link.importSummary;
+    check(sum && sum.usersInvited >= 3 && sum.usersWithoutPaymentsAccess >= 1 && sum.invitedUsers.some((u) => u.email === 'contable@constructoraandina.com.ar' && u.role === 'viewer'),
+      `import summary ${JSON.stringify(sum)}`);
+    // An invited ERP user joins by verifying the email (first run) or logging in (later runs).
+    const email = 'contable@constructoraandina.com.ar';
+    const signup = await call('POST', '/auth/signup', { body: { email, password: PASSWORD, fullName: 'Lorena Videla' } });
+    if (signup.status === 201) await must('POST', '/auth/verify-email', 204, { body: { email, code: CODE } });
+    else check(signup.status === 409, `signup ${signup.status}`);
+    const invitee = await must('POST', '/auth/login', 200, { body: { email, password: PASSWORD } });
+    const joined = await must('GET', '/orgs', 200, { token: invitee.accessToken });
+    check(joined.items.some((o) => o.id === andina.id && o.role === 'viewer'), `invitee orgs ${JSON.stringify(joined.items)}`);
+    const members = await must('GET', `/orgs/${andina.id}/members`, 200, { token });
+    check(members.items.some((m) => m.fullName === 'Paula Sosa' && m.role === 'operator'), 'the seeded invitee joined as operator');
+    return `invited ${sum.usersInvited}, members skipped ${sum.usersAlreadyMembers}, without payments access ${sum.usersWithoutPaymentsAccess}`;
   });
 
   await step('Mis pagos: person sees + pays the company', async () => {

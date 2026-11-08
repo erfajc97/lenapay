@@ -14,26 +14,28 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/app"
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	"github.com/erfajc97/lenapay/apps/api/internal/movements"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/app"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/movements"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/apperr"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/money"
+	"lenapay/apps/api/internal/platform/page"
 )
 
 // Demo credentials (development only; documented in the README).
 const (
 	demoPassword  = "Lenapay2026!" //nolint:gosec // published demo password, refused in production
 	demoEmail     = "demo@lenapay.app"
+	demoName      = "Ricardo Benítez"
 	approverEmail = "approver@lenapay.app"
+	approverName  = "Carolina Méndez"
 	personaEmail  = "persona@lenapay.app"
 	orgName       = "Desarrollos Del Sur SA"
 	orgCUIT       = "30712345678" // 30-71234567-8, the ERP fixture's CUIT (erp-org-001)
@@ -118,8 +120,9 @@ type seeder struct {
 	andina   auth.Principal
 }
 
-func (sd *seeder) admin() auth.Principal {
-	return auth.Principal{UserID: sd.demo, OrgID: sd.org, Role: auth.RoleAdmin, KYCStatus: auth.KYCApproved, StepUp: true}
+// owner is demo@ acting in Desarrollos Del Sur: its creator, so its owner.
+func (sd *seeder) owner() auth.Principal {
+	return auth.Principal{UserID: sd.demo, OrgID: sd.org, Role: auth.RoleOwner, KYCStatus: auth.KYCApproved, StepUp: true}
 }
 
 func (sd *seeder) approverP() auth.Principal {
@@ -139,9 +142,11 @@ func (sd *seeder) run(ctx context.Context) error {
 		{"payers + CVUs", sd.payers},
 		{"payins via bind-mock", sd.payins},
 		{"payouts", sd.payouts},
+		{"approval policy (threshold)", sd.approvalPolicy},
 		{"internal transfer", sd.transfer},
 		{"reconciliation run", sd.reconciliation},
 		{"ERP-linked company (Mis pagos)", sd.andinaCompany},
+		{"ERP invitee joins on verification", sd.erpInvitee},
 		{"personal wallet", sd.persona},
 		{"personal wallet funds", sd.fundPersona},
 	}
@@ -155,9 +160,14 @@ func (sd *seeder) run(ctx context.Context) error {
 	return nil
 }
 
-// user signs up and verifies a user (the fixed demo code), or finds the existing one.
-func (sd *seeder) user(ctx context.Context, email string) (uuid.UUID, error) {
-	id, err := sd.s.Identity.Signup(ctx, identity.SignupInput{Email: email, Password: config.Secret(demoPassword)})
+// user signs up and verifies a user (the fixed demo code), or finds the existing one. fullName
+// is optional (""): a person's KYC approval names them otherwise.
+func (sd *seeder) user(ctx context.Context, email, fullName string) (uuid.UUID, error) {
+	in := identity.SignupInput{Email: email, Password: config.Secret(demoPassword)}
+	if fullName != "" {
+		in.FullName = &fullName
+	}
+	id, err := sd.s.Identity.Signup(ctx, in)
 	if apperr.IsCode(err, apperr.CodeEmailTaken) {
 		return sd.s.Identity.UserIDByEmail(ctx, email) // already verified by a previous run
 	}
@@ -169,10 +179,10 @@ func (sd *seeder) user(ctx context.Context, email string) (uuid.UUID, error) {
 
 func (sd *seeder) users(ctx context.Context) error {
 	var err error
-	if sd.demo, err = sd.user(ctx, demoEmail); err != nil {
+	if sd.demo, err = sd.user(ctx, demoEmail, demoName); err != nil {
 		return err
 	}
-	sd.approver, err = sd.user(ctx, approverEmail)
+	sd.approver, err = sd.user(ctx, approverEmail, approverName)
 	return err
 }
 
@@ -273,7 +283,7 @@ func (sd *seeder) fillCompanyKYC(ctx context.Context, p auth.Principal, name, cu
 }
 
 func (sd *seeder) membership(ctx context.Context) error {
-	_, err := sd.s.Orgs.AddMember(ctx, sd.admin(), orgs.MemberInput{Email: approverEmail, Role: auth.RoleApprover})
+	_, err := sd.s.Orgs.AddMember(ctx, sd.owner(), orgs.MemberInput{Email: approverEmail, Role: auth.RoleApprover})
 	if apperr.IsCode(err, apperr.CodeMemberAlreadyExists) {
 		return nil
 	}
@@ -282,7 +292,7 @@ func (sd *seeder) membership(ctx context.Context) error {
 
 // accountByName returns the org's account with that name.
 func (sd *seeder) accountByName(ctx context.Context, name string) (accounts.Account, bool, error) {
-	list, err := sd.s.Accounts.List(ctx, sd.admin(), false)
+	list, err := sd.s.Accounts.List(ctx, sd.owner(), false)
 	if err != nil {
 		return accounts.Account{}, false, err
 	}
@@ -302,7 +312,7 @@ func (sd *seeder) projects(ctx context.Context) error {
 			}
 			continue
 		}
-		if _, err := sd.s.Accounts.Create(ctx, sd.admin(), accounts.CreateInput{Name: name}); err != nil {
+		if _, err := sd.s.Accounts.Create(ctx, sd.owner(), accounts.CreateInput{Name: name}); err != nil {
 			return err
 		}
 	}
@@ -313,13 +323,13 @@ func (sd *seeder) projects(ctx context.Context) error {
 func (sd *seeder) payer(ctx context.Context, i int) (payers.Payer, error) {
 	d := demoPayers[i]
 	q := d.dni
-	found, err := sd.s.Payers.List(ctx, sd.admin(), payers.ListInput{Query: &q, Page: page.Request{Limit: 5}})
+	found, err := sd.s.Payers.List(ctx, sd.owner(), payers.ListInput{Query: &q, Page: page.Request{Limit: 5}})
 	if err != nil {
 		return payers.Payer{}, err
 	}
 	for _, p := range found.Items {
 		if p.DocNumber == d.dni {
-			return sd.s.Payers.Get(ctx, sd.admin(), p.ID)
+			return sd.s.Payers.Get(ctx, sd.owner(), p.ID)
 		}
 	}
 	acc, ok, err := sd.accountByName(ctx, d.project)
@@ -330,7 +340,7 @@ func (sd *seeder) payer(ctx context.Context, i int) (payers.Payer, error) {
 	if d.email != "" {
 		in.Email = &d.email
 	}
-	return sd.s.Payers.Create(ctx, sd.admin(), in)
+	return sd.s.Payers.Create(ctx, sd.owner(), in)
 }
 
 func (sd *seeder) payers(ctx context.Context) error {
@@ -348,7 +358,7 @@ func (sd *seeder) payers(ctx context.Context) error {
 				continue
 			}
 			key := fmt.Sprintf("seed-cvu-%s-%s", d.dni, c)
-			if _, err := sd.s.Payers.CreateCVU(ctx, sd.admin(), p.ID, payers.CreateCVUInput{Currency: c, IdempotencyKey: key}); err != nil {
+			if _, err := sd.s.Payers.CreateCVU(ctx, sd.owner(), p.ID, payers.CreateCVUInput{Currency: c, IdempotencyKey: key}); err != nil {
 				return err
 			}
 		}
@@ -367,7 +377,7 @@ func cvuOf(p payers.Payer, c money.Currency) string {
 
 // count returns how many of the demo org's movements of a type exist (and are completed when done).
 func (sd *seeder) count(ctx context.Context, typ movements.Type, done bool) (int, error) {
-	return sd.countOf(ctx, sd.admin(), typ, done)
+	return sd.countOf(ctx, sd.owner(), typ, done)
 }
 
 // countOf counts the movements of a type of p's org (completed only when done).
@@ -471,11 +481,11 @@ func (sd *seeder) payouts(ctx context.Context) error {
 		if !d.settle || po.Status != payouts.StatusPendingApproval {
 			continue
 		}
-		if _, err := sd.s.Payouts.Approve(ctx, sd.admin(), po.ID, "seed-approve-"+d.key[len("seed-payout-"):]); err != nil {
+		if _, err := sd.s.Payouts.Approve(ctx, sd.owner(), po.ID, "seed-approve-"+d.key[len("seed-payout-"):]); err != nil {
 			return err
 		}
 		if err := sd.waitFor(ctx, "payout settled", func() (bool, error) {
-			got, err := sd.s.Payouts.Get(ctx, sd.admin(), po.ID)
+			got, err := sd.s.Payouts.Get(ctx, sd.owner(), po.ID)
 			return got.Status == payouts.StatusSettled, err
 		}); err != nil {
 			return err
@@ -496,7 +506,7 @@ func (sd *seeder) transfer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = sd.s.Accounts.Transfer(ctx, sd.admin(), accounts.TransferInput{
+	_, err = sd.s.Accounts.Transfer(ctx, sd.owner(), accounts.TransferInput{
 		FromAccountID: from.ID, ToAccountID: to.ID, Amount: money.New(25_000_000, money.ARS),
 		Concept: "Reasignación de fondos de obra", IdempotencyKey: "seed-transfer-palermo-nordelta",
 	})
@@ -504,16 +514,16 @@ func (sd *seeder) transfer(ctx context.Context) error {
 }
 
 func (sd *seeder) reconciliation(ctx context.Context) error {
-	runs, err := sd.s.Reconciliation.ListRuns(ctx, sd.admin(), nil, page.Request{Limit: 1})
+	runs, err := sd.s.Reconciliation.ListRuns(ctx, sd.owner(), nil, page.Request{Limit: 1})
 	if err != nil || len(runs.Items) > 0 {
 		return err
 	}
-	run, err := sd.s.Reconciliation.RequestOrgRun(ctx, sd.admin(), money.ARS, time.Now().In(sd.cfg.Location()))
+	run, err := sd.s.Reconciliation.RequestOrgRun(ctx, sd.owner(), money.ARS, time.Now().In(sd.cfg.Location()))
 	if err != nil {
 		return err
 	}
 	return sd.waitFor(ctx, "reconciliation run", func() (bool, error) {
-		pg, err := sd.s.Reconciliation.ListRuns(ctx, sd.admin(), nil, page.Request{Limit: 5})
+		pg, err := sd.s.Reconciliation.ListRuns(ctx, sd.owner(), nil, page.Request{Limit: 5})
 		for _, r := range pg.Items {
 			if r.ID == run.ID {
 				return r.FinishedAt != nil, err
@@ -529,7 +539,7 @@ func (sd *seeder) persona(ctx context.Context) error {
 		slog.WarnContext(ctx, "seed: PERSONAL_MODE_ENABLED is off; skipping persona@lenapay.app")
 		return nil
 	}
-	userID, err := sd.user(ctx, personaEmail)
+	userID, err := sd.user(ctx, personaEmail, "")
 	if err != nil {
 		return err
 	}

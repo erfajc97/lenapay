@@ -126,7 +126,7 @@ const getPersonForUser = `-- name: GetPersonForUser :one
 
 SELECT o.id, COALESCE(o.doc_number, '')::text AS dni
 FROM organizations o
-JOIN memberships m ON m.org_id = o.id AND m.user_id = $1 AND m.role = 'admin'
+JOIN memberships m ON m.org_id = o.id AND m.user_id = $1 AND m.role = 'owner'
 WHERE o.created_by = $1 AND o.kind = 'personal' AND o.kyc_status = 'approved'
   AND o.doc_type = 'dni' AND o.doc_number IS NOT NULL
 ORDER BY o.created_at, o.id
@@ -141,8 +141,8 @@ type GetPersonForUserRow struct {
 // Payer view ("Mis pagos") queries. payer_links is this feature's own table; organizations,
 // memberships, accounts, payers, cvus and payins are only READ (a read model, like movements;
 // never a writer, P4). Every link read filters by the personal org, the link's tenant (T1).
-// The caller's verified person: a personal org they created and administer, KYC approved with
-// the DNI that approval copied onto the org (never the unverified KYC case data).
+// The caller's verified person: a personal org they created and own, KYC approved with the DNI
+// that approval copied onto the org (never the unverified KYC case data).
 func (q *Queries) GetPersonForUser(ctx context.Context, userID uuid.UUID) (GetPersonForUserRow, error) {
 	row := q.db.QueryRow(ctx, getPersonForUser, userID)
 	var i GetPersonForUserRow

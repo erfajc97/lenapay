@@ -5,16 +5,16 @@ import (
 	"errors"
 	"log/slog"
 
-	erpfake "github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
-	kycfake "github.com/erfajc97/lenapay/apps/api/internal/kyc/provider/fake"
-	notifyfake "github.com/erfajc97/lenapay/apps/api/internal/notifications/provider/fake"
-	payoutfake "github.com/erfajc97/lenapay/apps/api/internal/payouts/provider/fake"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp/provider/bind"
-	pspfake "github.com/erfajc97/lenapay/apps/api/internal/psp/provider/fake"
+	erpfake "lenapay/apps/api/internal/erplink/provider/fake"
+	kycfake "lenapay/apps/api/internal/kyc/provider/fake"
+	notifyfake "lenapay/apps/api/internal/notifications/provider/fake"
+	payoutfake "lenapay/apps/api/internal/payouts/provider/fake"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/psp/provider/bind"
+	pspfake "lenapay/apps/api/internal/psp/provider/fake"
 )
 
 // NewIssuer builds the local identity provider. Without JWT_PRIVATE_KEY (development and test

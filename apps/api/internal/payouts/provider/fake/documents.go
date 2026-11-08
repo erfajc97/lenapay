@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/payouts"
 )
 
 // DiskDocumentStore stores objects under Root (keys are slash-separated relative paths).

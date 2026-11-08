@@ -7,27 +7,27 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/fees"
-	"github.com/erfajc97/lenapay/apps/api/internal/identity"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	"github.com/erfajc97/lenapay/apps/api/internal/ledger"
-	"github.com/erfajc97/lenapay/apps/api/internal/movements"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payerview"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/auth"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/clock"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/idempotency"
-	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
-	"github.com/erfajc97/lenapay/apps/api/internal/psp"
-	"github.com/erfajc97/lenapay/apps/api/internal/reconciliation"
+	"lenapay/apps/api/internal/accounts"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/fees"
+	"lenapay/apps/api/internal/identity"
+	"lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/ledger"
+	"lenapay/apps/api/internal/movements"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/orgs"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payerview"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/platform/audit"
+	"lenapay/apps/api/internal/platform/auth"
+	"lenapay/apps/api/internal/platform/clock"
+	"lenapay/apps/api/internal/platform/config"
+	"lenapay/apps/api/internal/platform/idempotency"
+	"lenapay/apps/api/internal/platform/jobs"
+	"lenapay/apps/api/internal/psp"
+	"lenapay/apps/api/internal/reconciliation"
 )
 
 // Ports are the external dependencies (P2): fakes locally, real adapters later.
@@ -83,10 +83,11 @@ func NewServices(p Platform, ports Ports) *Services {
 	s.Identity = identity.NewService(identity.Deps{
 		Pool: p.Pool, Clock: p.Clock, Issuer: p.Issuer, Codes: s.Notifications, Config: p.Config,
 		Memberships: identity.MembershipsFunc(s.membershipsForUser), OnSignup: identity.SignupHookFunc(s.onSignup),
+		Accounts: identity.AccountsFunc(s.accountArchived), Invites: identity.InviteAcceptorFunc(s.acceptERPInvites),
 	})
 	s.Orgs = orgs.NewService(orgs.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Users: s.Identity, Mailer: s.Notifications, Config: p.Config,
-		KYC: orgs.KYCCasesFunc(s.openKYCCase),
+		KYC: orgs.KYCCasesFunc(s.openKYCCase), Names: s.Identity,
 	})
 
 	// accounts ↔ payers: accounts lists its own CVUs, which payers owns; the closure reads
@@ -114,7 +115,7 @@ func NewServices(p Platform, ports Ports) *Services {
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Idempotency: idem, Jobs: p.Jobs, PSP: ports.PSP,
 		Accounts: s.Accounts, Ledger: s.Ledger, Fees: s.Fees, Notifications: s.Notifications,
 		Orgs: s.Orgs, Documents: ports.Documents, Location: p.Config.Location(),
-		CVUs: s.Payers, Credits: s.Payins,
+		CVUs: s.Payers, Credits: s.Payins, Policies: s.Orgs,
 	})
 	s.Movements = movements.NewService(movements.Deps{Pool: p.Pool, Location: p.Config.Location()})
 	s.Reconciliation = reconciliation.NewService(reconciliation.Deps{
@@ -123,7 +124,7 @@ func NewServices(p Platform, ports Ports) *Services {
 	})
 	s.ERPLink = erplink.NewService(erplink.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Jobs: p.Jobs, Directory: ports.ERP,
-		Orgs: s.Orgs, Accounts: s.Accounts, Payers: s.Payers,
+		Orgs: s.Orgs, Accounts: s.Accounts, Payers: s.Payers, Invites: s.Orgs,
 	})
 	s.PayerView = payerview.NewService(payerview.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, ERP: s.ERPLink, Payouts: s.Payouts,
@@ -163,6 +164,21 @@ func (s *Services) onSignup(ctx context.Context, tx pgx.Tx, userID uuid.UUID, em
 		return err
 	}
 	return s.Accounts.OpenOrgAccount(ctx, tx, orgID, string(orgs.KindPersonal))
+}
+
+// accountArchived forwards to accounts (identity is built before accounts): a preferred default
+// account must exist in that org and not be archived.
+func (s *Services) accountArchived(ctx context.Context, orgID, accountID uuid.UUID) (bool, error) {
+	a, err := s.Accounts.Get(ctx, orgID, accountID)
+	if err != nil {
+		return false, err
+	}
+	return a.Archived, nil
+}
+
+// acceptERPInvites forwards to orgs (see the identity ↔ orgs note in NewServices).
+func (s *Services) acceptERPInvites(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string) (int, error) {
+	return s.Orgs.AcceptERPInvites(ctx, tx, userID, email)
 }
 
 // receivingCVUs forwards to payers (see the accounts ↔ payers note in NewServices).

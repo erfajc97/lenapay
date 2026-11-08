@@ -3,13 +3,13 @@ package app
 import (
 	"github.com/riverqueue/river"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
-	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
-	"github.com/erfajc97/lenapay/apps/api/internal/payers"
-	"github.com/erfajc97/lenapay/apps/api/internal/payins"
-	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
-	"github.com/erfajc97/lenapay/apps/api/internal/reconciliation"
+	"lenapay/apps/api/internal/erplink"
+	"lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/notifications"
+	"lenapay/apps/api/internal/payers"
+	"lenapay/apps/api/internal/payins"
+	"lenapay/apps/api/internal/payouts"
+	"lenapay/apps/api/internal/reconciliation"
 )
 
 // RegisterWorkers adds every feature's River workers to the worker process (AG13) and returns

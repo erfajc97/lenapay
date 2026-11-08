@@ -31,3 +31,9 @@ type KYCCasesFunc func(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind 
 func (f KYCCasesFunc) OpenCase(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
 	return f(ctx, tx, orgID, orgKind)
 }
+
+// Names fills a user's full name from a verified identity (implemented by identity.Service):
+// the person KYC approval names the owner of the personal org when they have no name yet.
+type Names interface {
+	FillFullNameIfEmpty(ctx context.Context, tx pgx.Tx, userID uuid.UUID, name string) error
+}

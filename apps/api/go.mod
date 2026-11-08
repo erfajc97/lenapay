@@ -1,4 +1,4 @@
-module github.com/erfajc97/lenapay/apps/api
+module lenapay/apps/api
 
 go 1.27.0
 

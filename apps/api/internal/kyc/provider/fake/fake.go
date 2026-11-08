@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/erfajc97/lenapay/apps/api/internal/kyc"
+	"lenapay/apps/api/internal/kyc"
 )
 
 // Rejection reasons the fake vendor answers (stored as the case's decision reason).

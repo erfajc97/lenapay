@@ -13,7 +13,8 @@ apps/mobile (Expo)  ──HTTPS/JSON + SSE──►  apps/api (Go)  ──►  P
 Fakes inside apps/api (adapters): KYC, ERP, notifications (email/push), clock.
 ```
 
-- One Go module per app (`apps/api`, `apps/bind-mock`); Go 1.27.
+- One Go module per app: `lenapay/apps/api` and `lenapay/apps/bind-mock` (a workspace in
+  `go.work`; the paths have no host on purpose — the code is not published as a library); Go 1.27.
 - One contract: `contracts/openapi.yaml` (OpenAPI 3.0.3). Generates the Go strict server
   (`oapi-codegen`) and the TS client types (`openapi-typescript`) used by the app.
 - Local run: `docker compose up` → postgres:17, api (host :18080 → container :8080), bind-mock (:8090). The app runs
@@ -57,13 +58,15 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 
 | Table | Purpose |
 |---|---|
-| `users` | email, password hash (argon2id), email_verified_at, totp_secret?, status |
+| `users` | email, password hash (argon2id), email_verified_at, totp_secret?, status, full_name? (1–120) |
 | `sessions` / `refresh_tokens` | rotating refresh tokens (hashed), device id |
 | `devices` | device public key for biometric step-up |
 | `email_codes` | verification codes (hashed, expiry) |
 | `organizations` | kind `company`/`personal`, legal name, cuit, kyc_status, fee_plan_id, erp_link |
-| `memberships` | user × org × role |
-| `invites` | email, role, token hash, expires_at |
+| `memberships` | user × org × role (`viewer` < `operator` < `approver` < `admin` < `owner`); exactly one `owner` per org: unique partial index `memberships_one_owner_key` + deferred constraint trigger `memberships_keep_owner` (demoting or deleting the owner must be compensated in the same transaction) |
+| `invites` | email, role (never owner), token hash, expires_at, `source` `manual`/`erp_import` (the import's invites are auto-accepted for a verified email) |
+| `approval_policies` | org_id PK, mode `always`/`threshold`, `threshold_ars_minor`/`threshold_usd_minor` (≥ 1, null = no threshold), `allow_owner_self_approval`, updated_by/at; no row = defaults |
+| `user_preferences` | user_id PK, default_org_id, default_account_id (needs the org), locale `es-AR`/`en-US`, theme `system`/`light`/`dark`, updated_at |
 | `kyc_cases` / `kyc_documents` | onboarding case per org/person, status, provider ref, files |
 | `accounts` | org_id, kind `main`/`project`/`personal`/`system`, name, archived_at |
 | `ledger_accounts` | (account_id, currency) → ledger account; system accounts: psp_master, fees_revenue, payout_clearing, suspense |
@@ -75,7 +78,7 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 | `cvus` | payer_id or account_id, currency, cvu, alias, psp_ref, status |
 | `psp_webhook_events` | raw body, signature ok, provider event id UNIQUE, processed_at |
 | `payins` | cvu_id, amount, fee, net, origin name/cuit/cbu, provider transfer id UNIQUE, status |
-| `payouts` | org, account, currency, amount, fee, destination snapshot, concept, status, created_by, approved_by, provider attempt id, idempotency key |
+| `payouts` | org, account, currency, amount, fee, destination snapshot, concept, status, created_by, approved_by, `self_approved` (owner approval under the policy; `payouts_four_eyes_check` keeps approved_by ≠ created_by otherwise), provider attempt id, idempotency key |
 | `payout_events` | status history |
 | `fee_plans` | payin_bps, payout_fixed_minor, payout_bps per currency |
 | `reconciliation_runs` / `reconciliation_items` | per currency/day, counts, difference |
@@ -102,9 +105,16 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 - **Reconciliation**: job `reconcile_master(currency, day)` pulls the PSP statement
   (`GET /accounts/master/statement`) and matches by provider transfer id against payins and
   settled payouts.
+- **Approval policy** (R-OUT-7): `orgs.ApprovalRules(orgID)` = the stored policy (or the defaults)
+  + the number of members besides the owner with role approver/admin. Payout create asks
+  `AutoApproves(amount)` (threshold mode, a threshold for the currency, amount strictly below it) →
+  `approved` + dispatch in the same transaction, event reason `policy_threshold`; approve asks
+  `OwnerMaySelfApprove()` when the caller is the owner and the creator (allowed and nobody else can
+  approve) → `self_approved`, audit `payout.self_approval`. Everything else is 4-eyes.
 - **ERP link**: `GET /orgs/{org}/erp-link/candidate` looks up `erp_identity_index` by CUIT →
   `POST /orgs/{org}/erp-link` with ERP credentials → ERP adapter verifies (fake) → import job
-  copies projects/buyers from the ERP adapter (fake reads `apps/api/fixtures/erp/*.json`).
+  copies projects/buyers from the ERP adapter (fake reads `apps/api/fixtures/erp/*.json`), then
+  invites the ERP users (below) and stores the summary on the link (`importSummary`).
 - **Mis pagos (payer view, B2C bridge, `internal/payerview`)**: when a person's personal org is
   KYC-approved, the approval copies the verified DNI onto the org and the `payerview` approval
   hook (same transaction) links every company payer whose document carries it: a DNI equal to
@@ -122,12 +132,15 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 
 ## 5. API surface (contract summary)
 
-Auth: `POST /auth/signup`, `/auth/verify-email`, `/auth/resend-code`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
+Auth: `POST /auth/signup` (optional `fullName`), `/auth/verify-email`, `/auth/resend-code`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
 `/auth/step-up/challenge`, `/auth/step-up/verify`, `POST /devices`, `GET /.well-known/jwks.json`,
-`GET /me`.
+`GET/PATCH /me` (`{fullName}`; `/me` carries `preferences`), `GET/PATCH /me/preferences`
+(`{defaultOrgId, defaultAccountId, locale, theme}`, absent keeps, null clears).
 Orgs: `GET/POST /orgs`, `GET /orgs/{org}`, `GET/POST /orgs/{org}/members`,
 `PATCH/DELETE /orgs/{org}/members/{userId}`, `POST /orgs/{org}/invites`,
-`POST /invites/{token}/accept`.
+`POST /invites/{token}/accept`, `POST /orgs/{org}/ownership-transfer` (owner + step-up),
+`GET/PUT /orgs/{org}/approval-policy` (any member reads; owner + step-up writes).
+Roles on responses are `MemberRole` (adds `owner`); requests keep `Role` (grantable, no owner).
 KYC: `GET/PUT /orgs/{org}/kyc`, `POST /orgs/{org}/kyc/documents`, `POST /orgs/{org}/kyc/submit`,
 `POST /internal/kyc/{case}/decision` (ops, API key).
 Accounts: `GET/POST /orgs/{org}/accounts`, `PATCH /orgs/{org}/accounts/{id}`, `GET /orgs/{org}/balances`,
@@ -164,6 +177,12 @@ Errors: `{ "error": { "code": "payout.insufficient_funds", "message": "...", "de
   `amr=["stepup"]`, bound to `sid`, required by money mutations.
 - Device key (Ed25519, generated on device, private key in SecureStore behind biometrics)
   signs the step-up challenge; fallback password.
+- Roles: viewer < operator < approver < admin < owner (`auth.Roles()`, the ONE ladder). Member
+  doors: nobody acts above their own role; an admin's row is changed only by the owner; the owner's
+  row never (`org.last_admin`); `owner` is not grantable. Owner-only routes: ownership transfer and
+  approval policy (both with step-up).
+- CORS allows the app's headers plus `Cache-Control`, `X-Requested-With`, `Last-Event-ID` (the web
+  EventSource polyfill on the SSE stream).
 - Webhooks: HMAC-SHA256 over the raw body with a shared secret, constant-time compare,
   timestamp tolerance 5 min.
 - Secrets only from env; `.env.example` documents them.
@@ -213,3 +232,29 @@ the fixture directory (`apps/api/fixtures/erp/*.json`, `ERP_FIXTURES_DIR`; any E
 accepts the demo password `lebane123`). Loading the ERP dump needs no new command: a
 `Directory` adapter that reads the dump (or the CDC read model) replaces the fixture one in
 `app.FakePorts`, and the same job loads it. Until that adapter exists there is no dump loader.
+
+### ERP users import
+
+The fixture of each ERP org lists its users (`username`, `email`, `fullName`, `admin`,
+`permissions`) with Lebane's real permission codes (`PermisoUsuario` in lebane-back; payments
+codes exist for the developer vertical and as `CONSTRUCTORA_*` twins for builders, grouped in
+`PermisosPaymentsPorVertical`). The import maps them with `erplink.RoleForERPUser` (one function,
+spec `model_roles_test.go`):
+
+| ERP user | Lenapay role |
+|---|---|
+| ERP admin flag, `CONFIGURACION_ORGANIZACION` or `PAYMENTS_RECONCILIATIONS_MASTER` | `admin` |
+| `PAYMENTS_PAYOUTS`, `PAYMENTS_CREATE_ACCOUNTS`, `PAYMENTS_CREATE_CVU` or `PAYMENTS_ACCOUNT_MOVEMENTS` (or their `CONSTRUCTORA_` twins) | `operator` |
+| only `PAYMENTS_RECONCILIATIONS` (read-only) | `viewer` |
+| no payments permission (only `CONTABILIDAD`, `COMPRAS`, …) | not invited (counted in `usersWithoutPaymentsAccess`) |
+
+Nobody maps to `approver`: Lebane has no payments approval permission (`APROBACIONES` /
+`GENERAL_APROBACIONES` approve purchase documents, not payments), so ERP payers come in as
+operators and the owner or an admin promotes approvers in Lenapay (proposal, G11). The role is
+capped at the linking admin's (an owner linker caps at `admin`) and is never `owner`; users who are
+already members are skipped and a pending invite is never duplicated (River retries). The invites
+(`source = erp_import`) are emailed like any invite and accepted automatically: inside the email
+verification transaction for a new account, and at login for an account that already existed.
+Only these invites auto-accept; a manual invite still needs its token (proposal: auto-accepting
+every invite would let an admin add any registered email to an org without their action). A link
+imported before this existed has no users in its summary (the import does not run again).
