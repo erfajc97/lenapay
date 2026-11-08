@@ -8,18 +8,20 @@ import { canManageTeam, canSeeReconciliation } from '@/shared/helpers/permission
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
+import { LANGUAGE_LABEL_KEY, LANGUAGE_PREFERENCES } from '@/shared/i18n/locale';
 import { THEME_PREFERENCES } from '@/shared/theme/themePreference';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Chip } from '@/shared/ui/Chip';
+import { Icon } from '@/shared/ui/Icon';
 import { Avatar, Divider, IconBadge, ListRow, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Segmented } from '@/shared/ui/Segmented';
 
 import { useLogout } from './mutations/useSettingsMutations';
 
-/** "Más": profile, organization tools, security, appearance, personal-mode preview, logout. */
+/** "Más": profile, organization tools, security, appearance, language, personal-mode preview, logout. */
 export function Settings() {
   const { t } = useTranslation();
   const me = useMe();
@@ -28,6 +30,8 @@ export function Settings() {
   const setPreview = usePreferencesStore((state) => state.setPersonalModePreview);
   const theme = usePreferencesStore((state) => state.themePreference);
   const setTheme = usePreferencesStore((state) => state.setThemePreference);
+  const language = usePreferencesStore((state) => state.languagePreference);
+  const setLanguage = usePreferencesStore((state) => state.setLanguagePreference);
   const logout = useLogout();
   const role = org?.role ?? 'viewer';
 
@@ -82,6 +86,27 @@ export function Settings() {
           onChange={setTheme}
           options={THEME_PREFERENCES.map((value) => ({ value, label: t(`settings.theme.${value}`) }))}
         />
+      </Card>
+
+      <SectionTitle title={t('settings.language')} />
+      <Card className="gap-1 py-2">
+        <AppText tone="secondary" className="pb-1">
+          {t('settings.languageBody')}
+        </AppText>
+        <View accessibilityRole="radiogroup" accessibilityLabel={t('settings.language')}>
+          {LANGUAGE_PREFERENCES.map((value, index) => (
+            <View key={value}>
+              {index > 0 ? <Divider /> : null}
+              <ListRow
+                title={t(LANGUAGE_LABEL_KEY[value])}
+                onPress={() => setLanguage(value)}
+                chevron={false}
+                selected={language === value}
+                trailing={language === value ? <Icon name="checkmark" size={20} tone="primary" /> : null}
+              />
+            </View>
+          ))}
+        </View>
       </Card>
 
       <View className="items-center gap-2 pt-2">

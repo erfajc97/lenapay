@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { Button } from '@/shared/ui/Button';
 import { Icon } from '@/shared/ui/Icon';
 import { LinkButton } from '@/shared/ui/Rows';
@@ -17,6 +18,7 @@ import { useAccountsScreen } from './hooks/useAccounts';
 export function Accounts() {
   const { t } = useTranslation();
   const screen = useAccountsScreen();
+  const pull = usePullToRefresh(screen.accounts.refetch);
   const addButton = screen.canCreate ? (
     <Pressable onPress={screen.openSheet} accessibilityRole="button" accessibilityLabel={t('accounts.new')} hitSlop={8} className="h-11 w-11 items-center justify-center rounded-full bg-primary-bg">
       <Icon name="add" size={24} tone="primary" />
@@ -37,8 +39,8 @@ export function Accounts() {
           keyExtractor={(account) => account.id}
           renderItem={({ item }) => <AccountCard account={item} onPress={screen.open} />}
           contentContainerStyle={LIST_CONTENT_STYLE}
-          onRefresh={() => void screen.accounts.refetch()}
-          refreshing={screen.accounts.isRefetching}
+          onRefresh={pull.onRefresh}
+          refreshing={pull.refreshing}
           ListEmptyComponent={<EmptyState icon="wallet-outline" title={t('accounts.emptyTitle')} body={t('accounts.emptyBody')} />}
           ListFooterComponent={
             screen.archivedCount > 0 ? (

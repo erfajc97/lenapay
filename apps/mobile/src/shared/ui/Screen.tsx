@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { keyboardBehavior } from '@/shared/helpers/platform';
 import { useIsOnline } from '@/shared/hooks/useIsOnline';
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 
 import { AppText } from './AppText';
 import { Icon } from './Icon';
@@ -29,8 +30,8 @@ interface ScreenProps {
   scroll?: boolean;
   headerRight?: ReactNode;
   footer?: ReactNode;
-  refreshing?: boolean;
-  onRefresh?: () => void;
+  /** Pull-to-refresh: the spinner shows only while the person's pull runs (usePullToRefresh). */
+  onRefresh?: () => Promise<unknown>;
 }
 
 function ScreenHeader({ title, back, onBack, right }: { title?: string; back?: boolean; onBack?: () => void; right?: ReactNode }) {
@@ -70,8 +71,11 @@ function OfflineBanner() {
   );
 }
 
-export function Screen({ children, title, back, onBack, inTabs, scroll = true, headerRight, footer, refreshing, onRefresh }: ScreenProps) {
+const noRefresh = () => Promise.resolve();
+
+export function Screen({ children, title, back, onBack, inTabs, scroll = true, headerRight, footer, onRefresh }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const pull = usePullToRefresh(onRefresh ?? noRefresh);
   const bottomInset = inTabs ? 0 : insets.bottom;
   return (
     <View className="flex-1 bg-bg-page" style={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }}>
@@ -83,7 +87,7 @@ export function Screen({ children, title, back, onBack, inTabs, scroll = true, h
             className="flex-1"
             contentContainerClassName="gap-4 px-4 pt-2"
             contentContainerStyle={{ paddingBottom: footer ? 24 : bottomInset + 32 }}
-            refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColorClassName="accent-primary" /> : undefined}
+            refreshControl={onRefresh ? <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColorClassName="accent-primary" /> : undefined}
           >
             {children}
           </Scroll>

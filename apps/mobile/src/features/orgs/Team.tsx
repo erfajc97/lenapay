@@ -22,8 +22,7 @@ export function Team() {
     <Screen
       title={t('team.title')}
       back
-      refreshing={team.members.isRefetching}
-      onRefresh={() => void team.members.refetch()}
+      onRefresh={team.members.refetch}
       footer={team.canManage ? <Button label={t('team.invite')} icon="person-add-outline" onPress={team.openSheet} /> : undefined}
     >
       {!team.canManage ? <Notice tone="info" icon="information-circle-outline" title={t('team.readOnly')} /> : null}

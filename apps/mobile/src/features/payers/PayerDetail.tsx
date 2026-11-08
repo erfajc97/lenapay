@@ -40,7 +40,7 @@ export function PayerDetail() {
   const doc = payer.docType === 'CUIT' ? formatCuit(payer.docNumber) : formatDni(payer.docNumber);
   const { sheet } = detail;
   return (
-    <Screen title={payer.name} back refreshing={detail.payer.isRefetching} onRefresh={() => void detail.payer.refetch()}>
+    <Screen title={payer.name} back onRefresh={detail.payer.refetch}>
       <Card className="gap-2">
         <View className="flex-row items-center gap-3">
           <Avatar name={payer.name} />

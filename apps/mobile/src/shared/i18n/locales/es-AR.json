@@ -50,6 +50,7 @@
     "accountName": "Nombre de la cuenta",
     "alias": "Alias",
     "amount": "Monto",
+    "amountPlaceholder": "0,00",
     "attachment": "Adjunto",
     "bank": "Banco",
     "cbu": "CBU / CVU",
@@ -560,6 +561,9 @@
     "logout": "Cerrar sesión",
     "appearance": "Apariencia",
     "appearanceBody": "Elegí cómo se ve Lenapay. Sistema sigue el modo de tu teléfono.",
-    "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" }
+    "theme": { "system": "Sistema", "light": "Claro", "dark": "Oscuro" },
+    "language": "Idioma",
+    "languageBody": "Sistema sigue el idioma de tu teléfono. Los montos siguen en pesos o dólares.",
+    "languages": { "system": "Sistema", "esAR": "Español (Argentina)", "enUS": "English (US)" }
   }
 }

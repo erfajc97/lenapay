@@ -42,7 +42,7 @@ export function Transfer() {
         label={t('fields.amount')}
         value={screen.amountText}
         onChangeText={screen.setAmountText}
-        placeholder="0,00"
+        placeholder={t('fields.amountPlaceholder')}
         keyboardType="decimal-pad"
         inputMode="decimal"
         autoComplete="off"

@@ -43,7 +43,7 @@ export function AccountDetail() {
   }
 
   return (
-    <Screen title={account.name} back refreshing={detail.movements.isRefetching} onRefresh={() => void detail.movements.refetch()}>
+    <Screen title={account.name} back onRefresh={detail.movements.refetch}>
       <View className="flex-row gap-2">
         <Chip label={t(`accounts.kind.${account.kind}`)} tone={account.kind === 'project' ? 'brand' : 'neutral'} />
         {account.archivedAt ? <Chip label={t('accounts.archivedChip')} /> : null}

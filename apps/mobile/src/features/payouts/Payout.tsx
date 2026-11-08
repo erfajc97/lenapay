@@ -100,7 +100,7 @@ export function Payout() {
           label={t('fields.amount')}
           value={flow.amountText}
           onChangeText={flow.setAmountText}
-          placeholder="0,00"
+          placeholder={t('fields.amountPlaceholder')}
           keyboardType="decimal-pad"
           inputMode="decimal"
           autoComplete="off"

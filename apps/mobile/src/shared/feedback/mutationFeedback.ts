@@ -11,6 +11,11 @@ export function notifyError(error: unknown): void {
   showToast('error', i18n.t(errorMessageKey(error)));
 }
 
+/** Why an action is not available right now (a blocked quick action), as a passing toast. */
+export function notifyInfo(key: string): void {
+  showToast('info', i18n.t(key));
+}
+
 export function notifySuccess(key: string, params?: Record<string, string>): void {
   showToast('success', i18n.t(key, params));
 }

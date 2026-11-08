@@ -38,7 +38,7 @@ export function Home() {
 
   const { org } = home;
   return (
-    <Screen inTabs refreshing={home.refreshing} onRefresh={home.refresh}>
+    <Screen inTabs onRefresh={home.refresh}>
       <OrgHeader org={org} firstName={home.firstName} onSwitch={() => router.push('/orgs')} onProfile={() => router.push('/settings/profile')} />
       {isMockApi ? <Chip label={t('common.demoMode')} tone="warning" /> : null}
       {home.kycNotice ? (
@@ -55,7 +55,13 @@ export function Home() {
       ) : (
         <BalanceCard currency={home.currency} onCurrency={home.setCurrency} balance={home.balance} loading={home.balances.isLoading} onOpenHeld={home.openHeld} onOpenTotal={home.openTotal} />
       )}
-      <QuickActions state={home.actions} onCollect={() => router.push('/payers')} onPay={() => router.push('/pay')} onMove={() => router.push('/move')} />
+      <QuickActions
+        state={home.actions}
+        onCollect={() => router.push('/payers')}
+        onPay={() => router.push('/pay')}
+        onMove={() => router.push('/move')}
+        onBlocked={home.explainBlocked}
+      />
       {home.pendingApprovals > 0 ? (
         <Notice
           tone="info"
@@ -65,20 +71,23 @@ export function Home() {
           action={<LinkButton label={t('home.approvalsAction')} onPress={() => router.push('/approvals')} />}
         />
       ) : null}
-      <SectionTitle title={t('home.recent')} action={home.recent.length > 0 ? <LinkButton label={t('common.seeAll')} onPress={() => router.push('/movements')} /> : undefined} />
-      <Card className="py-1">
-        {home.movements.isLoading ? <SkeletonList rows={3} /> : null}
-        {home.movements.isError ? <ErrorState error={home.movements.error} onRetry={() => void home.movements.refetch()} /> : null}
-        {(home.movements.isSuccess || org.kycStatus !== 'approved') && home.recent.length === 0 ? (
-          <EmptyState icon="receipt-outline" title={t('home.emptyTitle')} body={t('home.emptyBody')} actionLabel={t('home.collect')} onAction={() => router.push('/payers')} />
-        ) : null}
-        {home.recent.map((movement, index) => (
-          <View key={movement.id}>
-            {index > 0 ? <Divider /> : null}
-            <MovementRow movement={movement} onPress={home.openMovement} />
-          </View>
-        ))}
-      </Card>
+      {/* Title and list read as one block: tighter than the screen's gap-4 rhythm. */}
+      <View className="gap-2">
+        <SectionTitle title={t('home.recent')} action={home.recent.length > 0 ? <LinkButton label={t('common.seeAll')} onPress={() => router.push('/movements')} /> : undefined} />
+        <Card className="py-1">
+          {home.movements.isLoading ? <SkeletonList rows={3} /> : null}
+          {home.movements.isError ? <ErrorState error={home.movements.error} onRetry={() => void home.movements.refetch()} /> : null}
+          {(home.movements.isSuccess || org.kycStatus !== 'approved') && home.recent.length === 0 ? (
+            <EmptyState icon="receipt-outline" title={t('home.emptyTitle')} body={t('home.emptyBody')} actionLabel={t('home.collect')} onAction={() => router.push('/payers')} />
+          ) : null}
+          {home.recent.map((movement, index) => (
+            <View key={movement.id}>
+              {index > 0 ? <Divider /> : null}
+              <MovementRow movement={movement} onPress={home.openMovement} />
+            </View>
+          ))}
+        </Card>
+      </View>
       {org.kycStatus === 'approved' && !org.erpLinked && org.role === 'admin' ? (
         <Card className="gap-3">
           <SectionTitle title={t('home.erpTitle')} />

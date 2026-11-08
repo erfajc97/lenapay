@@ -4,13 +4,10 @@ import { View } from 'react-native';
 import { withUniwind } from 'uniwind';
 
 import { AppText } from './AppText';
+import { LEBANE_ISOTYPE, LEBANE_WORDMARK_ON_DARK, LEBANE_WORDMARK_ON_LIGHT } from './brandAssets';
 
 const Image = withUniwind(ExpoImage);
 
-// Metro picks the @2x/@3x file for the screen density; the sources are cut from assets/brand.
-const isotipo = require('../../../assets/logo/lebane-isotipo.png');
-const lebaneOnLight = require('../../../assets/logo/lebane-wordmark-on-light.png');
-const lebaneOnDark = require('../../../assets/logo/lebane-wordmark-on-dark.png');
 
 const SIZES = {
   large: { mark: 'h-11 w-11', text: 'balance' },
@@ -28,7 +25,7 @@ export function Wordmark({ size = 'large', byLebane = false }: { size?: keyof ty
   return (
     <View className="gap-1" accessible accessibilityRole="header" accessibilityLabel={byLebane ? t('brand.byLebaneLabel') : t('brand.name')}>
       <View className="flex-row items-center gap-2.5">
-        <Image source={isotipo} className={mark} contentFit="contain" cachePolicy="memory" />
+        <Image source={LEBANE_ISOTYPE} className={mark} contentFit="contain" cachePolicy="memory" />
         <AppText variant={text} tone="brand">
           {t('brand.name')}
         </AppText>
@@ -39,10 +36,10 @@ export function Wordmark({ size = 'large', byLebane = false }: { size?: keyof ty
             {t('brand.by')}
           </AppText>
           <View className="dark:hidden">
-            <Image source={lebaneOnLight} className="h-3.5 w-[60px]" contentFit="contain" cachePolicy="memory" />
+            <Image source={LEBANE_WORDMARK_ON_LIGHT} className="h-3.5 w-[60px]" contentFit="contain" cachePolicy="memory" />
           </View>
           <View className="hidden dark:flex">
-            <Image source={lebaneOnDark} className="h-3.5 w-[60px]" contentFit="contain" cachePolicy="memory" />
+            <Image source={LEBANE_WORDMARK_ON_DARK} className="h-3.5 w-[60px]" contentFit="contain" cachePolicy="memory" />
           </View>
         </View>
       ) : null}

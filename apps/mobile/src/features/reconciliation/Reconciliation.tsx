@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
@@ -14,6 +15,7 @@ import { useReconciliation } from './hooks/useReconciliation';
 export function Reconciliation() {
   const { t } = useTranslation();
   const screen = useReconciliation();
+  const pull = usePullToRefresh(screen.runs.refetch);
 
   if (!screen.allowed) {
     return (
@@ -37,8 +39,8 @@ export function Reconciliation() {
           keyExtractor={(run) => run.id}
           renderItem={({ item }) => <RunCard run={item} onPress={screen.open} />}
           contentContainerStyle={LIST_CONTENT_STYLE}
-          onRefresh={() => void screen.runs.refetch()}
-          refreshing={screen.runs.isRefetching}
+          onRefresh={pull.onRefresh}
+          refreshing={pull.refreshing}
           ListEmptyComponent={<EmptyState icon="git-compare-outline" title={t('reconciliation.emptyTitle')} body={t('reconciliation.emptyBody')} />}
         />
       )}

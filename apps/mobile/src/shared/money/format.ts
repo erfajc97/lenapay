@@ -1,19 +1,34 @@
 import type { Currency } from '@/shared/api/types';
+import { activeLocale, type AppLocale } from '@/shared/i18n/locale';
 
 const SYMBOLS: Record<Currency, string> = { ARS: '$', USD: 'US$' };
-const groupFormatter = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0, useGrouping: true });
+
+/** Per language: thousands grouping, decimal mark and whether the symbol is spaced (brand.md). */
+const STYLE: Record<AppLocale, { decimal: string; symbolGap: string }> = {
+  'es-AR': { decimal: ',', symbolGap: ' ' },
+  'en-US': { decimal: '.', symbolGap: '' },
+};
+const groupers = new Map<AppLocale, Intl.NumberFormat>();
+
+function groupUnits(units: number): string {
+  const locale = activeLocale();
+  let grouper = groupers.get(locale);
+  if (!grouper) {
+    grouper = new Intl.NumberFormat(locale, { maximumFractionDigits: 0, useGrouping: true });
+    groupers.set(locale, grouper);
+  }
+  return grouper.format(units);
+}
 
 /**
- * `$ 1.500,00` / `US$ 1.500,00` from integer minor units (brand.md). The split into units
- * and cents is integer arithmetic: dividing by 100 as a float would drift on large amounts.
+ * `$ 1.500,00` (es-AR) / `$1,500.00` (en-US) from integer minor units; the currency never
+ * changes with the language. The split into units and cents is integer arithmetic: dividing by
+ * 100 as a float would drift on large amounts.
  */
 export function formatMoney(minor: number, currency: Currency, options: { signed?: boolean } = {}): string {
-  const negative = minor < 0;
-  const abs = Math.abs(minor);
-  const units = (abs - (abs % 100)) / 100;
-  const cents = String(abs % 100).padStart(2, '0');
-  const sign = negative ? '-' : options.signed ? '+' : '';
-  return `${sign}${SYMBOLS[currency]} ${groupFormatter.format(units)},${cents}`;
+  const parts = splitMoney(minor, currency);
+  const sign = minor >= 0 && options.signed ? '+' : '';
+  return `${sign}${parts.symbol}${STYLE[activeLocale()].symbolGap}${parts.units}${parts.cents}`;
 }
 
 /** The big balance splits units and cents so the cents can render smaller. */
@@ -22,8 +37,8 @@ export function splitMoney(minor: number, currency: Currency): { symbol: string;
   const units = (abs - (abs % 100)) / 100;
   return {
     symbol: `${minor < 0 ? '-' : ''}${SYMBOLS[currency]}`,
-    units: groupFormatter.format(units),
-    cents: `,${String(abs % 100).padStart(2, '0')}`,
+    units: groupUnits(units),
+    cents: `${STYLE[activeLocale()].decimal}${String(abs % 100).padStart(2, '0')}`,
   };
 }
 

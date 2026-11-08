@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import type { Currency, Movement } from '@/shared/api/types';
+import { notifyInfo } from '@/shared/feedback/mutationFeedback';
+import type { MoneyBlocker } from '@/shared/helpers/permissions';
 import { useBalances } from '@/shared/queries/accounts';
 import { useMovements } from '@/shared/queries/movements';
 import { useActiveOrg } from '@/shared/queries/orgs';
@@ -36,13 +38,7 @@ export function useHome() {
     pendingApprovals: approvals.data?.length ?? 0,
     movements,
     recent: movements.data?.pages[0]?.items.slice(0, RECENT_COUNT) ?? [],
-    refreshing: balances.isRefetching || movements.isRefetching,
-    refresh: () => {
-      void orgsQuery.refetch();
-      void balances.refetch();
-      void approvals.refetch();
-      void movements.refetch();
-    },
+    refresh: () => Promise.all([orgsQuery.refetch(), balances.refetch(), approvals.refetch(), movements.refetch()]),
     // The hero tiles open Movements filtered to what they add up: held = pending, in this currency.
     openHeld: () => {
       showOnly({ status: 'pending', currency });
@@ -52,6 +48,7 @@ export function useHome() {
       showOnly({ currency });
       router.push('/movements');
     },
+    explainBlocked: (blocker: NonNullable<MoneyBlocker>) => notifyInfo(`blockers.${blocker}`),
     openMovement: (movement: Movement) => router.push({ pathname: '/movements/[id]', params: { id: movement.id } }),
   };
 }

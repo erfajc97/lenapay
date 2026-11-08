@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { groupedRowClass, LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { MovementRow } from '@/shared/ui/MovementRow';
 import { Screen } from '@/shared/ui/Screen';
@@ -15,6 +16,7 @@ import { useMovementsScreen } from './hooks/useMovementsScreen';
 export function Movements() {
   const { t } = useTranslation();
   const screen = useMovementsScreen();
+  const pull = usePullToRefresh(screen.movements.refetch);
   return (
     <Screen title={t('movements.title.screen')} inTabs scroll={false}>
       <MovementFilters draft={screen.draft} activeCount={screen.activeCount} onOpen={screen.open} onReset={screen.reset} />
@@ -36,8 +38,8 @@ export function Movements() {
           contentContainerStyle={LIST_CONTENT_STYLE}
           onEndReached={screen.loadMore}
           onEndReachedThreshold={0.4}
-          onRefresh={() => void screen.movements.refetch()}
-          refreshing={screen.movements.isRefetching && !screen.movements.isFetchingNextPage}
+          onRefresh={pull.onRefresh}
+          refreshing={pull.refreshing}
           ListFooterComponent={screen.movements.isFetchingNextPage ? <ActivityIndicator colorClassName="accent-primary" /> : null}
           ListEmptyComponent={
             <EmptyState

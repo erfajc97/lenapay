@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { Icon } from '@/shared/ui/Icon';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { Screen } from '@/shared/ui/Screen';
@@ -15,6 +16,7 @@ import { usePayersScreen } from './hooks/usePayers';
 export function Payers() {
   const { t } = useTranslation();
   const screen = usePayersScreen();
+  const pull = usePullToRefresh(screen.payers.refetch);
   const addButton = screen.canCreate ? (
     <Pressable onPress={screen.create} accessibilityRole="button" accessibilityLabel={t('payers.new')} hitSlop={8} className="h-11 w-11 items-center justify-center rounded-full bg-primary-bg">
       <Icon name="person-add-outline" size={22} tone="primary" />
@@ -48,8 +50,8 @@ export function Payers() {
           renderItem={({ item }) => <PayerRow payer={item} onPress={screen.open} />}
           contentContainerStyle={LIST_CONTENT_STYLE}
           keyboardShouldPersistTaps="handled"
-          onRefresh={() => void screen.payers.refetch()}
-          refreshing={screen.payers.isRefetching && !screen.searching}
+          onRefresh={pull.onRefresh}
+          refreshing={pull.refreshing}
           ListEmptyComponent={
             screen.searching ? (
               <EmptyState icon="search-outline" title={t('payers.noResults')} />

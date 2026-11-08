@@ -62,8 +62,8 @@ react-native-web on the web — no `shadowColor`/`elevation` pairs.
 | `md` | `shadow-md` | `shadow-edge-md` (10 % highlight, 4 % ring, 24 px drop) | `surface-1` #1B1E26 | cards and pressable cards (pressed: sinks to `sm`) |
 | `lg` | `shadow-lg` | `shadow-edge-strong` (12 % highlight, 6 % ring, 40 px drop) | `surface-2` #222631 | toasts, floating badges |
 | `xl` | `shadow-xl` | `shadow-edge-strong` | `surface-3` #2A2F3B | sheets and dialogs (over a blurred backdrop, expo-blur) |
-| `bar` | `shadow-bar` (upward) | `shadow-edge-strong` | `surface-2` | the floating tab bar (rounded top corners, active tab pill) |
-| `glow` | `shadow-glow` (primary-tinted) | `shadow-glow-dark` (#296BFE at 35 %, 36 px blur) | — | primary buttons, quick actions, the balance hero |
+| `bar` | `shadow-bar` (upward) | `shadow-edge-strong` | `surface-2` | the floating tab bar (rounded top corners) |
+| `glow` | `shadow-glow` (primary-tinted) | `shadow-glow-dark` (#296BFE at 35 %, 36 px blur) | — | primary buttons, quick actions, the balance hero, the selected tab's circle (it rises 7 dp and scales 1.1 on a spring) |
 | focus | `shadow-focus` (4 px primary ring at 16 %) | same | — | focused inputs, with the `primary` border |
 
 - Light surfaces stay white (`surface-1/2/3` = #FFFFFF); the light shadows are ~30 % stronger

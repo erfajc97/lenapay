@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
@@ -13,6 +14,7 @@ import { useApprovalsScreen } from './hooks/useApprovals';
 export function Approvals() {
   const { t } = useTranslation();
   const screen = useApprovalsScreen();
+  const pull = usePullToRefresh(screen.approvals.refetch);
   return (
     <Screen title={t('approvals.title')} back scroll={false}>
       {screen.approvals.isLoading ? (
@@ -27,8 +29,8 @@ export function Approvals() {
           keyExtractor={(payout) => payout.id}
           renderItem={({ item }) => <ApprovalCard payout={item} mine={item.createdBy.userId === screen.userId} onPress={screen.open} />}
           contentContainerStyle={LIST_CONTENT_STYLE}
-          onRefresh={() => void screen.approvals.refetch()}
-          refreshing={screen.approvals.isRefetching}
+          onRefresh={pull.onRefresh}
+          refreshing={pull.refreshing}
           ListEmptyComponent={<EmptyState icon="checkmark-done-circle-outline" title={t('approvals.emptyTitle')} body={t('approvals.emptyBody')} />}
         />
       )}

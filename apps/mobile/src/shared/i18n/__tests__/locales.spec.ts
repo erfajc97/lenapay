@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { APP_LOCALES, LANGUAGE_LABEL_KEY, SOURCE_LOCALE } from '../locale';
 import esAR from '../locales/es-AR.json';
 
 // Why: a missing key shows "payout.confirm" to the person about to move money (M8). This
@@ -45,6 +46,7 @@ const DYNAMIC: Record<string, readonly string[]> = {
   'movements.range': ['today', '7d', '30d', 'month', 'custom'],
   'movements.filter': ['type', 'status', 'currency', 'date'],
   'settings.theme': ['system', 'light', 'dark'],
+  'settings.languages': ['system', 'esAR', 'enUS'],
   'movements.type': ['payin', 'payout', 'transfer'],
   'movements.kind': ['payin', 'payout', 'transfer'],
   'movements.title': ['payin.in', 'payin.out', 'payout.in', 'payout.out', 'transfer.in', 'transfer.out'],
@@ -90,5 +92,43 @@ describe('es-AR locale', () => {
       .map((code) => errorMessageKey(new ApiError(code, 400)))
       .filter((key) => !exists(key));
     expect(missing).toEqual([]);
+  });
+});
+
+/** Every leaf of a catalog as `dotted.key → text`. */
+function leaves(node: unknown, prefix = ''): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === 'string') out.set(path, value);
+    else for (const [inner, text] of leaves(value, path)) out.set(inner, text);
+  }
+  return out;
+}
+
+const placeholders = (text: string) => [...text.matchAll(/\{\{(\w+)\}\}/g)].map((match) => match[1]).sort();
+
+// Why: a language that misses a key shows the raw key ("payout.confirm") or, worse, falls back
+// to Spanish in the middle of an English screen; a missing {{amount}} hides how much money moves.
+describe('every shipped locale', () => {
+  const dir = join(__dirname, '..', 'locales');
+  const source = leaves(esAR);
+
+  it('ships one catalog per app locale, and nothing else', () => {
+    expect(readdirSync(dir).sort()).toEqual(APP_LOCALES.map((locale) => `${locale}.json`).sort());
+    expect(APP_LOCALES).toContain(SOURCE_LOCALE);
+  });
+
+  it.each(APP_LOCALES.filter((locale) => locale !== SOURCE_LOCALE))('%s has exactly the keys of es-AR, with the same placeholders', (locale) => {
+    const catalog = leaves(JSON.parse(readFileSync(join(dir, `${locale}.json`), 'utf8')));
+    expect([...catalog.keys()].filter((key) => !source.has(key))).toEqual([]);
+    expect([...source.keys()].filter((key) => !catalog.has(key))).toEqual([]);
+    const mismatched = [...source].filter(([key, text]) => JSON.stringify(placeholders(text)) !== JSON.stringify(placeholders(catalog.get(key) ?? '')));
+    expect(mismatched.map(([key]) => key)).toEqual([]);
+    expect([...catalog.values()].filter((text) => text.trim() === '')).toEqual([]);
+  });
+
+  it('names every option of Idioma', () => {
+    expect(Object.values(LANGUAGE_LABEL_KEY).filter((key) => !exists(key))).toEqual([]);
   });
 });

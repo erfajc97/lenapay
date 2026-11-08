@@ -35,3 +35,24 @@ describe('usePreferencesStore — theme', () => {
     expect(usePreferencesStore.getState().themePreference).toBe('system');
   });
 });
+
+// Why: the language picked in Idioma must survive a restart; a saved language we no longer
+// ship (or garbage) must fall back to the device, never to raw keys.
+describe('usePreferencesStore — language', () => {
+  it('follows the device until the person picks a language, and persists the pick', async () => {
+    usePreferencesStore.setState({ languagePreference: 'system' });
+    expect(usePreferencesStore.getState().languagePreference).toBe('system');
+    usePreferencesStore.getState().setLanguagePreference('en-US');
+    const saved = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '{}') as { state: Record<string, unknown> };
+    expect(saved.state.languagePreference).toBe('en-US');
+  });
+
+  it('restores a saved language and drops an unknown one', async () => {
+    await AsyncStorage.setItem(KEY, JSON.stringify({ version: 1, state: { activeOrgId: null, personalModePreview: false, languagePreference: 'en-US' } }));
+    await usePreferencesStore.persist.rehydrate();
+    expect(usePreferencesStore.getState().languagePreference).toBe('en-US');
+    await AsyncStorage.setItem(KEY, JSON.stringify({ version: 1, state: { activeOrgId: null, personalModePreview: false, languagePreference: 'pt-BR' } }));
+    await usePreferencesStore.persist.rehydrate();
+    expect(usePreferencesStore.getState().languagePreference).toBe('system');
+  });
+});

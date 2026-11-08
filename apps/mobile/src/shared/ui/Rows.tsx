@@ -38,6 +38,7 @@ export function ListRow({
   onPress,
   accessibilityLabel,
   chevron = true,
+  selected,
 }: {
   title: string;
   subtitle?: string | null;
@@ -46,6 +47,8 @@ export function ListRow({
   onPress?: () => void;
   accessibilityLabel?: string;
   chevron?: boolean;
+  /** Set on option rows: the choice is announced, not only shown by the trailing check (M7). */
+  selected?: boolean;
 }) {
   const content = (
     <>
@@ -68,8 +71,9 @@ export function ListRow({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole={selected === undefined ? 'button' : 'radio'}
       accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityState={selected === undefined ? undefined : { selected, checked: selected }}
       className="min-h-14 flex-row items-center gap-3 rounded-chip py-2 active:bg-primary-soft"
     >
       {content}
