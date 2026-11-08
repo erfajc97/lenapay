@@ -45,7 +45,8 @@ Run a process on the host against the compose database: `make api`, `make worker
 `make seed` (or `./scripts/seed.ps1`; `./scripts/seed.ps1 -OnHost` runs `go run ./cmd/seed` on
 the host) loads, through the real services and the bind-mock's signed webhooks, a demo dataset
 into the running stack (it needs the worker: payins are credited by its jobs). Running it again
-changes nothing.
+changes nothing. The demo password is `SEED_DEMO_PASSWORD` (default `Lenapay2026!` from
+`.env.example`, `docker-compose.yml` and `scripts/seed.ps1`); the seed refuses to run without it.
 
 | User (password `Lenapay2026!`, **demo only**) | Role |
 |---|---|

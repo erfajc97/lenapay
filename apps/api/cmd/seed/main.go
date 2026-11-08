@@ -48,6 +48,9 @@ func run() error {
 	if cfg.IsProduction() {
 		return errors.New("seed refuses to run in production")
 	}
+	if cfg.SeedDemoPassword.Reveal() == "" {
+		return errors.New("SEED_DEMO_PASSWORD is required: the demo users' password (see .env.example)")
+	}
 	// The demo users are verified with the fixed development code (the same one the API
 	// uses when DEV_FIXED_EMAIL_CODE is set; the seed sets it for its own process otherwise).
 	if cfg.DevFixedEmailCode == "" {

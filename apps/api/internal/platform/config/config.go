@@ -100,6 +100,10 @@ type Config struct {
 	// DocumentsDir is the root of the local-disk document store (payout attachments) used
 	// until an object-storage adapter exists ("" = <os temp>/lenapay-documents).
 	DocumentsDir string `env:"DOCUMENTS_DIR"`
+	// SeedDemoPassword is the password cmd/seed gives every demo user (development only; the
+	// published demo default lives in .env.example, docker-compose.yml and scripts/seed.ps1).
+	// Only cmd/seed reads it, and it refuses to run when it is empty.
+	SeedDemoPassword Secret `env:"SEED_DEMO_PASSWORD"`
 }
 
 // DevKYCAutoApproveDelay is the dev auto-approval delay; 0 (off) in production.

@@ -45,7 +45,7 @@ linters:
       - path: ^cmd/
         text: context\.Background
         linters: [forbidigo]
-      - path: ^(internal/config|cmd)/
+      - path: ^(internal/platform/config|cmd)/
         text: os\.
         linters: [forbidigo]
 

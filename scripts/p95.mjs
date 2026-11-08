@@ -17,7 +17,9 @@ async function json(method, path, token, body) {
   return res.json();
 }
 
-const { accessToken } = await json('POST', '/auth/login', null, { email: 'demo@lenapay.app', password: 'Lenapay2026!' });
+// The seeded users' password (SEED_DEMO_PASSWORD, the published demo default otherwise).
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'Lenapay2026!';
+const { accessToken } = await json('POST', '/auth/login', null, { email: 'demo@lenapay.app', password: DEMO_PASSWORD });
 const { items } = await json('GET', '/orgs', accessToken);
 const org = items.find((o) => o.legalName === 'Desarrollos Del Sur SA');
 if (!org) throw new Error('demo org missing: run the seed first');

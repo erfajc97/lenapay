@@ -29,9 +29,9 @@ import (
 	"lenapay/apps/api/internal/platform/page"
 )
 
-// Demo credentials (development only; documented in the README).
+// Demo identities (development only; documented in the README). The demo password comes from
+// SEED_DEMO_PASSWORD (config.Config.SeedDemoPassword).
 const (
-	demoPassword  = "Lenapay2026!" //nolint:gosec // published demo password, refused in production
 	demoEmail     = "demo@lenapay.app"
 	demoName      = "Ricardo Benítez"
 	approverEmail = "approver@lenapay.app"
@@ -163,7 +163,7 @@ func (sd *seeder) run(ctx context.Context) error {
 // user signs up and verifies a user (the fixed demo code), or finds the existing one. fullName
 // is optional (""): a person's KYC approval names them otherwise.
 func (sd *seeder) user(ctx context.Context, email, fullName string) (uuid.UUID, error) {
-	in := identity.SignupInput{Email: email, Password: config.Secret(demoPassword)}
+	in := identity.SignupInput{Email: email, Password: sd.cfg.SeedDemoPassword}
 	if fullName != "" {
 		in.FullName = &fullName
 	}

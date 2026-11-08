@@ -51,19 +51,6 @@ func New(ctx context.Context, b *bank.Bank, sender WebhookSender, now func() tim
 	return s
 }
 
-// onCredit delivers the webhook of an on-us credit. The bank calls it while locked, so the
-// delivery runs on its own goroutine, after the outgoing transfer's answer, as at the bank.
-func (s *Simulator) onCredit(t bank.Transfer) {
-	s.onUs.Add(1)
-	go func() {
-		defer s.onUs.Done()
-		s.deliver(s.base, t)
-	}()
-}
-
-// Wait blocks until the on-us webhooks started so far were attempted (shutdown and tests).
-func (s *Simulator) Wait() { s.onUs.Wait() }
-
 // Receive credits a CVU and delivers its webhook. The transfer stands even when the webhook
 // fails (the API can be down): the delivery is recorded and can be repeated with Redeliver.
 func (s *Simulator) Receive(ctx context.Context, in bank.IncomingInput) (bank.Transfer, bank.Delivery, error) {
@@ -95,57 +82,6 @@ func (s *Simulator) deliver(ctx context.Context, t bank.Transfer) bank.Delivery 
 	}
 	s.bank.RecordDelivery(d)
 	return d
-}
-
-// AutoStatus says whether random payins are running.
-type AutoStatus struct {
-	Enabled      bool `json:"enabled"`
-	EverySeconds int  `json:"everySeconds"`
-}
-
-// Status returns the auto-payin state.
-func (s *Simulator) Status() AutoStatus {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return AutoStatus{Enabled: s.cancel != nil, EverySeconds: int(s.every / time.Second)}
-}
-
-// StartAuto starts (or restarts with a new interval) random payins until StopAuto or ctx ends.
-func (s *Simulator) StartAuto(ctx context.Context, every time.Duration) {
-	s.StopAuto()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ctx, cancel := context.WithCancel(ctx)
-	s.cancel, s.every, s.stopped = cancel, every, make(chan struct{})
-	go s.loop(ctx, every, s.stopped)
-}
-
-// StopAuto stops random payins and waits for the loop to end.
-func (s *Simulator) StopAuto() {
-	s.mu.Lock()
-	cancel, stopped := s.cancel, s.stopped
-	s.cancel, s.every, s.stopped = nil, 0, nil
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
-		<-stopped
-	}
-}
-
-func (s *Simulator) loop(ctx context.Context, every time.Duration, stopped chan struct{}) {
-	defer close(stopped)
-	ticker := time.NewTicker(every)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if _, _, err := s.RandomPayin(ctx); err != nil && !errors.Is(err, errNoActiveCVU) {
-				slog.WarnContext(ctx, "auto payin failed", "err", err.Error())
-			}
-		}
-	}
 }
 
 // RandomPayin pays a random active CVU a random amount from a random payer.

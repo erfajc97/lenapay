@@ -15,6 +15,8 @@ try {
             $name, $value = $_ -split '=', 2
             [Environment]::SetEnvironmentVariable($name.Trim(), $value)
         }
+        # An older .env may predate SEED_DEMO_PASSWORD: fall back to the published demo password.
+        if (-not $env:SEED_DEMO_PASSWORD) { $env:SEED_DEMO_PASSWORD = 'Lenapay2026!' }
         Push-Location apps/api
         try { go run ./cmd/seed } finally { Pop-Location }
     } else {

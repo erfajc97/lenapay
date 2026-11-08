@@ -13,12 +13,17 @@
 //
 //   node scripts/smoke.mjs
 //   LENAPAY_API_URL=http://localhost:18080 BINDMOCK_URL=http://localhost:8090 node scripts/smoke.mjs
+//   (also DEV_FIXED_EMAIL_CODE, SEED_DEMO_PASSWORD and SMOKE_PASSWORD; each has the demo default)
 
 const API = (process.env.LENAPAY_API_URL ?? 'http://localhost:18080').replace(/\/$/, '');
 const BANK = (process.env.BINDMOCK_URL ?? 'http://localhost:8090').replace(/\/$/, '');
 const CODE = process.env.DEV_FIXED_EMAIL_CODE ?? '123456';
-const PASSWORD = 'Smoke-test-2026!';
 const run = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+// Password of the users the smoke signs up. It must stay the same across runs: the invited ERP
+// user (contable@constructoraandina.com.ar) signs up once and logs in on later runs.
+const PASSWORD = process.env.SMOKE_PASSWORD ?? 'Smoke-test-2026!';
+// The seeded users' password (SEED_DEMO_PASSWORD, the published demo default otherwise).
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'Lenapay2026!';
 const results = [];
 const ctx = {};
 
@@ -349,7 +354,7 @@ async function main() {
   });
 
   await step('ERP users import (seeded Andina) + auto-accept', async () => {
-    const login = await call('POST', '/auth/login', { body: { email: 'andina@lenapay.app', password: 'Lenapay2026!' } });
+    const login = await call('POST', '/auth/login', { body: { email: 'andina@lenapay.app', password: DEMO_PASSWORD } });
     check(login.status === 200, `andina@lenapay.app cannot log in (${login.status}): run the seed first`);
     const token = login.json.accessToken;
     const list = await must('GET', '/orgs', 200, { token });

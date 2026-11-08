@@ -14,8 +14,8 @@ import (
 	_ "time/tzdata" // the bank's time zone must load in minimal containers
 
 	"lenapay/apps/bind-mock/internal/bank"
-	"lenapay/apps/bind-mock/internal/config"
 	"lenapay/apps/bind-mock/internal/httpapi"
+	"lenapay/apps/bind-mock/internal/platform/config"
 	"lenapay/apps/bind-mock/internal/simulator"
 	"lenapay/apps/bind-mock/internal/simulator/provider/webhook"
 )

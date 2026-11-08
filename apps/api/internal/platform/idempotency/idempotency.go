@@ -1,10 +1,8 @@
 // Package idempotency stores client idempotency keys (MO2, R-OUT-3). A key is claimed in the
-// SAME transaction as the money effect and completed with the response before commit:
-//
-//	replay, err := store.Claim(ctx, tx, key)   // inside the money transaction
-//	if replay != nil { return decode(replay.Body) }
-//	... do the effect ...
-//	store.Complete(ctx, tx, key, http.StatusCreated, body)
+// SAME transaction as the money effect and completed with the response before commit: inside
+// the money transaction the caller first calls Store.Claim with the key; a non-nil replay means
+// the key was already completed, so it decodes and returns the stored body. Otherwise it applies
+// the effect and calls Store.Complete with the key, the HTTP status and the response body.
 //
 // A concurrent request with the same key blocks on the row until the first commits, then
 // replays its response. The same key with a different request is 409 idempotency.key_reused.
