@@ -107,7 +107,7 @@ func (h *Handler) PayMyPaymentCompany(ctx context.Context, req api.PayMyPaymentC
 	if err != nil {
 		return nil, err
 	}
-	return api.PayMyPaymentCompany201JSONResponse(payouts.PayoutToAPI(po)), nil
+	return api.PayMyPaymentCompany201JSONResponse(payoutToAPI(payouts.NewPayoutView(po))), nil
 }
 
 // companyToAPI builds the contract's MyPaymentCompany field by field (A5: the allowlist).
@@ -140,4 +140,42 @@ func installmentToAPI(in erplink.Installment) api.MyPaymentInstallment {
 
 func moneyToAPI(a money.Amount) api.Money {
 	return api.Money{Minor: a.Minor, Currency: api.Currency(a.Currency)}
+}
+
+// payoutToAPI copies the payout's allowlist (payouts.NewPayoutView, A5) into the generated
+// type: the pay operation answers the same Payout as the payouts endpoints (G12, pinned by
+// TestPayoutToAPIMatchesThePayoutView).
+func payoutToAPI(v payouts.PayoutView) api.Payout {
+	events := make([]api.PayoutEvent, 0, len(v.Events))
+	for _, e := range v.Events {
+		ev := api.PayoutEvent{ToStatus: api.PayoutStatus(e.ToStatus), ActorId: e.ActorID, Reason: e.Reason, CreatedAt: e.CreatedAt}
+		if e.FromStatus != nil {
+			from := api.PayoutStatus(*e.FromStatus)
+			ev.FromStatus = &from
+		}
+		events = append(events, ev)
+	}
+	attachments := make([]api.PayoutAttachment, 0, len(v.Attachments))
+	for _, a := range v.Attachments {
+		attachments = append(attachments, api.PayoutAttachment{
+			Id: a.ID, FileName: a.FileName, ContentType: api.PayoutAttachmentContentType(a.ContentType),
+			SizeBytes: a.SizeBytes, UploadedBy: a.UploadedBy, CreatedAt: a.CreatedAt,
+		})
+	}
+	d := v.Destination
+	return api.Payout{
+		Attachments: attachments,
+		Id:          v.ID, AccountId: v.AccountID, Concept: v.Concept, Status: api.PayoutStatus(v.Status), Rail: api.Rail(v.Rail),
+		Amount: moneyViewToAPI(v.Amount), Fee: moneyViewToAPI(v.Fee), Total: moneyViewToAPI(v.Total),
+		Destination: api.Destination{
+			Type: api.DestinationType(d.Type), Value: d.Value, AccountNumber: d.AccountNumber,
+			HolderName: d.HolderName, HolderCuit: d.HolderCuit, BankName: d.BankName,
+		},
+		CreatedBy: v.CreatedBy, ApprovedBy: v.ApprovedBy, RejectReason: v.RejectReason, FailureCode: v.FailureCode,
+		Events: events, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, SettledAt: v.SettledAt,
+	}
+}
+
+func moneyViewToAPI(m payouts.MoneyView) api.Money {
+	return api.Money{Minor: m.Minor, Currency: api.Currency(m.Currency)}
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"lenapay/apps/api/internal/api"
 	"lenapay/apps/api/internal/notifications"
 	"lenapay/apps/api/internal/payouts/store"
 	"lenapay/apps/api/internal/platform/realtime"
@@ -25,12 +24,13 @@ const (
 // envelope; a bigger payout (many long attachment names) is sent without its lists.
 const maxEventBytes = 6000
 
-// payoutEvent is the data of payout.updated and approval.requested: ids for routing and the
-// payout as the contract's Payout, so the app updates its cache without a refetch.
+// payoutEvent is the data of payout.updated and approval.requested (RealtimeEvent in the
+// contract): ids for routing and the payout as the contract's Payout, so the app updates its
+// cache without a refetch. It is this feature's own type, never the generated one (AG1).
 type payoutEvent struct {
 	PayoutID uuid.UUID  `json:"payoutId"`
 	Status   Status     `json:"status"`
-	Payout   api.Payout `json:"payout"`
+	Payout   PayoutView `json:"payout"`
 }
 
 // publishPayout reads the payout inside tx (its new state, uncommitted) and queues typ for its
@@ -40,18 +40,28 @@ func publishPayout(ctx context.Context, tx pgx.Tx, typ string, payoutID, orgID u
 	if err != nil {
 		return err
 	}
-	ev := payoutEvent{PayoutID: po.ID, Status: po.Status, Payout: PayoutToAPI(po)}
-	raw, err := json.Marshal(ev)
+	raw, err := payoutEventData(po)
 	if err != nil {
-		return fmt.Errorf("payouts: event data: %w", err)
-	}
-	if len(raw) > maxEventBytes {
-		ev.Payout.Events, ev.Payout.Attachments = []api.PayoutEvent{}, []api.PayoutAttachment{}
-		if raw, err = json.Marshal(ev); err != nil {
-			return fmt.Errorf("payouts: event data: %w", err)
-		}
+		return err
 	}
 	return realtime.Publish(ctx, tx, orgID, realtime.Event{Type: typ, Data: raw})
+}
+
+// payoutEventData marshals the event of po, dropping its lists when they would push the
+// payload past maxEventBytes (the app refetches the detail when it needs them).
+func payoutEventData(po Payout) ([]byte, error) {
+	ev := payoutEvent{PayoutID: po.ID, Status: po.Status, Payout: NewPayoutView(po)}
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		return nil, fmt.Errorf("payouts: event data: %w", err)
+	}
+	if len(raw) > maxEventBytes {
+		ev.Payout.Events, ev.Payout.Attachments = []PayoutEventView{}, []AttachmentView{}
+		if raw, err = json.Marshal(ev); err != nil {
+			return nil, fmt.Errorf("payouts: event data: %w", err)
+		}
+	}
+	return raw, nil
 }
 
 func publishBalance(ctx context.Context, tx pgx.Tx, orgID, accountID uuid.UUID) error {
