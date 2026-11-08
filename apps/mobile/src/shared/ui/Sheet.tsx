@@ -5,12 +5,13 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
-import { keyboardBehavior, modalReportsDismiss } from '@/shared/helpers/platform';
+import { keyboardBehavior, modalReportsDismiss, rootSheetUsesWindowOverlay } from '@/shared/helpers/platform';
 
 import { AppText } from './AppText';
 import { elevation, SURFACE_TONE } from './elevation';
 import { Icon } from './Icon';
 import { Scroll } from './Scroll';
+import { WindowSheet } from './WindowLayer';
 
 const BlurView = withUniwind(ExpoBlurView);
 
@@ -20,18 +21,25 @@ const BlurView = withUniwind(ExpoBlurView);
  * `onClose` runs for the backdrop, the close button and Android hardware back (ME11).
  * `onDismissed` runs once the sheet is fully off screen: navigate there, never while it is
  * still sliding out (on iOS that leaves an invisible presentation that swallows every touch).
+ * `onShown` runs once it is really on screen. A sheet mounted at the ROOT sets `aboveNativeModals`:
+ * on iOS it then renders in an overlay window, because a root Modal cannot present over a
+ * native modal screen (UIKit refuses and nothing shows).
  */
 export function Sheet({
   visible,
   title,
   onClose,
   onDismissed,
+  onShown,
+  aboveNativeModals,
   children,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   onDismissed?: () => void;
+  onShown?: () => void;
+  aboveNativeModals?: boolean;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -44,34 +52,47 @@ export function Sheet({
     wasVisible.current = visible;
   }, [visible, onDismissed]);
 
+  const content = (
+    <KeyboardAvoidingView behavior={keyboardBehavior(Platform.OS)} className="flex-1 justify-end">
+      <BlurView intensity={18} tint="default" className="absolute inset-0" />
+      <Pressable className="absolute inset-0 bg-overlay" onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
+      <View className={`max-h-[90%] rounded-t-sheet ${SURFACE_TONE.xl} ${elevation('xl')}`} style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
+        <View className="items-center pt-2">
+          <View className="h-1 w-10 rounded-full bg-border-default" />
+        </View>
+        <View className="flex-row items-center gap-2 px-4 pb-2 pt-3">
+          <AppText variant="subheading" className="flex-1" accessibilityRole="header">
+            {title}
+          </AppText>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={12} className="h-11 w-11 items-center justify-center">
+            <Icon name="close" size={22} tone="text-secondary" />
+          </Pressable>
+        </View>
+        <Scroll contentContainerClassName="gap-4 px-4 pb-2">{children}</Scroll>
+      </View>
+    </KeyboardAvoidingView>
+  );
+
+  if (aboveNativeModals && rootSheetUsesWindowOverlay(Platform.OS)) {
+    return (
+      <WindowSheet visible={visible} onShown={onShown} onDismissed={onDismissed}>
+        {content}
+      </WindowSheet>
+    );
+  }
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      onShow={onShown}
       onDismiss={onDismissed}
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <KeyboardAvoidingView behavior={keyboardBehavior(Platform.OS)} className="flex-1 justify-end">
-        <BlurView intensity={18} tint="default" className="absolute inset-0" />
-        <Pressable className="absolute inset-0 bg-overlay" onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
-        <View className={`max-h-[90%] rounded-t-sheet ${SURFACE_TONE.xl} ${elevation('xl')}`} style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
-          <View className="items-center pt-2">
-            <View className="h-1 w-10 rounded-full bg-border-default" />
-          </View>
-          <View className="flex-row items-center gap-2 px-4 pb-2 pt-3">
-            <AppText variant="subheading" className="flex-1" accessibilityRole="header">
-              {title}
-            </AppText>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={12} className="h-11 w-11 items-center justify-center">
-              <Icon name="close" size={22} tone="text-secondary" />
-            </Pressable>
-          </View>
-          <Scroll contentContainerClassName="gap-4 px-4 pb-2">{children}</Scroll>
-        </View>
-      </KeyboardAvoidingView>
+      {content}
     </Modal>
   );
 }

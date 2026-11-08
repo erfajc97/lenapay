@@ -24,3 +24,13 @@ export function pushPlatform(os: string): PushPlatform {
 export function tabBarBlurs(os: string): boolean {
   return os === 'ios' || os === 'web';
 }
+
+/**
+ * Where a sheet mounted at the root (step-up) presents. On iOS a root `Modal` presents from the
+ * root view controller, which is already presenting any native modal screen (Mover, Pagar), so
+ * UIKit refuses and the sheet never shows; there it goes to a window above everything instead.
+ * Android's Modal is a dialog window that already sits above every screen.
+ */
+export function rootSheetUsesWindowOverlay(os: string): boolean {
+  return os === 'ios';
+}

@@ -87,7 +87,7 @@ function createDirectory(http: Http) {
       // A member list the role cannot read only costs the creator's name on payouts.
       http<List<Schemas['Member']>>('GET', endpoints.orgs.members(orgId)).catch(() => ({ items: [] })),
     ]);
-    const names = new Map(accounts.items.map((account) => [account.id, account.name]));
+    const names = new Map(accounts.items.map((account) => [account.id, toAccount(account).name]));
     const people = new Map(members.items.map((member) => [member.userId, displayName(toMember(member))]));
     return { accountName: (id) => names.get(id) ?? '', memberLabel: (id) => people.get(id) ?? null };
   }

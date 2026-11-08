@@ -15,6 +15,7 @@ import { Divider, Field, LinkButton, Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Segmented } from '@/shared/ui/Segmented';
 import { ErrorState, Skeleton, SkeletonList } from '@/shared/ui/States';
+import { StepProgress } from '@/shared/ui/StepProgress';
 import { TextField } from '@/shared/ui/TextField';
 
 import { DestinationCard } from './components/DestinationCard';
@@ -51,6 +52,8 @@ export function Payout() {
     );
   }
 
+  const stepLabels = [t('payout.steps.destination'), t('payout.steps.details'), t('payout.steps.review')];
+
   if (flow.step === 'destination') {
     const resolved = flow.destination.data;
     return (
@@ -66,6 +69,7 @@ export function Payout() {
           )
         }
       >
+        <StepProgress current={1} labels={stepLabels} />
         <TextField
           label={t('payout.destinationLabel')}
           value={flow.destinationInput}
@@ -91,6 +95,7 @@ export function Payout() {
   if (flow.step === 'details') {
     return (
       <Screen title={t('payout.amountTitle')} back onBack={flow.back} footer={<Button label={t('payout.toReview')} onPress={flow.toReview} />}>
+        <StepProgress current={2} labels={stepLabels} />
         <Segmented
           label={t('fields.currency')}
           value={flow.currency}
@@ -146,6 +151,7 @@ export function Payout() {
       onBack={flow.back}
       footer={<Button label={t('payout.confirm')} icon="finger-print" onPress={flow.confirm} loading={flow.confirming} disabled={!quote || flow.blockedByBalance !== null} />}
     >
+      <StepProgress current={3} labels={stepLabels} />
       {flow.destination.data ? <DestinationCard destination={flow.destination.data} /> : null}
       {isInstantLenapay(quote) ? <RailBadge rail="internal" long /> : null}
       {flow.quote.isError ? <ErrorState error={flow.quote.error} onRetry={() => void flow.quote.refetch()} /> : null}

@@ -105,7 +105,14 @@ describe('contract → view model', () => {
       id: 'acc-1', kind: 'project', name: 'Torre Palermo', archived: true, erpProjectRef: null, createdAt: '2026-11-01T00:00:00Z',
       balances: [{ currency: 'ARS', posted: ars(567_090_350), held: ars(60_651_000), available: ars(506_439_350) }],
     }));
+    expect(account.name).toBe('Torre Palermo');
     expect(account).toMatchObject({ archived: true, payersCount: null, balances: [{ currency: 'ARS', posted: 567_090_350, held: 60_651_000, available: 506_439_350 }] });
+  });
+
+  // Why: the API seeds "Main account" in English; the es-AR app must show "Cuenta principal".
+  it('labels the seeded main account by kind in the active language', () => {
+    const account = toAccount(asContract<Schemas['Account']>({ id: 'acc-0', kind: 'main', name: 'Main account', archived: false, erpProjectRef: null, createdAt: '2026-11-01T00:00:00Z', balances: [] }));
+    expect(account.name).toBe('Cuenta principal');
   });
 
   it('maps the quote (available after the hold, negative when it does not fit)', () => {

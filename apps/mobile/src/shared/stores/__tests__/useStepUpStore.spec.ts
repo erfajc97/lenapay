@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runMoneyAction } from '@/shared/stepup/moneyAction';
 
-import { DISMISS_FALLBACK_MS, requestStepUp, useStepUpStore } from '../useStepUpStore';
+import { DISMISS_FALLBACK_MS, PRESENT_TIMEOUT_MS, requestStepUp, useStepUpStore } from '../useStepUpStore';
 
 /** Records whether a promise settled, without awaiting it (awaiting would hide a pending one). */
 function track<T>(promise: Promise<T>) {
@@ -136,5 +136,45 @@ describe('useStepUpStore', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(call).toHaveBeenCalledWith({ stepUpToken: 'su-7', idempotencyKey: expect.any(String) });
     expect(action).toMatchObject({ settled: true, value: 'ok' });
+  });
+
+  // Why: the iOS freeze on Mover entre cuentas. The sheet asked to open but UIKit never put it
+  // on screen (a root Modal cannot present over a native modal screen), so the money button
+  // spun forever and nothing reached the API. A sheet that does not confirm it is visible must
+  // fail the action with a code the toast can explain, and reset the button.
+  it('fails with stepup.not_shown and closes when the sheet never confirms it is on screen', async () => {
+    const pending = track(requestStepUp());
+    await vi.advanceTimersByTimeAsync(PRESENT_TIMEOUT_MS - 1);
+    expect(pending.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(pending.error).toMatchObject({ code: 'stepup.not_shown' });
+    expect(store().open).toBe(false);
+    expect(store().pending).toBeNull();
+  });
+
+  it('keeps waiting for the person once the sheet confirmed it is on screen', async () => {
+    const pending = track(requestStepUp());
+    store().presented();
+    await vi.advanceTimersByTimeAsync(PRESENT_TIMEOUT_MS * 3);
+    expect(pending.settled).toBe(false);
+    expect(store().open).toBe(true);
+    store().complete('su-8');
+    store().dismissed();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pending.value).toBe('su-8');
+  });
+
+  it('does not let the presentation timer of a replaced request fail the new one', async () => {
+    track(requestStepUp());
+    await vi.advanceTimersByTimeAsync(PRESENT_TIMEOUT_MS - 100);
+    const second = track(requestStepUp());
+    await vi.advanceTimersByTimeAsync(200);
+    expect(second.settled).toBe(false);
+    expect(store().open).toBe(true);
+  });
+
+  it('keeps the presentation window around 2 s', () => {
+    expect(PRESENT_TIMEOUT_MS).toBeGreaterThanOrEqual(1_500);
+    expect(PRESENT_TIMEOUT_MS).toBeLessThanOrEqual(3_000);
   });
 });

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { missingKeyReporter, scrub } from '../reporting';
+import { devLog, missingKeyReporter, scrub } from '../reporting';
 
 // Why: crash dashboards have more readers than the database; a name, email or token in an
 // error context is a data leak (M12).
@@ -29,5 +29,17 @@ describe('missing translation reporter', () => {
     const warnings: string[] = [];
     missingKeyReporter({ dev: false, warn: (message) => warnings.push(message) })(['es-AR'], 'translation', 'x.y');
     expect(warnings).toEqual([]);
+  });
+});
+
+// Why: step breadcrumbs are how a stalled flow (the step-up sheet that never showed) is found
+// on a device; they must never print in a release build, nor carry personal data.
+describe('devLog', () => {
+  it('prints the event with the scrubbed context in development only', () => {
+    const info = vi.fn();
+    devLog('stepup.requested', { code: 'x', email: 'a@b.c' }, { dev: true, info });
+    expect(info).toHaveBeenCalledWith('[lenapay] stepup.requested {"code":"x"}');
+    devLog('stepup.requested', {}, { dev: false, info });
+    expect(info).toHaveBeenCalledTimes(1);
   });
 });

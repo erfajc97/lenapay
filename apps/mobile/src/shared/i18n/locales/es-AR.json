@@ -1,6 +1,7 @@
 {
   "brand": { "name": "Lenapay", "by": "by", "byLebaneLabel": "Lenapay by Lebane" },
   "common": {
+    "stepOf": "Paso {{current}} de {{total}} · {{label}}",
     "back": "Volver",
     "cancel": "Cancelar",
     "close": "Cerrar",
@@ -134,6 +135,7 @@
     "stepup_cancelled": "Cancelaste la confirmación.",
     "stepup_failed": "No pudimos confirmar que sos vos. Probá de nuevo.",
     "stepup_device_key_unavailable": "Este dispositivo todavía no puede firmar con biometría. Confirmá con tu contraseña.",
+    "stepup_not_shown": "No se pudo abrir la confirmación. Probá de nuevo.",
     "payout_invalid_state": "Este pago ya no se puede modificar.",
     "destination_not_found": "No encontramos esa cuenta. Revisá el CBU, CVU o alias.",
     "kyc_not_approved": "La verificación todavía no está aprobada.",
@@ -250,10 +252,10 @@
   },
   "stepUp": {
     "title": "Confirmá la operación",
-    "bodyBiometric": "Por seguridad, confirmá con tu biometría antes de mover dinero.",
+    "bodyBiometric": "Por seguridad, confirmá con Face ID o el código del teléfono antes de mover dinero.",
     "bodyPassword": "Por seguridad, ingresá tu contraseña antes de mover dinero.",
     "prompt": "Confirmá la operación en Lenapay",
-    "confirmBiometric": "Confirmar con biometría",
+    "confirmBiometric": "Confirmar con Face ID o código",
     "usePassword": "Usar mi contraseña",
     "password": "Contraseña",
     "confirm": "Confirmar",
@@ -322,6 +324,12 @@
   },
   "notFound": { "title": "No encontramos esta pantalla", "body": "Puede que el enlace esté vencido.", "action": "Ir al inicio" },
   "accounts": {
+    "searchLabel": "Buscar cuenta",
+    "searchPlaceholder": "Nombre de la cuenta",
+    "noMatches": "Ninguna cuenta coincide con “{{query}}”.",
+    "noOtherAccounts": "No hay otra cuenta abierta. Creá una en Cuentas.",
+    "showAll": "Ver todas ({{count}} más)",
+    "defaultName": { "main": "Cuenta principal", "personal": "Cuenta personal" },
     "title": "Cuentas",
     "new": "Nueva cuenta de proyecto",
     "create": "Crear cuenta",
@@ -389,6 +397,7 @@
     "shareMessage": "Datos para transferir a {{name}} ({{currency}})\nCVU: {{cvu}}\nAlias: {{alias}}"
   },
   "payout": {
+    "steps": { "destination": "Destino", "details": "Monto", "review": "Revisar" },
     "title": "Pagar",
     "destinationLabel": "CBU, CVU o alias",
     "destinationPlaceholder": "22 números o alias",
@@ -460,6 +469,12 @@
     "selfWarningBody": "La política lo permite porque no hay otro aprobador en el equipo. Queda registrado como aprobación propia."
   },
   "transfer": {
+    "amountStep": "Monto",
+    "fromQuestion": "¿Desde qué cuenta?",
+    "toQuestion": "¿Hacia qué cuenta?",
+    "balanceAfter": "Saldo de {{account}} después",
+    "resultBody": "De {{from}} a {{to}}. Ya está disponible.",
+    "close": "Listo",
     "title": "Mover entre cuentas",
     "from": "Desde",
     "to": "Hacia",
@@ -747,11 +762,40 @@
     "urlHint": "En el teléfono, la IP de tu PC en la red local (no localhost).",
     "urlInvalid": "Ingresá una URL http(s) completa, por ejemplo http://192.168.68.53:18080.",
     "check": "Probar conexión",
-    "reachable": "La API respondió OK.",
     "apply": "Aplicar y cerrar sesión",
     "applied": "Listo. Ingresá de nuevo contra la API elegida.",
     "reset": "Volver al valor del build",
-    "signOutNote": "Al aplicar se cierra la sesión: los datos y el acceso son de cada API."
+    "signOutNote": "Al aplicar se cierra la sesión: los datos y el acceso son de cada API.",
+    "connection": {
+      "chipLabel": "Conexión",
+      "chipA11y": "Conexión: {{state}}",
+      "chip": {
+        "untested": "Sin probar",
+        "checking": "Probando…",
+        "connected": "Conectado",
+        "offline": "Sin conexión"
+      },
+      "checkingTitle": "Probando conexión…",
+      "checkingBody": "Esperamos hasta {{seconds}} s la respuesta de /healthz.",
+      "successTitle": "Conectado · {{ms}} ms",
+      "successBody": "GET /healthz respondió 200 · status: {{status}}",
+      "timeoutTitle": "No se pudo llegar a la API",
+      "timeoutBody": "Pasaron {{seconds}} s sin respuesta. ¿El celular está en la misma Wi-Fi que la PC? ¿El firewall de Windows permite el puerto {{port}}?",
+      "unreachableTitle": "Nada responde en esa dirección",
+      "unreachableBody": "Revisá la IP y el puerto (la IP de tu PC en la Wi-Fi, no localhost) y que la API esté levantada. En iPhone, Ajustes → Expo Go → Red local tiene que estar activado. Si todo eso está bien, puede ser el firewall de Windows.",
+      "invalidUrlTitle": "La URL no es válida",
+      "invalidUrlBody": "Usá http://IP:puerto, por ejemplo http://192.168.68.53:18080.",
+      "httpTitle": "La API respondió HTTP {{status}}",
+      "httpBody": "Hay un servidor en esa dirección, pero /healthz no respondió OK. ¿Es la URL de la API de Lenapay?",
+      "httpUnavailableBody": "La API está levantada pero no llega a su base de datos. Revisá que el stack esté corriendo (pnpm docker:up).",
+      "notLenapayTitle": "Eso no parece la API de Lenapay",
+      "notLenapayBody": "La dirección responde, pero /healthz no devolvió status ok. Revisá el puerto (la API local usa 18080).",
+      "unexpectedTitle": "No se pudo probar la conexión",
+      "unexpectedBody": "Probá de nuevo. Si sigue, revisá la URL.",
+      "firewallHint": "En la PC, en PowerShell como administrador:",
+      "copyCommand": "Copiar comando",
+      "copied": "Copiado"
+    }
   },
   "rail": {
     "label": "Vía",

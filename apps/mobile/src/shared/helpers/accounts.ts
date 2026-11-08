@@ -1,4 +1,4 @@
-import type { Account } from '@/shared/api/types';
+import type { Account, AccountKind } from '@/shared/api/types';
 
 type ArchiveBlocker = 'main' | 'not_empty' | 'archived' | null;
 
@@ -19,4 +19,15 @@ export function sortAccounts<T extends Pick<Account, 'kind' | 'name' | 'archived
 export function accountNameError(name: string): 'validation.accountName' | null {
   const length = name.trim().length;
   return length >= 3 && length <= 40 ? null : 'validation.accountName';
+}
+
+/**
+ * The names the API seeds for the accounts it creates by itself (apps/api accounts service).
+ * They are English placeholders, not names a person chose, so the app labels them by kind.
+ */
+const API_SEEDED_NAMES: Partial<Record<AccountKind, string>> = { main: 'Main account', personal: 'Personal account' };
+
+/** The name to show: the i18n label of a seeded main/personal account, else the name as typed. */
+export function accountDisplayName(account: { kind: AccountKind; name: string }, t: (key: string) => string): string {
+  return API_SEEDED_NAMES[account.kind] === account.name ? t(`accounts.defaultName.${account.kind}`) : account.name;
 }

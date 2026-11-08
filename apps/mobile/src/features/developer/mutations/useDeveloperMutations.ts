@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 
 import { checkApiHealth } from '@/shared/api/live/health';
 import type { ApiTarget } from '@/shared/config/env';
+import { confirmHaptic, warningHaptic } from '@/shared/feedback/haptics';
 import { notifyError, notifySuccess } from '@/shared/feedback/mutationFeedback';
 import { queryPersister } from '@/shared/queries/queryClient';
 import { clearSession } from '@/shared/session/session';
@@ -35,10 +36,15 @@ export function useApplyApiTarget() {
   });
 }
 
+/**
+ * "Probar conexión". The result is rendered inline by the screen (mutation data / error): this
+ * route is an iOS modal, and the toast host lives under it, so a toast here would never be seen.
+ */
 export function useCheckApi() {
   return useMutation({
-    mutationFn: (url: string) => checkApiHealth(url.trim().replace(/\/+$/, '')),
-    onSuccess: () => notifySuccess('developer.reachable'),
-    onError: notifyError,
+    // Called with the normalized URL, so `variables` tells the screen which URL the result is for.
+    mutationFn: (url: string) => checkApiHealth(url),
+    onSuccess: () => confirmHaptic(),
+    onError: () => warningHaptic(),
   });
 }

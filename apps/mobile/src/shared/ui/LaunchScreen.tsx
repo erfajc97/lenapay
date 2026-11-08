@@ -7,20 +7,17 @@ import { withUniwind } from 'uniwind';
 
 import { AppText } from './AppText';
 import { LEBANE_WORDMARK_ON_DARK, LEBANE_WORDMARK_ON_LIGHT, SPLASH_ICON } from './brandAssets';
-import { launchHoldMs } from './launchTiming';
+import { LAUNCH_MARK_MS, LAUNCH_TEXT_DELAY_MS, LAUNCH_TEXT_MS, launchHoldMs } from './launchTiming';
 
 const Image = withUniwind(ExpoImage);
 
-const MARK_MS = 450;
-const TEXT_DELAY_MS = 380;
-const TEXT_MS = 380;
 const FADE_MS = 280;
 
 /**
  * The in-app launch screen. It starts on exactly the native splash frame (same image, 112 dp,
  * centred, same background), the isotype breathes once, then "Lenapay" and "by Lebane" rise in below it, and once the app is `ready` (and the
  * minimum time passed) it crossfades into the app underneath. With Reduce Motion it shows the
- * final frame and leaves as soon as the app is ready. `onShown` fires when it is on screen, so
+ * final frame for a shorter minimum and leaves without animating. `onShown` fires when it is on screen, so
  * the native splash can hide without a blank frame in between.
  */
 export function LaunchScreen({ ready, onShown, onDone }: { ready: boolean; onShown: () => void; onDone: () => void }) {
@@ -33,8 +30,8 @@ export function LaunchScreen({ ready, onShown, onDone }: { ready: boolean; onSho
 
   useEffect(() => {
     if (reduceMotion) return;
-    mark.set(withTiming(1, { duration: MARK_MS, easing: Easing.inOut(Easing.sin) }));
-    text.set(withDelay(TEXT_DELAY_MS, withTiming(1, { duration: TEXT_MS, easing: Easing.out(Easing.cubic) })));
+    mark.set(withTiming(1, { duration: LAUNCH_MARK_MS, easing: Easing.inOut(Easing.sin) }));
+    text.set(withDelay(LAUNCH_TEXT_DELAY_MS, withTiming(1, { duration: LAUNCH_TEXT_MS, easing: Easing.out(Easing.cubic) })));
   }, [mark, text, reduceMotion]);
 
   useEffect(() => {

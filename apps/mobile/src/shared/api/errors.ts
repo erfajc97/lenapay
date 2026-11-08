@@ -34,6 +34,7 @@ export const ERROR_CODES = [
   'stepup.cancelled',
   'stepup.failed',
   'stepup.device_key_unavailable',
+  'stepup.not_shown',
   'network.offline',
   'network.timeout',
   // Platform

@@ -1,5 +1,8 @@
 import type { components } from '@lenapay/api-types';
 
+import { accountDisplayName } from '@/shared/helpers/accounts';
+import { i18n } from '@/shared/i18n';
+
 import type {
   Account,
   Balance,
@@ -43,7 +46,7 @@ export function toAccount(dto: Schemas['Account']): Account {
   return {
     id: dto.id,
     kind: dto.kind,
-    name: dto.name,
+    name: accountDisplayName(dto, (key) => i18n.t(key)),
     archived: dto.archived,
     erpProjectRef: dto.erpProjectRef,
     balances: dto.balances.map(toBalance),

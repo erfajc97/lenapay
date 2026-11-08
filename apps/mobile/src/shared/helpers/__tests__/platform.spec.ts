@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyboardBehavior, modalReportsDismiss, pushPlatform, tabBarBlurs } from '../platform';
+import { keyboardBehavior, modalReportsDismiss, pushPlatform, rootSheetUsesWindowOverlay, tabBarBlurs } from '../platform';
 
 // Why: the wrong keyboard behaviour hides the "Confirmar" button under the keyboard on one
 // platform only, which is the one nobody tested (ME11).
@@ -42,5 +42,16 @@ describe('tabBarBlurs', () => {
     expect(tabBarBlurs('web')).toBe(true);
     expect(tabBarBlurs('android')).toBe(false);
     expect(tabBarBlurs('windows')).toBe(false);
+  });
+});
+
+// Why: on iOS a Modal mounted at the root presents from the root view controller, which is
+// already presenting any native modal screen (Mover, Pagar): UIKit refuses and the sheet never
+// shows. Root sheets there go to a window above everything; Android dialogs already are.
+describe('rootSheetUsesWindowOverlay', () => {
+  it('uses the window overlay on iOS only', () => {
+    expect(rootSheetUsesWindowOverlay('ios')).toBe(true);
+    expect(rootSheetUsesWindowOverlay('android')).toBe(false);
+    expect(rootSheetUsesWindowOverlay('web')).toBe(false);
   });
 });

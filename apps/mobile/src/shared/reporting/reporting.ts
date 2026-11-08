@@ -36,3 +36,14 @@ export function missingKeyReporter(options: { dev?: boolean; warn?: (message: st
     if (dev) warn(`[i18n] missing key "${key}" (${locales.join(', ')})`);
   };
 }
+
+/**
+ * Development breadcrumbs (M12): each step of a flow that can stall (step-up presentation) is
+ * logged in a development bundle only, with event names and numbers, never personal data.
+ */
+export function devLog(event: string, context: Record<string, string | number> = {}, options: { dev?: boolean; info?: (message: string) => void } = {}): void {
+  if (!(options.dev ?? IS_DEV)) return;
+  // Dev-only output: the reporting module is the one logger (M12).
+  const info = options.info ?? ((message: string) => console.info(message));
+  info(`[lenapay] ${event} ${JSON.stringify(scrub({ ...context }))}`);
+}

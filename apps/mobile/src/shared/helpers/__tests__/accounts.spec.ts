@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountNameError, archiveBlocker, sortAccounts } from '../accounts';
+import { accountDisplayName, accountNameError, archiveBlocker, sortAccounts } from '../accounts';
 
 // Why: archiving an account that still holds money (or a hold in flight) hides that money
 // from every screen (R-ACC-3).
@@ -41,5 +41,22 @@ describe('account helpers', () => {
     expect(accountNameError('abc')).toBeNull();
     expect(accountNameError('a'.repeat(40))).toBeNull();
     expect(accountNameError('a'.repeat(41))).toBe('validation.accountName');
+  });
+});
+
+// Why: the API seeds the main and personal accounts with English names ('Main account'),
+// which showed up untranslated in an es-AR app; a name the person chose must stay as typed.
+describe('accountDisplayName', () => {
+  const t = (key: string) => `<${key}>`;
+
+  it('labels the API-seeded main and personal accounts by kind through i18n', () => {
+    expect(accountDisplayName({ kind: 'main', name: 'Main account' }, t)).toBe('<accounts.defaultName.main>');
+    expect(accountDisplayName({ kind: 'personal', name: 'Personal account' }, t)).toBe('<accounts.defaultName.personal>');
+  });
+
+  it('keeps a renamed main account and every project account as named', () => {
+    expect(accountDisplayName({ kind: 'main', name: 'Caja central' }, t)).toBe('Caja central');
+    expect(accountDisplayName({ kind: 'project', name: 'Main account' }, t)).toBe('Main account');
+    expect(accountDisplayName({ kind: 'personal', name: 'Main account' }, t)).toBe('Main account');
   });
 });

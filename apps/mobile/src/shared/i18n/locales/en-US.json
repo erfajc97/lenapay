@@ -1,6 +1,7 @@
 {
   "brand": { "name": "Lenapay", "by": "by", "byLebaneLabel": "Lenapay by Lebane" },
   "common": {
+    "stepOf": "Step {{current}} of {{total}} · {{label}}",
     "back": "Back",
     "cancel": "Cancel",
     "close": "Close",
@@ -134,6 +135,7 @@
     "stepup_cancelled": "You cancelled the confirmation.",
     "stepup_failed": "We couldn't confirm it's you. Try again.",
     "stepup_device_key_unavailable": "This device can't sign with biometrics yet. Confirm with your password.",
+    "stepup_not_shown": "Could not open the confirmation. Try again.",
     "payout_invalid_state": "This payment can no longer be changed.",
     "destination_not_found": "We couldn't find that account. Check the CBU, CVU or alias.",
     "kyc_not_approved": "The verification isn't approved yet.",
@@ -250,10 +252,10 @@
   },
   "stepUp": {
     "title": "Confirm the operation",
-    "bodyBiometric": "For your security, confirm with biometrics before moving money.",
+    "bodyBiometric": "For your security, confirm with Face ID or the phone passcode before moving money.",
     "bodyPassword": "For your security, enter your password before moving money.",
     "prompt": "Confirm the operation in Lenapay",
-    "confirmBiometric": "Confirm with biometrics",
+    "confirmBiometric": "Confirm with Face ID or passcode",
     "usePassword": "Use my password",
     "password": "Password",
     "confirm": "Confirm",
@@ -322,6 +324,12 @@
   },
   "notFound": { "title": "We couldn't find this screen", "body": "The link may have expired.", "action": "Go home" },
   "accounts": {
+    "searchLabel": "Search account",
+    "searchPlaceholder": "Account name",
+    "noMatches": "No account matches “{{query}}”.",
+    "noOtherAccounts": "There is no other open account. Create one in Accounts.",
+    "showAll": "See all ({{count}} more)",
+    "defaultName": { "main": "Main account", "personal": "Personal account" },
     "title": "Accounts",
     "new": "New project account",
     "create": "Create account",
@@ -389,6 +397,7 @@
     "shareMessage": "Details to transfer to {{name}} ({{currency}})\nCVU: {{cvu}}\nAlias: {{alias}}"
   },
   "payout": {
+    "steps": { "destination": "Destination", "details": "Amount", "review": "Review" },
     "title": "Pay",
     "destinationLabel": "CBU, CVU or alias",
     "destinationPlaceholder": "22 digits or alias",
@@ -460,6 +469,12 @@
     "selfWarningBody": "The policy allows it because there is no other approver on the team. It is recorded as a self-approval."
   },
   "transfer": {
+    "amountStep": "Amount",
+    "fromQuestion": "From which account?",
+    "toQuestion": "To which account?",
+    "balanceAfter": "{{account}} balance after",
+    "resultBody": "From {{from}} to {{to}}. It is available now.",
+    "close": "Done",
     "title": "Move between accounts",
     "from": "From",
     "to": "To",
@@ -747,11 +762,40 @@
     "urlHint": "On the phone, your PC's IP on the local network (not localhost).",
     "urlInvalid": "Enter a full http(s) URL, for example http://192.168.68.53:18080.",
     "check": "Test connection",
-    "reachable": "The API answered OK.",
     "apply": "Apply and log out",
     "applied": "Done. Log in again against the chosen API.",
     "reset": "Back to the build default",
-    "signOutNote": "Applying logs you out: data and access belong to each API."
+    "signOutNote": "Applying logs you out: data and access belong to each API.",
+    "connection": {
+      "chipLabel": "Connection",
+      "chipA11y": "Connection: {{state}}",
+      "chip": {
+        "untested": "Not tested",
+        "checking": "Testing…",
+        "connected": "Connected",
+        "offline": "No connection"
+      },
+      "checkingTitle": "Testing connection…",
+      "checkingBody": "Waiting up to {{seconds}} s for /healthz to answer.",
+      "successTitle": "Connected · {{ms}} ms",
+      "successBody": "GET /healthz answered 200 · status: {{status}}",
+      "timeoutTitle": "Could not reach the API",
+      "timeoutBody": "No answer after {{seconds}} s. Is the phone on the same Wi-Fi as the PC? Does Windows Firewall allow port {{port}}?",
+      "unreachableTitle": "Nothing answers at that address",
+      "unreachableBody": "Check the IP and port (your PC's IP on the Wi-Fi, not localhost) and that the API is running. On iPhone, Settings → Expo Go → Local Network must be on. If all of that is fine, it may be Windows Firewall.",
+      "invalidUrlTitle": "The URL is not valid",
+      "invalidUrlBody": "Use http://IP:port, for example http://192.168.68.53:18080.",
+      "httpTitle": "The API answered HTTP {{status}}",
+      "httpBody": "There is a server at that address, but /healthz did not answer OK. Is it the Lenapay API URL?",
+      "httpUnavailableBody": "The API is up but cannot reach its database. Check that the stack is running (pnpm docker:up).",
+      "notLenapayTitle": "That does not look like the Lenapay API",
+      "notLenapayBody": "The address answers, but /healthz did not return status ok. Check the port (the local API uses 18080).",
+      "unexpectedTitle": "Could not test the connection",
+      "unexpectedBody": "Try again. If it persists, check the URL.",
+      "firewallHint": "On the PC, in PowerShell as administrator:",
+      "copyCommand": "Copy command",
+      "copied": "Copied"
+    }
   },
   "rail": {
     "label": "Via",
