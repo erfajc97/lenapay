@@ -9,6 +9,7 @@ import type { AuthTokens } from '@/shared/api/types';
 export const SECURE_KEYS = {
   refreshToken: 'lenapay.refreshToken',
   biometricsEnabled: 'lenapay.biometricsEnabled',
+  deviceKey: 'lenapay.deviceKey',
 } as const;
 
 let accessToken: string | null = null;
@@ -53,6 +54,31 @@ export async function readBiometricsEnabled(): Promise<boolean> {
 
 export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
   await writeSecure(SECURE_KEYS.biometricsEnabled, enabled ? 'true' : 'false');
+}
+
+/**
+ * The step-up device key (R-ID-3): the id the API gave it and its Ed25519 secret. Logout
+ * deletes it with the rest, so the next person on this phone registers their own.
+ */
+export interface StoredDeviceKey {
+  deviceId: string;
+  secretKey: string;
+}
+
+export async function saveDeviceKey(key: StoredDeviceKey): Promise<void> {
+  await writeSecure(SECURE_KEYS.deviceKey, JSON.stringify(key));
+}
+
+export async function readDeviceKey(): Promise<StoredDeviceKey | null> {
+  const raw = await readSecure(SECURE_KEYS.deviceKey);
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<StoredDeviceKey>;
+    return typeof value.deviceId === 'string' && typeof value.secretKey === 'string' ? { deviceId: value.deviceId, secretKey: value.secretKey } : null;
+  } catch {
+    // A corrupt entry is "no device key": step-up falls back to the password.
+    return null;
+  }
 }
 
 /** Logout: forget the in-memory token and delete EVERY secure entry, even if one delete fails. */

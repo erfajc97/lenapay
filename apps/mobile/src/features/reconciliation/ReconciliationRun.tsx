@@ -10,14 +10,14 @@ import { Divider, Field, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 
-import { runDifference } from './helpers/reconRules';
+import { itemAmount, runDifference } from './helpers/reconRules';
 import { useReconciliationRun } from './hooks/useReconciliation';
 
 const ITEM_TONE: Record<string, ChipTone> = { matched: 'success', missing_in_ledger: 'danger', missing_at_psp: 'danger' };
 
 export function ReconciliationRun() {
   const { t } = useTranslation();
-  const { runs, run } = useReconciliationRun();
+  const { runs, run, items } = useReconciliationRun();
 
   if (runs.isError) {
     return (
@@ -31,10 +31,11 @@ export function ReconciliationRun() {
   }
 
   const difference = runDifference(run);
-  const unmatched = run.items.filter((item) => item.status !== 'matched');
-  const matched = run.items.filter((item) => item.status === 'matched');
+  const all = items.data ?? [];
+  const unmatched = all.filter((item) => item.status !== 'matched');
+  const matched = all.filter((item) => item.status === 'matched');
   return (
-    <Screen title={`${formatDay(run.day)} · ${run.currency}`} back>
+    <Screen title={`${formatDay(run.day)} · ${run.currency}`} back onRefresh={items.refetch}>
       <Card className="gap-1">
         <Field label={t('reconciliation.pspTotal')} value={formatMoney(run.pspTotal, run.currency)} />
         <Field label={t('reconciliation.ledgerTotal')} value={formatMoney(run.ledgerTotal, run.currency)} />
@@ -46,6 +47,9 @@ export function ReconciliationRun() {
           </AppText>
         </View>
       </Card>
+      {items.isLoading ? <SkeletonList rows={3} /> : null}
+      {items.isError ? <ErrorState error={items.error} onRetry={() => void items.refetch()} /> : null}
+      {items.isSuccess && all.length === 0 ? <EmptyState icon="git-compare-outline" title={t('reconciliation.noItems')} /> : null}
       {[
         { title: t('reconciliation.unmatched'), items: unmatched },
         { title: t('reconciliation.matchedTitle'), items: matched },
@@ -54,18 +58,21 @@ export function ReconciliationRun() {
           <View key={section.title} className="gap-2">
             <SectionTitle title={section.title} />
             <Card className="gap-3">
-              {section.items.map((item) => (
-                <View key={item.id} className="gap-1">
-                  <View className="flex-row items-center justify-between">
-                    <Chip label={t(`reconciliation.item.${item.status}`)} tone={ITEM_TONE[item.status] ?? 'neutral'} />
-                    <AppText variant="bodyStrong">{formatMoney(item.amount, run.currency, { signed: item.amount > 0 })}</AppText>
+              {section.items.map((item) => {
+                const amount = itemAmount(item);
+                return (
+                  <View key={item.id} className="gap-1">
+                    <View className="flex-row items-center justify-between">
+                      <Chip label={t(`reconciliation.item.${item.status}`)} tone={ITEM_TONE[item.status] ?? 'neutral'} />
+                      <AppText variant="bodyStrong">{formatMoney(amount, run.currency, { signed: amount > 0 })}</AppText>
+                    </View>
+                    <AppText variant="label">{t(`reconciliation.direction.${item.direction}`)}</AppText>
+                    <AppText variant="monoSmall" tone="muted">
+                      {item.providerTransferId}
+                    </AppText>
                   </View>
-                  <AppText variant="label">{item.description}</AppText>
-                  <AppText variant="monoSmall" tone="muted">
-                    {item.providerTransferId}
-                  </AppText>
-                </View>
-              ))}
+                );
+              })}
             </Card>
           </View>
         ) : null,

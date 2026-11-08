@@ -1,0 +1,169 @@
+import type { components } from '@lenapay/api-types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  type OrgDirectory,
+  parseRealtimeFrame,
+  toAccount,
+  toErpLink,
+  toMe,
+  toMovement,
+  toPayin,
+  toPayout,
+  toQuote,
+  toReconciliationItem,
+  toReconciliationRun,
+} from '../mappers';
+
+type Schemas = components['schemas'];
+
+/**
+ * Fixtures are typed against the contract field by field but may omit members: the contract
+ * grows members the mappers do not read, and these specs pin only what the mappers translate.
+ */
+const asContract = <T,>(value: Partial<T>): T => value as T;
+
+// Why: the live client is the only place where contract money `{minor, currency}` becomes the
+// app's minor units; a swapped field (fee for amount, gross for net) shows the wrong money on
+// every screen, and a nullable member read as a string crashes the screen in live mode only.
+const ars = (minor: number) => ({ minor, currency: 'ARS' as const });
+const directory: OrgDirectory = {
+  accountName: (id) => ({ 'acc-1': 'Torre Palermo' })[id] ?? '',
+  memberLabel: (id) => ({ 'u-creator': 'approver@lenapay.app' })[id] ?? null,
+};
+
+const payoutDto = asContract<Schemas['Payout']>({
+  id: 'po-1',
+  accountId: 'acc-1',
+  amount: ars(18_500_000),
+  fee: ars(52_000),
+  total: ars(18_552_000),
+  destination: { type: 'alias', value: 'ascensores.norte', accountNumber: '0070999007153818841095', holderName: 'Lucía Fernández', holderCuit: '20714469518', bankName: null },
+  concept: 'Anticipo ascensores',
+  status: 'pending_approval',
+  createdBy: 'u-creator',
+  approvedBy: 'u-gone',
+  rejectReason: null,
+  failureCode: null,
+  events: [{ fromStatus: null, toStatus: 'pending_approval', actorId: 'u-creator', reason: null, createdAt: '2026-11-07T23:50:24Z' }],
+  attachments: [],
+  createdAt: '2026-11-07T23:50:24Z',
+  updatedAt: '2026-11-07T23:50:24Z',
+  settledAt: null,
+});
+
+const payinDto = asContract<Schemas['Payin']>({
+  id: 'pin-1',
+  accountId: 'acc-1',
+  payerId: null,
+  cvuId: 'cvu-1',
+  gross: ars(15_000_000),
+  fee: ars(90_000),
+  net: ars(14_910_000),
+  origin: { name: 'Juan Pérez', cuit: '20284567898', cbu: null },
+  providerTransferId: 'BIND-1',
+  status: 'credited',
+  createdAt: '2026-11-07T12:00:00Z',
+  creditedAt: '2026-11-07T12:00:01Z',
+});
+
+describe('contract → view model', () => {
+  it('maps a payout: money, names joined from the directory, events and nulls', () => {
+    const payout = toPayout(payoutDto, directory);
+    expect(payout).toMatchObject({ currency: 'ARS', amount: 18_500_000, fee: 52_000, total: 18_552_000, accountName: 'Torre Palermo', rejectReason: null });
+    expect(payout.createdBy).toEqual({ userId: 'u-creator', label: 'approver@lenapay.app' });
+    expect(payout.approvedBy).toEqual({ userId: 'u-gone', label: null });
+    expect(payout.events).toEqual([{ status: 'pending_approval', at: '2026-11-07T23:50:24Z' }]);
+    expect(payout.destination.bankName).toBeNull();
+    expect(toPayout({ ...payoutDto, approvedBy: null }, directory).approvedBy).toBeNull();
+  });
+
+  it('maps a payin: gross as the amount, fee and net apart, the origin as the sender', () => {
+    expect(toPayin(payinDto, directory)).toEqual({
+      id: 'pin-1', accountId: 'acc-1', accountName: 'Torre Palermo', payerId: null, cvuId: 'cvu-1', currency: 'ARS',
+      amount: 15_000_000, fee: 90_000, net: 14_910_000, originName: 'Juan Pérez', originCuit: '20284567898', createdAt: '2026-11-07T12:00:00Z',
+    });
+  });
+
+  it('maps a movement with a null fee and a nameless counterparty, and one with both', () => {
+    const transfer = asContract<Schemas['Movement']>({
+      id: 'mv-1', type: 'internal_transfer', status: 'completed', direction: 'in', accountId: 'acc-unknown', amount: ars(25_000_000), fee: null,
+      counterparty: { name: null, cuit: null, cbu: null }, concept: null, refId: 'tr-1', createdAt: '2026-11-07T23:50:25Z',
+    });
+    expect(toMovement(transfer, directory)).toMatchObject({ amount: 25_000_000, currency: 'ARS', fee: null, counterparty: null, counterpartyDoc: null, accountName: '' });
+    const payout = asContract<Schemas['Movement']>({ ...transfer, type: 'payout', direction: 'out', accountId: 'acc-1', fee: ars(34_700), counterparty: { name: 'Martín Díaz', cuit: '20752817953', cbu: '0070' } });
+    expect(toMovement(payout, directory)).toMatchObject({ fee: 34_700, counterparty: 'Martín Díaz', counterpartyDoc: '20752817953', accountName: 'Torre Palermo' });
+  });
+
+  it('maps balances and the account flags', () => {
+    const account = toAccount(asContract<Schemas['Account']>({
+      id: 'acc-1', kind: 'project', name: 'Torre Palermo', archived: true, erpProjectRef: null, createdAt: '2026-11-01T00:00:00Z',
+      balances: [{ currency: 'ARS', posted: ars(567_090_350), held: ars(60_651_000), available: ars(506_439_350) }],
+    }));
+    expect(account).toMatchObject({ archived: true, payersCount: null, balances: [{ currency: 'ARS', posted: 567_090_350, held: 60_651_000, available: 506_439_350 }] });
+  });
+
+  it('maps the quote (available after the hold, negative when it does not fit)', () => {
+    expect(toQuote(asContract<Schemas['PayoutQuote']>({ amount: ars(100), fee: ars(15_010), total: ars(15_110), destination: payoutDto.destination, availableAfter: ars(-5) }))).toEqual({ currency: 'ARS', amount: 100, fee: 15_010, total: 15_110, availableAfter: -5 });
+  });
+
+  it('derives personal mode from a personal membership (the contract has no flag)', () => {
+    const user = { id: 'u', email: 'persona@lenapay.app', emailVerified: true, mfaEnabled: false, createdAt: '2026-11-01T00:00:00Z' };
+    const personal = { orgId: 'o', orgName: 'Lucía', orgKind: 'personal' as const, role: 'admin' as const, kycStatus: 'approved' as const };
+    expect(toMe({ user, memberships: [personal] })).toMatchObject({ id: 'u', fullName: null, personalModeEnabled: true });
+    expect(toMe({ user, memberships: [{ ...personal, orgKind: 'company' }] }).personalModeEnabled).toBe(false);
+    expect(toMe({ user, memberships: [] }).personalModeEnabled).toBe(false);
+  });
+
+  it('maps reconciliation runs and items, with an absent side as null', () => {
+    const run = toReconciliationRun({
+      id: 'r', currency: 'ARS', day: '2026-11-07', status: 'completed', matchedCount: 13, missingInLedgerCount: 1, missingAtPspCount: 2,
+      pspTotal: ars(1_000), ledgerTotal: ars(900), difference: ars(100), createdAt: 'c', finishedAt: null,
+    });
+    expect(run).toMatchObject({ matched: 13, missingInLedger: 1, missingAtPsp: 2, pspTotal: 1_000, ledgerTotal: 900, difference: 100, finishedAt: null });
+    expect(toReconciliationItem({ id: 'i', status: 'missing_in_ledger', providerTransferId: 'B', direction: 'in', pspAmount: ars(85), ledgerAmount: null, createdAt: 'c' })).toMatchObject({ pspAmount: 85, ledgerAmount: null });
+  });
+
+  it('reads every ERP import state, and "not linked" from the 404', () => {
+    const link = { id: 'l', erpOrgId: 'erp-1', displayName: 'DDS', linkedBy: 'u', linkedAt: 'a', importedAt: null };
+    expect(toErpLink(null).status).toBe('not_linked');
+    expect(toErpLink({ ...link, importStatus: 'pending' }).status).toBe('importing');
+    expect(toErpLink({ ...link, importStatus: 'running' }).status).toBe('importing');
+    expect(toErpLink({ ...link, importStatus: 'completed' }).status).toBe('linked');
+    expect(toErpLink({ ...link, importStatus: 'failed' })).toEqual({ status: 'failed', displayName: 'DDS', linkedAt: 'a', importedAt: null });
+  });
+});
+
+// Why: the SSE frames are unnamed `message` events whose JSON is the RealtimeEvent envelope;
+// a parser that expects the old `{type, payin}` shape drops every live payin and approval.
+describe('parseRealtimeFrame', () => {
+  const frame = (type: string, data: Record<string, unknown>) => JSON.stringify({ type, orgId: 'o', occurredAt: '2026-11-07T12:00:00Z', data, ...data });
+
+  it('parses payin.credited into a payin with its account name', () => {
+    expect(parseRealtimeFrame(frame('payin.credited', { payinId: 'pin-1', accountId: 'acc-1', payin: payinDto }), directory)).toMatchObject({ type: 'payin.credited', payin: { id: 'pin-1', accountName: 'Torre Palermo', net: 14_910_000 } });
+  });
+
+  it('parses payout.updated and approval.requested into the payout', () => {
+    expect(parseRealtimeFrame(frame('payout.updated', { payoutId: 'po-1', status: 'settled', payout: { ...payoutDto, status: 'settled' } }), directory)).toMatchObject({ type: 'payout.updated', payout: { id: 'po-1', status: 'settled' } });
+    expect(parseRealtimeFrame(frame('approval.requested', { payoutId: 'po-1', payout: payoutDto }), directory)).toMatchObject({ type: 'approval.requested', payout: { id: 'po-1' } });
+  });
+
+  it('parses balance.changed with or without an account', () => {
+    expect(parseRealtimeFrame(frame('balance.changed', { accountId: 'acc-1' }), directory)).toEqual({ type: 'balance.changed', accountId: 'acc-1' });
+    expect(parseRealtimeFrame(JSON.stringify({ type: 'balance.changed', orgId: 'o', occurredAt: 'x', data: {} }), directory)).toEqual({ type: 'balance.changed', accountId: null });
+  });
+
+  it('reads the payload from the top level when `data` is missing', () => {
+    expect(parseRealtimeFrame(JSON.stringify({ type: 'payin.credited', payin: payinDto }), directory)).toMatchObject({ type: 'payin.credited' });
+  });
+
+  it('ignores unknown types, missing payloads, malformed JSON and heartbeats', () => {
+    expect(parseRealtimeFrame(frame('payer.created', {}), directory)).toBeNull();
+    expect(parseRealtimeFrame(frame('payout.updated', { payoutId: 'po-1' }), directory)).toBeNull();
+    expect(parseRealtimeFrame(frame('payin.credited', { payin: 'nope' }), directory)).toBeNull();
+    expect(parseRealtimeFrame('{not json', directory)).toBeNull();
+    expect(parseRealtimeFrame('[1,2]', directory)).toBeNull();
+    expect(parseRealtimeFrame('', directory)).toBeNull();
+    expect(parseRealtimeFrame(null, directory)).toBeNull();
+  });
+});

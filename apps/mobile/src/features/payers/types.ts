@@ -7,7 +7,7 @@ export const payerSchema = z
   .object({
     accountId: z.string().min(1, { message: 'validation.account' }),
     name: z.string().trim().min(3, { message: 'validation.payerName' }),
-    docType: z.enum(['CUIT', 'DNI']),
+    docType: z.enum(['cuit', 'dni']),
     docNumber: z.string(),
     email: z.union([z.literal(''), z.email({ message: 'validation.email' })]),
     currencies: z.array(z.enum(['ARS', 'USD'])).min(1, { message: 'validation.currencies' }),

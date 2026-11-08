@@ -40,11 +40,13 @@ export function useResolveDestination(orgId: string | undefined, to: string | nu
   });
 }
 
+const NO_QUOTE: PayoutQuoteRequest = { accountId: '', currency: 'ARS', amount: 0, to: '' };
+
 /** Fee and total before confirming (R-OUT-2). */
 export function usePayoutQuote(orgId: string | undefined, request: PayoutQuoteRequest | null) {
   return useQuery({
-    queryKey: QUOTE_KEY(orgId ?? '', request ?? { accountId: '', currency: 'ARS', amount: 0 }),
-    queryFn: () => api.payouts.quote(orgId ?? '', request ?? { accountId: '', currency: 'ARS', amount: 0 }),
+    queryKey: QUOTE_KEY(orgId ?? '', request ?? NO_QUOTE),
+    queryFn: () => api.payouts.quote(orgId ?? '', request ?? NO_QUOTE),
     enabled: Boolean(orgId && request),
     staleTime: 0,
   });

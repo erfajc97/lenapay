@@ -2,8 +2,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import type { Currency, Payout } from '@/shared/api/types';
+import type { Currency, LocalUpload, Payout } from '@/shared/api/types';
 import { classifyDestination } from '@/shared/helpers/cbu';
+import { toUpload } from '@/shared/helpers/files';
 import { moneyActionBlocker } from '@/shared/helpers/permissions';
 import { useAccounts } from '@/shared/queries/accounts';
 import { useActiveOrg } from '@/shared/queries/orgs';
@@ -25,16 +26,16 @@ export function usePayout() {
   const [currency, setCurrency] = useState<Currency>('ARS');
   const [amountText, setAmountText] = useState('');
   const [concept, setConcept] = useState('');
-  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<LocalUpload | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [result, setResult] = useState<Payout | null>(null);
 
   const destination = useResolveDestination(org?.id, submittedTo);
-  const openAccounts = (accounts.data ?? []).filter((account) => !account.archivedAt);
+  const openAccounts = (accounts.data ?? []).filter((account) => !account.archived);
   const selectedAccountId = accountId ?? openAccounts.find((account) => account.kind !== 'project')?.id ?? openAccounts[0]?.id ?? null;
   const errors = detailsErrors({ amountText, accountId: selectedAccountId, concept });
   const amount = readAmount(amountText).minor;
-  const quoteRequest = step === 'review' && selectedAccountId && amount ? { accountId: selectedAccountId, currency, amount } : null;
+  const quoteRequest = step === 'review' && selectedAccountId && amount && submittedTo ? { accountId: selectedAccountId, currency, amount, to: submittedTo } : null;
   const quote = usePayoutQuote(org?.id, quoteRequest);
   const create = useCreatePayout(org?.id, (payout) => {
     setResult(payout);
@@ -64,12 +65,14 @@ export function usePayout() {
     setAmountText,
     concept,
     setConcept,
-    attachmentName,
+    attachmentName: attachment?.fileName ?? null,
+    // A copy in the app's cache: the upload runs after the step-up, when the picker's URI may be gone.
     pickAttachment: async () => {
-      const picked = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: false });
-      if (!picked.canceled) setAttachmentName(picked.assets[0]?.name ?? null);
+      const picked = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
+      const asset = picked.canceled ? undefined : picked.assets[0];
+      if (asset) setAttachment(toUpload(asset));
     },
-    removeAttachment: () => setAttachmentName(null),
+    removeAttachment: () => setAttachment(null),
     errors: showErrors ? errors : null,
     toReview: () => {
       setShowErrors(true);
@@ -79,7 +82,7 @@ export function usePayout() {
     blockedByBalance: quote.data ? reviewBlocker(quote.data) : null,
     confirm: () => {
       if (!selectedAccountId || !amount || !submittedTo) return;
-      create.mutate({ accountId: selectedAccountId, currency, amount, to: submittedTo, concept: concept.trim(), attachmentName: attachmentName ?? undefined });
+      create.mutate({ body: { accountId: selectedAccountId, currency, amount, to: submittedTo, concept: concept.trim() }, attachment });
     },
     confirming: create.isPending,
     result,

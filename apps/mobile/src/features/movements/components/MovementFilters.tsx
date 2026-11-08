@@ -5,7 +5,7 @@ import type { MovementFilterDraft } from '@/shared/stores/useMovementFiltersStor
 import { AppText } from '@/shared/ui/AppText';
 import { Icon } from '@/shared/ui/Icon';
 
-import { formatDayInput } from '../helpers/filters';
+import { formatDayInput } from '@/shared/helpers/days';
 import type { FilterKey } from '../hooks/useMovementsScreen';
 import { FilterPill } from './FilterPill';
 

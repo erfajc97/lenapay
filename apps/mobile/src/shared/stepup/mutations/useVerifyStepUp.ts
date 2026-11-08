@@ -2,12 +2,10 @@ import { useMutation } from '@tanstack/react-query';
 
 import { api } from '@/shared/api';
 import { warningHaptic } from '@/shared/feedback/haptics';
+import { readDeviceKey } from '@/shared/session/session';
 import { useStepUpStore } from '@/shared/stores/useStepUpStore';
 
-interface StepUpInput {
-  method: 'device_key' | 'password';
-  password?: string;
-}
+import { type StepUpInput, verifyStepUp } from '../stepUpFlow';
 
 /**
  * Challenge + verify (R-ID-3). The sheet closes only on success (M2); the error is shown
@@ -16,10 +14,7 @@ interface StepUpInput {
 export function useVerifyStepUp() {
   const complete = useStepUpStore((state) => state.complete);
   return useMutation({
-    mutationFn: async (input: StepUpInput) => {
-      const challenge = await api.auth.stepUpChallenge();
-      return api.auth.stepUpVerify({ challengeId: challenge.challengeId, method: input.method, password: input.password });
-    },
+    mutationFn: (input: StepUpInput) => verifyStepUp(input, { auth: api.auth, readDeviceKey }),
     onSuccess: (token) => complete(token.stepUpToken),
     onError: () => warningHaptic(),
   });

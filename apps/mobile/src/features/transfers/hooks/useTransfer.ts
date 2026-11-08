@@ -12,7 +12,7 @@ import { useCreateTransfer } from '../mutations/useCreateTransfer';
 export function useTransfer() {
   const { org } = useActiveOrg();
   const accounts = useAccounts(org?.id);
-  const open = (accounts.data ?? []).filter((account) => !account.archivedAt);
+  const open = (accounts.data ?? []).filter((account) => !account.archived);
   const [fromId, setFromId] = useState<string | null>(null);
   const [toId, setToId] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>('ARS');

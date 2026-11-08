@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
+import { useIsMockApi } from '@/shared/api';
 import { AppText } from '@/shared/ui/AppText';
 import { AccountPicker } from '@/shared/ui/AccountPicker';
 import { Button } from '@/shared/ui/Button';
@@ -22,6 +22,7 @@ import { usePayout } from './hooks/usePayout';
 export function Payout() {
   const { t } = useTranslation();
   const flow = usePayout();
+  const isMock = useIsMockApi();
 
   if (flow.blocker) {
     return (
@@ -76,7 +77,7 @@ export function Payout() {
           onSubmitEditing={flow.canResolve ? flow.resolve : undefined}
           autoFocus
         />
-        {isMockApi ? <Notice tone="info" icon="flask-outline" title={t('demo.title')} body={t('demo.destinations')} /> : null}
+        {isMock ? <Notice tone="info" icon="flask-outline" title={t('demo.title')} body={t('demo.destinations')} /> : null}
         {flow.destination.isLoading ? <SkeletonList rows={1} /> : null}
         {flow.destination.isError ? <ErrorState error={flow.destination.error} onRetry={() => void flow.destination.refetch()} /> : null}
         {resolved ? <DestinationCard destination={resolved} /> : null}
@@ -164,7 +165,7 @@ export function Payout() {
               <AppText variant="caption" tone="muted">
                 {t('payout.availableAfter')}
               </AppText>
-              <Money minor={quote.available - quote.total} currency={quote.currency} variant="caption" tone={flow.blockedByBalance ? 'danger' : 'muted'} />
+              <Money minor={quote.availableAfter} currency={quote.currency} variant="caption" tone={flow.blockedByBalance ? 'danger' : 'muted'} />
             </View>
           </>
         ) : (
@@ -175,7 +176,7 @@ export function Payout() {
           </View>
         )}
       </Card>
-      {flow.blockedByBalance ? <Notice tone="danger" icon="alert-circle-outline" title={t('errors.payout_insufficient_funds')} /> : null}
+      {flow.blockedByBalance ? <Notice tone="danger" icon="alert-circle-outline" title={t('errors.ledger_insufficient_funds')} /> : null}
       <Card className="gap-1">
         <Field label={t('fields.concept')} value={flow.concept.trim()} />
         {flow.attachmentName ? <Field label={t('fields.attachment')} value={flow.attachmentName} /> : null}

@@ -70,7 +70,7 @@ export function CvuCard({
           <Divider />
           <View className="flex-row">
             <IconAction icon="copy-outline" label={t('payers.copyCvu')} onPress={() => onCopy(cvu.cvu)} />
-            <IconAction icon="at-outline" label={t('payers.copyAlias')} onPress={() => onCopy(cvu.alias)} />
+            {cvu.alias ? <IconAction icon="at-outline" label={t('payers.copyAlias')} onPress={() => onCopy(cvu.alias ?? '')} /> : null}
             <IconAction icon="share-outline" label={t('common.share')} onPress={() => onShare(cvu)} />
             <IconAction icon="qr-code-outline" label={t('payers.qr')} onPress={() => onQr(cvu)} />
           </View>

@@ -2,19 +2,17 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
-import { formatCuit } from '@/shared/helpers/cuit';
+import { useIsMockApi } from '@/shared/api';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Icon } from '@/shared/ui/Icon';
-import { Field, ListRow, Notice } from '@/shared/ui/Rows';
+import { Field, Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Sheet } from '@/shared/ui/Sheet';
-import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
+import { EmptyState, ErrorState, Skeleton, SkeletonList } from '@/shared/ui/States';
 import { TextField } from '@/shared/ui/TextField';
 
-import { ProgressBar } from './components/ProgressBar';
 import { useErpLinkScreen } from './hooks/useErpLinkScreen';
 
 /** Link with the Lebane ERP by CUIT, confirm with ERP credentials, import (R-ERP-1..3). */
@@ -23,6 +21,7 @@ export function ErpLink() {
   const screen = useErpLinkScreen();
   const link = screen.link.data;
   const candidate = screen.candidate.data;
+  const isMock = useIsMockApi();
 
   return (
     <Screen title={t('erp.title')} back>
@@ -51,22 +50,8 @@ export function ErpLink() {
               <AppText variant="label" tone="brand">
                 {t('erp.found')}
               </AppText>
-              <AppText variant="subheading">{candidate.erpOrgName ?? ''}</AppText>
-              {candidate.cuit ? <Field label={t('fields.cuit')} value={formatCuit(candidate.cuit)} mono /> : null}
-              <View className="flex-row gap-3">
-                <Card className="flex-1 items-center gap-1">
-                  <AppText variant="heading">{String(candidate.projectsCount)}</AppText>
-                  <AppText variant="caption" tone="muted">
-                    {t('erp.projects')}
-                  </AppText>
-                </Card>
-                <Card className="flex-1 items-center gap-1">
-                  <AppText variant="heading">{String(candidate.buyersCount)}</AppText>
-                  <AppText variant="caption" tone="muted">
-                    {t('erp.buyers')}
-                  </AppText>
-                </Card>
-              </View>
+              <AppText variant="subheading">{candidate.displayName ?? screen.org?.legalName ?? ''}</AppText>
+              {candidate.erpOrgId ? <Field label={t('erp.erpId')} value={candidate.erpOrgId} mono /> : null}
               <Button label={t('erp.link')} icon="link-outline" onPress={screen.openSheet} />
             </Card>
           ) : null}
@@ -74,21 +59,18 @@ export function ErpLink() {
       ) : null}
 
       {screen.stage === 'importing' && link ? (
-        <Card className="gap-4">
-          <AppText variant="subheading">{t('erp.importing', { percent: screen.percent })}</AppText>
-          <ProgressBar label={t('erp.projects')} done={link.projects.done} total={link.projects.total} />
-          <ProgressBar label={t('erp.buyers')} done={link.payers.done} total={link.payers.total} />
+        <Card className="gap-3">
+          <AppText variant="subheading">{t('erp.importing')}</AppText>
+          <AppText tone="secondary">{t('erp.importingBody', { name: link.displayName ?? '' })}</AppText>
+          <Skeleton className="h-2 w-full" />
         </Card>
       ) : null}
 
+      {screen.stage === 'failed' ? <Notice tone="danger" icon="close-circle-outline" title={t('erp.failedTitle')} body={t('erp.failedBody')} /> : null}
+
       {screen.stage === 'linked' && link ? (
         <>
-          <Notice tone="success" icon="checkmark-circle-outline" title={t('erp.linkedTitle')} body={t('erp.linkedBody', { count: link.payers.total })} />
-          <Card className="py-1">
-            {link.importedProjects.map((project) => (
-              <ListRow key={project} title={project} subtitle={t('erp.importedProject')} />
-            ))}
-          </Card>
+          <Notice tone="success" icon="checkmark-circle-outline" title={t('erp.linkedTitle')} body={t('erp.linkedBody', { name: link.displayName ?? '' })} />
           <Button
             label={t('erp.seeAccounts')}
             variant="secondary"
@@ -102,7 +84,7 @@ export function ErpLink() {
 
       <Sheet visible={screen.sheetOpen} title={t('erp.credentialsTitle')} onClose={screen.closeSheet}>
         <AppText tone="secondary">{t('erp.credentialsBody')}</AppText>
-        {isMockApi ? <Notice tone="info" icon="flask-outline" title={t('demo.title')} body={t('demo.erp')} /> : null}
+        {isMock ? <Notice tone="info" icon="flask-outline" title={t('demo.title')} body={t('demo.erp')} /> : null}
         <TextField label={t('fields.lebaneUser')} value={screen.username} onChangeText={screen.setUsername} keyboardType="email-address" autoCapitalize="none" autoComplete="username" textContentType="username" returnKeyType="next" />
         <TextField label={t('fields.password')} value={screen.password} onChangeText={screen.setPassword} secureTextEntry autoComplete="current-password" textContentType="password" returnKeyType="done" onSubmitEditing={screen.submit} />
         <Button label={t('erp.confirmLink')} onPress={screen.submit} loading={screen.linking} disabled={!screen.canSubmit} />

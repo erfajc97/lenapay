@@ -36,8 +36,8 @@ describe('detailsErrors', () => {
 
 describe('reviewBlocker', () => {
   it('lets the last affordable total through and stops one minor unit more', () => {
-    expect(reviewBlocker({ total: 1_000_00, available: 1_000_00 })).toBeNull();
-    expect(reviewBlocker({ total: 1_000_01, available: 1_000_00 })).toBe('insufficient');
+    expect(reviewBlocker({ availableAfter: 0 })).toBeNull();
+    expect(reviewBlocker({ availableAfter: -1 })).toBe('insufficient');
   });
 });
 

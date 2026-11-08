@@ -1,23 +1,27 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as Crypto from 'expo-crypto';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { useIsMockApi } from '@/shared/api';
+import type { KycDocumentKind } from '@/shared/api/types';
+import { notifyInfo } from '@/shared/feedback/mutationFeedback';
 import { digitsOnly } from '@/shared/helpers/cuit';
 import { useActiveOrg, useKyc } from '@/shared/queries/orgs';
 
-import { canSubmitKyc, kycChecklist } from '../helpers/kycChecklist';
+import { canSubmitKyc, companyFormValues, kycChecklist, personFormValues, toAddress, toPersonData } from '../helpers/kycChecklist';
 import { useSaveKyc, useSubmitKyc, useUploadKycDocument } from '../mutations/useKycMutations';
 import { type CompanyValues, companySchema, type PersonValues, personSchema, type RepresentativeValues, representativeSchema } from '../types';
 
-/** Shared KYC plumbing: the case, uploads, the mock camera and submit. */
+/** Shared KYC plumbing: the case, uploads, the selfie camera (simulated in mock) and submit. */
 function useKycCase() {
   const { org } = useActiveOrg();
   const kyc = useKyc(org?.id);
   const upload = useUploadKycDocument(org?.id);
   const submit = useSubmitKyc(org?.id);
   const save = useSaveKyc(org?.id);
-  const [camera, setCamera] = useState<{ representativeId?: string } | null>(null);
+  const isMock = useIsMockApi();
+  // `null` = closed; `{ representativeDni }` = the simulated camera is open for that person.
+  const [camera, setCamera] = useState<{ representativeDni?: string } | null>(null);
   return {
     org,
     kyc,
@@ -26,13 +30,14 @@ function useKycCase() {
     canSubmit: kyc.data ? canSubmitKyc(kyc.data) : false,
     submit: () => submit.mutate(),
     submitting: submit.isPending,
-    upload: (type: 'bylaws' | 'afip_constancy' | 'dni_front', representativeId?: string) => upload.mutate({ type, representativeId }),
+    upload: (kind: KycDocumentKind, representativeDni?: string) => upload.mutate({ kind, representativeDni }),
     uploading: upload.isPending,
     camera,
-    openCamera: (representativeId?: string) => setCamera({ representativeId }),
+    // Live mode picks a real photo; the mock shows the simulated camera instead.
+    takeSelfie: (representativeDni?: string) => (isMock ? setCamera({ representativeDni }) : upload.mutate({ kind: 'selfie', representativeDni })),
     closeCamera: () => setCamera(null),
     capture: () => {
-      upload.mutate({ type: 'selfie', representativeId: camera?.representativeId }, { onSuccess: () => setCamera(null) });
+      upload.mutate({ kind: 'selfie', representativeDni: camera?.representativeDni }, { onSuccess: () => setCamera(null) });
     },
   };
 }
@@ -42,26 +47,38 @@ export function useCompanyKyc() {
   const data = base.kyc.data;
   const form = useForm<CompanyValues>({
     resolver: zodResolver(companySchema),
-    values: { cuit: data?.cuit ?? '', legalName: data?.legalName ?? base.org?.legalName ?? '', legalAddress: data?.legalAddress ?? '' },
+    values: companyFormValues(data, base.org?.legalName ?? ''),
     resetOptions: { keepDirtyValues: true },
   });
-  const repForm = useForm<RepresentativeValues>({ resolver: zodResolver(representativeSchema), defaultValues: { fullName: '', dni: '' } });
+  const repForm = useForm<RepresentativeValues>({ resolver: zodResolver(representativeSchema), defaultValues: { fullName: '', dni: '', position: '' } });
   const [repSheet, setRepSheet] = useState(false);
+  const representatives = data?.company?.representatives ?? [];
 
   return {
     ...base,
     form,
-    saveCompany: () => void form.handleSubmit((values) => base.save.mutate({ kind: 'company', ...values, cuit: digitsOnly(values.cuit) }))(),
+    representatives,
+    saveCompany: () =>
+      void form.handleSubmit((values) =>
+        base.save.mutate({ company: { cuit: digitsOnly(values.cuit), legalName: values.legalName.trim(), legalAddress: toAddress(values), representatives } }),
+      )(),
     saving: base.save.isPending,
     repForm,
     repSheet,
     openRepSheet: () => setRepSheet(true),
     closeRepSheet: () => setRepSheet(false),
+    // PUT replaces the whole company: a representative is added to the saved data, so the
+    // company data must be saved first (the submit gate of this form, M2).
     addRepresentative: () =>
       void repForm.handleSubmit((values) => {
-        const representatives = [...(data?.representatives ?? []), { id: Crypto.randomUUID(), fullName: values.fullName.trim(), dni: digitsOnly(values.dni) }];
+        const company = data?.company;
+        if (!company) {
+          notifyInfo('kyc.saveCompanyFirst');
+          return;
+        }
+        const representative = { fullName: values.fullName.trim(), dni: digitsOnly(values.dni), position: values.position.trim() };
         base.save.mutate(
-          { kind: 'company', representatives },
+          { company: { ...company, representatives: [...company.representatives.filter((rep) => rep.dni !== representative.dni), representative] } },
           {
             onSuccess: () => {
               repForm.reset();
@@ -75,16 +92,15 @@ export function useCompanyKyc() {
 
 export function usePersonKyc() {
   const base = useKycCase();
-  const data = base.kyc.data;
   const form = useForm<PersonValues>({
     resolver: zodResolver(personSchema),
-    values: { fullName: data?.fullName ?? base.org?.legalName ?? '', dni: data?.dni ?? '' },
+    values: personFormValues(base.kyc.data, base.org?.legalName ?? ''),
     resetOptions: { keepDirtyValues: true },
   });
   return {
     ...base,
     form,
-    savePerson: () => void form.handleSubmit((values) => base.save.mutate({ kind: 'person', fullName: values.fullName.trim(), dni: digitsOnly(values.dni) }))(),
+    savePerson: () => void form.handleSubmit((values) => base.save.mutate({ person: toPersonData(values) }))(),
     saving: base.save.isPending,
   };
 }

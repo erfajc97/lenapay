@@ -37,7 +37,7 @@ export function KycStatus() {
         <>
           <Card className="gap-4">
             {screen.timeline.map((step, index) => {
-              const at = data.timeline.find((entry) => entry.status === step.status)?.at;
+              const at = step.at;
               const tone = step.status === 'rejected' ? 'danger' : step.state === 'upcoming' ? 'text-muted' : step.state === 'current' ? 'warning' : 'success';
               return (
                 <View key={step.status} className="flex-row gap-3">
@@ -61,7 +61,7 @@ export function KycStatus() {
           </Card>
           {status === 'submitted' ? <Notice tone="info" icon="hourglass-outline" title={t('kyc.reviewing')} body={t('kyc.reviewingBody')} /> : null}
           {status === 'approved' ? <Notice tone="success" icon="checkmark-circle-outline" title={t('kyc.approvedTitle')} body={t('kyc.approvedBody')} /> : null}
-          {status === 'rejected' ? <Notice tone="danger" icon="close-circle-outline" title={t('kyc.rejectedTitle')} body={data.rejectionReason ?? ''} /> : null}
+          {status === 'rejected' ? <Notice tone="danger" icon="close-circle-outline" title={t('kyc.rejectedTitle')} body={data.decisionReason ?? ''} /> : null}
         </>
       ) : null}
     </Screen>

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { z } from 'zod';
 
-import type { Role } from '@/shared/api/types';
-import { canManageTeam } from '@/shared/helpers/permissions';
+import type { Member, Role } from '@/shared/api/types';
+import { canEditMember, canManageTeam } from '@/shared/helpers/permissions';
 import { useActiveOrg, useMembers } from '@/shared/queries/orgs';
+import { useMe } from '@/shared/queries/session';
 
 import { useInvite } from '../mutations/useInvite';
+import { useRemoveMember, useUpdateMember } from '../mutations/useMemberMutations';
 
 const emailSchema = z.email();
 
@@ -22,6 +24,15 @@ export function useTeam() {
     setTouched(false);
   });
   const emailValid = emailSchema.safeParse(email.trim()).success;
+  const me = useMe();
+  const [editing, setEditing] = useState<Member | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const closeMember = () => {
+    setEditing(null);
+    setConfirmRemove(false);
+  };
+  const updateMember = useUpdateMember(org?.id, closeMember);
+  const removeMember = useRemoveMember(org?.id, closeMember);
 
   return {
     org,
@@ -43,5 +54,20 @@ export function useTeam() {
       if (emailValid) invite.mutate({ email: email.trim().toLowerCase(), role });
     },
     inviting: invite.isPending,
+    canEdit: (member: Member) => (org ? canEditMember({ role: org.role, myUserId: me.data?.id ?? null, member }) : false),
+    editing,
+    openMember: (member: Member) => setEditing(member),
+    closeMember,
+    changeRole: (role: Role) => {
+      if (editing && role !== editing.role) updateMember.mutate({ member: editing, role });
+    },
+    confirmRemove,
+    // Removing someone is not undoable from the app: the first tap asks, the second removes.
+    remove: () => {
+      if (!editing) return;
+      if (confirmRemove) removeMember.mutate(editing);
+      else setConfirmRemove(true);
+    },
+    savingMember: updateMember.isPending || removeMember.isPending,
   };
 }

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
-import type { Currency, MovementStatus, MovementType } from '@/shared/api/types';
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '@/shared/api/types';
 import type { DateRange, MovementFilterDraft } from '@/shared/stores/useMovementFiltersStore';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
@@ -14,9 +14,6 @@ import type { FilterKey, useMovementsScreen } from '../hooks/useMovementsScreen'
 
 type Screen = ReturnType<typeof useMovementsScreen>;
 
-const TYPES: MovementType[] = ['payin', 'payout', 'transfer'];
-const STATUSES: MovementStatus[] = ['pending', 'settled', 'failed', 'cancelled'];
-const CURRENCIES: Currency[] = ['ARS', 'USD'];
 const QUICK_RANGES: Exclude<DateRange, 'all' | 'custom'>[] = ['today', '7d', '30d', 'month'];
 
 function Option({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -37,7 +34,7 @@ function Option({ label, selected, onPress }: { label: string; selected: boolean
 }
 
 /** "Todos" first, then each value; the current one is checked. */
-function OptionList<T extends string>({ all, options, value, label, onPick }: { all: string; options: T[]; value: T | null; label: (option: T) => string; onPick: (value: T | null) => void }) {
+function OptionList<T extends string>({ all, options, value, label, onPick }: { all: string; options: readonly T[]; value: T | null; label: (option: T) => string; onPick: (value: T | null) => void }) {
   return (
     <View accessibilityRole="radiogroup">
       <Option label={all} selected={value === null} onPress={() => onPick(null)} />
@@ -99,10 +96,10 @@ export function FilterSheet({ screen }: { screen: Screen }) {
   return (
     <Sheet visible={openFilter !== null} title={titles[shownFilter]} onClose={screen.closeFilter}>
       {shownFilter === 'type' ? (
-        <OptionList all={t('movements.filter.all')} options={TYPES} value={draft.type} label={(type) => t(`movements.type.${type}`)} onPick={(type) => screen.pick('type', type)} />
+        <OptionList all={t('movements.filter.all')} options={MOVEMENT_TYPES} value={draft.type} label={(type) => t(`movements.type.${type}`)} onPick={(type) => screen.pick('type', type)} />
       ) : null}
       {shownFilter === 'status' ? (
-        <OptionList all={t('movements.filter.all')} options={STATUSES} value={draft.status} label={(status) => t(`status.movement.${status}`)} onPick={(status) => screen.pick('status', status)} />
+        <OptionList all={t('movements.filter.all')} options={MOVEMENT_STATUSES} value={draft.status} label={(status) => t(`status.movement.${status}`)} onPick={(status) => screen.pick('status', status)} />
       ) : null}
       {shownFilter === 'currency' ? (
         <OptionList all={t('movements.filter.all')} options={CURRENCIES} value={draft.currency} label={(currency) => t(`currency.${currency}`)} onPick={(currency) => screen.pick('currency', currency)} />

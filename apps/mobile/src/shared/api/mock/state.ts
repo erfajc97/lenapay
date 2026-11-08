@@ -2,22 +2,22 @@ import type {
   AccountKind,
   Currency,
   ErpCandidate,
-  InternalTransfer,
   Invite,
   KycCase,
   Org,
   Payer,
   Payin,
   Payout,
+  ReconciliationItem,
   ReconciliationRun,
   Role,
 } from '../types';
 
-/** Internal records of the in-memory backend. Never leave `mock/`: the API returns DTOs. */
+/** Internal records of the in-memory backend. Never leave `mock/`: the API returns view models. */
 interface MockUser {
   id: string;
   email: string;
-  fullName: string;
+  fullName: string | null;
   mfaEnabled: boolean;
   personalModeEnabled: boolean;
 }
@@ -35,7 +35,8 @@ export interface MockAccount {
   orgId: string;
   kind: AccountKind;
   name: string;
-  archivedAt: string | null;
+  archived: boolean;
+  createdAt: string;
   ledger: Record<Currency, { posted: number; held: number }>;
 }
 
@@ -51,24 +52,43 @@ export interface MockPayout extends Payout {
   orgId: string;
 }
 
-export interface MockTransfer extends InternalTransfer {
+export interface MockTransfer {
+  id: string;
   orgId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  currency: Currency;
+  amount: number;
   concept: string;
+  createdAt: string;
+}
+
+export interface MockErpPayer {
+  name: string;
+  docType: Payer['docType'];
+  docNumber: string;
+  project: string;
 }
 
 interface MockErp {
   candidate: ErpCandidate;
   projects: string[];
-  payers: { name: string; docType: 'CUIT' | 'DNI'; docNumber: string; project: string }[];
+  payers: MockErpPayer[];
   linkStartedAt: number | null;
   linkedAt: string | null;
+}
+
+export interface MockReconRun {
+  run: ReconciliationRun;
+  items: ReconciliationItem[];
 }
 
 export interface MockState {
   seq: number;
   currentUserId: string | null;
-  pendingSignup: { email: string; fullName: string } | null;
+  pendingSignup: { email: string } | null;
   users: MockUser[];
+  devices: { id: string; userId: string; publicKey: string }[];
   orgs: MockOrg[];
   memberships: MockMembership[];
   invites: (Invite & { orgId: string })[];
@@ -79,7 +99,7 @@ export interface MockState {
   payins: MockPayin[];
   payouts: MockPayout[];
   transfers: MockTransfer[];
-  recon: Record<string, ReconciliationRun[]>;
+  recon: Record<string, MockReconRun[]>;
   erp: Record<string, MockErp>;
   idempotency: Record<string, { hash: string; response: unknown }>;
 }

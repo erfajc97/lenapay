@@ -5,13 +5,14 @@ import type { Currency, Movement } from '@/shared/api/types';
 import { notifyInfo } from '@/shared/feedback/mutationFeedback';
 import type { MoneyBlocker } from '@/shared/helpers/permissions';
 import { useBalances } from '@/shared/queries/accounts';
+import { useErpLink } from '@/shared/queries/erp';
 import { useMovements } from '@/shared/queries/movements';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { useApprovals } from '@/shared/queries/payouts';
 import { useMe } from '@/shared/queries/session';
 import { useMovementFiltersStore } from '@/shared/stores/useMovementFiltersStore';
 
-import { balanceFor, kycNotice, quickActions } from '../helpers/homeRules';
+import { balanceFor, canLinkErp, kycNotice, quickActions, showErpInvite } from '../helpers/homeRules';
 
 const RECENT_COUNT = 5;
 
@@ -21,13 +22,15 @@ export function useHome() {
   const balances = useBalances(org?.id);
   const approvals = useApprovals(org?.kycStatus === 'approved' ? org.id : undefined);
   const movements = useMovements(org?.kycStatus === 'approved' ? org.id : undefined, {});
+  const erpLink = useErpLink(org && canLinkErp(org) ? org.id : undefined);
   const [currency, setCurrency] = useState<Currency>('ARS');
   const showOnly = useMovementFiltersStore((state) => state.showOnly);
 
   return {
     orgsQuery,
     org,
-    firstName: me.data?.fullName.split(' ')[0] ?? null,
+    firstName: me.data?.fullName?.split(' ')[0] ?? null,
+    erpInvite: org ? showErpInvite(org, erpLink.data?.status) : false,
     noOrgs: orgsQuery.isSuccess && org === null,
     currency,
     setCurrency,

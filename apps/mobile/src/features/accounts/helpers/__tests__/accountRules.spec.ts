@@ -11,17 +11,17 @@ const zero = [
 
 describe('archiveBlocker', () => {
   it('allows an empty project account', () => {
-    expect(archiveBlocker({ kind: 'project', balances: zero, archivedAt: null })).toBeNull();
+    expect(archiveBlocker({ kind: 'project', balances: zero, archived: false })).toBeNull();
   });
 
   it('blocks a single minor unit posted or held in any currency', () => {
-    expect(archiveBlocker({ kind: 'project', balances: [zero[0]!, { ...zero[1]!, posted: 1, available: 1 }], archivedAt: null })).toBe('not_empty');
-    expect(archiveBlocker({ kind: 'project', balances: [{ ...zero[0]!, held: 1, available: -1 }, zero[1]!], archivedAt: null })).toBe('not_empty');
+    expect(archiveBlocker({ kind: 'project', balances: [zero[0]!, { ...zero[1]!, posted: 1, available: 1 }], archived: false })).toBe('not_empty');
+    expect(archiveBlocker({ kind: 'project', balances: [{ ...zero[0]!, held: 1, available: -1 }, zero[1]!], archived: false })).toBe('not_empty');
   });
 
   it('never archives the main account or an archived one', () => {
-    expect(archiveBlocker({ kind: 'main', balances: zero, archivedAt: null })).toBe('main');
-    expect(archiveBlocker({ kind: 'project', balances: zero, archivedAt: '2026-01-01' })).toBe('archived');
+    expect(archiveBlocker({ kind: 'main', balances: zero, archived: false })).toBe('main');
+    expect(archiveBlocker({ kind: 'project', balances: zero, archived: true })).toBe('archived');
   });
 });
 
@@ -33,10 +33,10 @@ describe('account helpers', () => {
 
   it('sorts main, projects by name, archived last', () => {
     const sorted = sortAccounts([
-      { kind: 'project', name: 'Torre', archivedAt: null },
-      { kind: 'project', name: 'Caballito', archivedAt: '2026-01-01' },
-      { kind: 'main', name: 'Principal', archivedAt: null },
-      { kind: 'project', name: 'Barrio', archivedAt: null },
+      { kind: 'project', name: 'Torre', archived: false },
+      { kind: 'project', name: 'Caballito', archived: true },
+      { kind: 'main', name: 'Principal', archived: false },
+      { kind: 'project', name: 'Barrio', archived: false },
     ]);
     expect(sorted.map((item) => item.name)).toEqual(['Principal', 'Barrio', 'Torre', 'Caballito']);
   });

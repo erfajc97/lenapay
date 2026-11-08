@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
-import { demoEmailCode } from '@/shared/api';
+import { useDemoEmailCode } from '@/shared/api';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { FormField } from '@/shared/ui/FormField';
+import { LinkButton } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 
 import { DemoHint } from './components/DemoHint';
@@ -12,7 +14,8 @@ import { useVerifyForm } from './hooks/useAuthForms';
 /** 6-digit email code (R-ID-1). */
 export function VerifyEmail() {
   const { t } = useTranslation();
-  const { form, submit, pending, email } = useVerifyForm();
+  const { form, submit, pending, email, resend } = useVerifyForm();
+  const demoEmailCode = useDemoEmailCode();
   return (
     <Screen title={t('verify.title')} back footer={<Button label={t('verify.submit')} onPress={submit} loading={pending} />}>
       <AppText tone="secondary">{t('verify.body', { email: email ?? '' })}</AppText>
@@ -30,6 +33,9 @@ export function VerifyEmail() {
         onSubmitEditing={submit}
         autoFocus
       />
+      <View className="items-start">
+        <LinkButton label={t('verify.resend')} onPress={resend} />
+      </View>
     </Screen>
   );
 }

@@ -26,7 +26,7 @@ export const ApprovalCard = memo(function ApprovalCard({ payout, mine, onPress }
         {payout.concept}
       </AppText>
       <AppText variant="caption" tone="muted">
-        {t('approvals.createdBy', { name: payout.createdBy.fullName, account: payout.accountName, date: formatDateTime(payout.createdAt) })}
+        {t('approvals.createdBy', { name: payout.createdBy.label ?? t('approvals.unknownPerson'), account: payout.accountName, date: formatDateTime(payout.createdAt) })}
       </AppText>
     </PressableCard>
   );

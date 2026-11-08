@@ -2,9 +2,9 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Switch, View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
 import { config } from '@/shared/config/env';
 import { canManageTeam, canSeeReconciliation } from '@/shared/helpers/permissions';
+import { useErpLink } from '@/shared/queries/erp';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
@@ -13,7 +13,7 @@ import { THEME_PREFERENCES } from '@/shared/theme/themePreference';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
-import { Chip } from '@/shared/ui/Chip';
+import { DemoBadge } from '@/shared/ui/DemoBadge';
 import { Icon } from '@/shared/ui/Icon';
 import { Avatar, Divider, IconBadge, ListRow, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
@@ -33,6 +33,7 @@ export function Settings() {
   const language = usePreferencesStore((state) => state.languagePreference);
   const setLanguage = usePreferencesStore((state) => state.setLanguagePreference);
   const logout = useLogout();
+  const erpLink = useErpLink(org?.kind === 'company' && org.kycStatus === 'approved' ? org.id : undefined);
   const role = org?.role ?? 'viewer';
 
   const orgItems = [
@@ -40,7 +41,7 @@ export function Settings() {
     { key: 'approvals', icon: 'checkmark-done-outline' as const, title: t('settings.approvals'), subtitle: null, href: '/approvals' as const, show: true },
     { key: 'team', icon: 'people-outline' as const, title: t('settings.team'), subtitle: canManageTeam(role) ? null : t('settings.readOnly'), href: '/team' as const, show: true },
     { key: 'recon', icon: 'git-compare-outline' as const, title: t('settings.reconciliation'), subtitle: null, href: '/reconciliation' as const, show: canSeeReconciliation(role) },
-    { key: 'erp', icon: 'git-merge-outline' as const, title: t('settings.erp'), subtitle: org?.erpLinked ? t('settings.erpLinked') : null, href: '/erp-link' as const, show: true },
+    { key: 'erp', icon: 'git-merge-outline' as const, title: t('settings.erp'), subtitle: erpLink.data?.status === 'linked' ? t('settings.erpLinked') : null, href: '/erp-link' as const, show: true },
     { key: 'kyc', icon: 'shield-checkmark-outline' as const, title: t('settings.kyc'), subtitle: org ? t(`status.kyc.${org.kycStatus}`) : null, href: '/onboarding/status' as const, show: true },
   ].filter((item) => item.show);
 
@@ -48,9 +49,9 @@ export function Settings() {
     <Screen title={t('settings.title')} inTabs>
       <Card className="py-1">
         <ListRow
-          title={me.data?.fullName ?? t('common.loading')}
+          title={me.data ? (me.data.fullName ?? me.data.email) : t('common.loading')}
           subtitle={me.data?.email}
-          leading={<Avatar name={me.data?.fullName ?? ''} />}
+          leading={<Avatar name={me.data?.fullName ?? me.data?.email ?? ''} />}
           onPress={() => router.push('/settings/profile')}
         />
       </Card>
@@ -69,6 +70,12 @@ export function Settings() {
       <Card className="py-1">
         <ListRow title={t('settings.security')} leading={<IconBadge name="lock-closed-outline" />} onPress={() => router.push('/settings/security')} />
         <Divider />
+        {config.devTools ? (
+          <>
+            <ListRow title={t('developer.title')} subtitle={t('developer.rowBody')} leading={<IconBadge name="construct-outline" />} onPress={() => router.push('/developer')} />
+            <Divider />
+          </>
+        ) : null}
         <ListRow
           title={t('settings.personalPreview')}
           subtitle={t('settings.personalPreviewBody')}
@@ -110,7 +117,7 @@ export function Settings() {
       </Card>
 
       <View className="items-center gap-2 pt-2">
-        {isMockApi ? <Chip label={t('common.demoMode')} tone="warning" /> : null}
+        <DemoBadge />
         <AppText variant="caption" tone="muted">
           {t('settings.version', { version: config.appVersion })}
         </AppText>

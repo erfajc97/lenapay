@@ -10,8 +10,10 @@ const account = (id: string, availableArs: number): Account => ({
   id,
   kind: 'project',
   name: id,
-  archivedAt: null,
+  archived: false,
+  erpProjectRef: null,
   payersCount: 0,
+  createdAt: '2026-11-01T12:00:00Z',
   balances: [
     { currency: 'ARS', posted: availableArs, held: 0, available: availableArs },
     { currency: 'USD', posted: 0, held: 0, available: 0 },

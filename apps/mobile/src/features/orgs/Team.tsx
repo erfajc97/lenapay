@@ -35,10 +35,11 @@ export function Team() {
             <View key={member.userId}>
               {index > 0 ? <Divider /> : null}
               <ListRow
-                title={member.fullName}
-                subtitle={member.status === 'invited' ? t('team.pendingInvite') : member.email}
-                leading={<Avatar name={member.fullName} />}
+                title={member.fullName ?? member.email}
+                subtitle={member.status === 'invited' ? t('team.pendingInvite') : member.fullName ? member.email : null}
+                leading={<Avatar name={member.fullName ?? member.email} />}
                 trailing={<Chip label={t(`roles.${member.role}`)} tone={member.status === 'invited' ? 'warning' : 'brand'} />}
+                onPress={team.canEdit(member) ? () => team.openMember(member) : undefined}
               />
             </View>
           ))}
@@ -56,6 +57,25 @@ export function Team() {
           </View>
         ))}
       </View>
+
+      <Sheet visible={team.editing !== null} title={t('team.memberTitle')} onClose={team.closeMember}>
+        <AppText variant="bodyStrong">{team.editing?.fullName ?? team.editing?.email ?? ''}</AppText>
+        <AppText variant="label" tone="secondary">
+          {t('fields.role')}
+        </AppText>
+        <View className="flex-row flex-wrap gap-2">
+          {ROLES.map((role) => (
+            <FilterChip key={role} label={t(`roles.${role}`)} selected={team.editing?.role === role} onPress={() => team.changeRole(role)} />
+          ))}
+        </View>
+        <Button
+          label={team.confirmRemove ? t('team.confirmRemove') : t('team.remove')}
+          variant="danger"
+          icon="person-remove-outline"
+          onPress={team.remove}
+          loading={team.savingMember}
+        />
+      </Sheet>
 
       <Sheet visible={team.sheetOpen} title={t('team.invite')} onClose={team.closeSheet}>
         <TextField

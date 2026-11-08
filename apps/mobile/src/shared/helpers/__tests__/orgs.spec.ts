@@ -6,7 +6,7 @@ import { pickActiveOrg, visibleOrgs } from '../orgs';
 
 // Why: every money action runs against the active org; falling back to the wrong one after
 // a switch, or showing a personal wallet without the B2C flag, moves money in the wrong place.
-const org = (id: string, kind: Org['kind'] = 'company'): Org => ({ id, kind, legalName: id, cuit: null, kycStatus: 'approved', role: 'admin', erpLinked: false });
+const org = (id: string, kind: Org['kind'] = 'company'): Org => ({ id, kind, legalName: id, cuit: null, kycStatus: 'approved', role: 'admin', createdAt: '2026-11-01T12:00:00Z' });
 
 describe('org selection', () => {
   const orgs = [org('a'), org('b'), org('me', 'personal')];
@@ -20,5 +20,12 @@ describe('org selection', () => {
     expect(pickActiveOrg(orgs, 'b')?.id).toBe('b');
     expect(pickActiveOrg(visibleOrgs(orgs, false), 'me')?.id).toBe('a');
     expect(pickActiveOrg([], 'a')).toBeNull();
+  });
+
+  it('prefers a company over a personal wallet listed first, and keeps a remembered wallet', () => {
+    const walletFirst = [org('me', 'personal'), org('a')];
+    expect(pickActiveOrg(walletFirst, null)?.id).toBe('a');
+    expect(pickActiveOrg(walletFirst, 'me')?.id).toBe('me');
+    expect(pickActiveOrg([org('me', 'personal')], null)?.id).toBe('me');
   });
 });

@@ -8,7 +8,6 @@ export const loginSchema = z.object({
 export type LoginValues = z.infer<typeof loginSchema>;
 
 export const signupSchema = z.object({
-  fullName: z.string().trim().min(3, { message: 'validation.fullName' }),
   email: z.email({ message: 'validation.email' }),
   password: z
     .string()

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Payout } from '@/shared/api/types';
 
-import { approvalBlocker, canManageTeam, canSeeReconciliation, moneyActionBlocker } from '../permissions';
+import { approvalBlocker, canEditMember, canManageTeam, canRunReconciliation, canSeeReconciliation, moneyActionBlocker } from '../permissions';
 
 // Why: offering "Aprobar" to the person who created the payout breaks 4-eyes in the UI, and
 // offering "Pagar" before KYC approval sends people into a flow the API rejects (R-KYC-3).
@@ -24,7 +24,7 @@ describe('moneyActionBlocker', () => {
 describe('approvalBlocker', () => {
   const payout = (over: Partial<Pick<Payout, 'status' | 'createdBy'>> = {}) => ({
     status: 'pending_approval' as const,
-    createdBy: { userId: 'u-creator', fullName: 'Martina López' },
+    createdBy: { userId: 'u-creator', label: 'Martina López' },
     ...over,
   });
 
@@ -53,5 +53,29 @@ describe('role gates', () => {
     expect(canManageTeam('approver')).toBe(false);
     expect(canSeeReconciliation('approver')).toBe(true);
     expect(canSeeReconciliation('operator')).toBe(false);
+  });
+});
+
+// Why: an admin who demotes or removes themselves can leave the org with nobody able to
+// approve or manage it; a pending invite has no membership the API could change.
+describe('canEditMember', () => {
+  const member = { userId: 'u-other', status: 'active' as const };
+
+  it('lets an admin edit another active member', () => {
+    expect(canEditMember({ role: 'admin', myUserId: 'u-me', member })).toBe(true);
+  });
+
+  it('never edits yourself, an invite, or as a non-admin', () => {
+    expect(canEditMember({ role: 'admin', myUserId: 'u-other', member })).toBe(false);
+    expect(canEditMember({ role: 'admin', myUserId: 'u-me', member: { ...member, status: 'invited' } })).toBe(false);
+    expect(canEditMember({ role: 'approver', myUserId: 'u-me', member })).toBe(false);
+  });
+});
+
+// Why: the API answers 403 to anyone else; offering the button would only show an error.
+describe('canRunReconciliation', () => {
+  it('is for admins only', () => {
+    expect(canRunReconciliation('admin')).toBe(true);
+    for (const role of ['viewer', 'operator', 'approver'] as const) expect(canRunReconciliation(role)).toBe(false);
   });
 });

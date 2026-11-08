@@ -6,7 +6,7 @@ const PAYOUT_TO_MOVEMENT: Record<PayoutStatus, MovementStatus> = {
   pending_approval: 'pending',
   approved: 'pending',
   sending: 'pending',
-  settled: 'settled',
+  settled: 'completed',
   failed: 'failed',
   rejected: 'cancelled',
   cancelled: 'cancelled',
@@ -17,7 +17,7 @@ function allMovements(state: MockState, orgId: string): Movement[] {
   const payins: Movement[] = state.payins
     .filter((item) => item.orgId === orgId)
     .map((item) => ({
-      id: `mv_${item.id}`, type: 'payin', direction: 'in', status: 'settled', currency: item.currency, amount: item.net, fee: item.fee,
+      id: `mv_${item.id}`, type: 'payin', direction: 'in', status: 'completed', currency: item.currency, amount: item.net, fee: item.fee,
       accountId: item.accountId, accountName: item.accountName, counterparty: item.originName, counterpartyDoc: item.originCuit,
       concept: null, refId: item.id, createdAt: item.createdAt,
     }));
@@ -25,19 +25,19 @@ function allMovements(state: MockState, orgId: string): Movement[] {
     .filter((item) => item.orgId === orgId)
     .map((item) => ({
       id: `mv_${item.id}`, type: 'payout', direction: 'out', status: PAYOUT_TO_MOVEMENT[item.status], currency: item.currency,
-      amount: item.amount + item.fee, fee: item.fee, accountId: item.accountId, accountName: item.accountName,
+      amount: item.total, fee: item.fee, accountId: item.accountId, accountName: item.accountName,
       counterparty: item.destination.holderName, counterpartyDoc: item.destination.holderCuit, concept: item.concept, refId: item.id, createdAt: item.createdAt,
     }));
   const transfers: Movement[] = state.transfers
     .filter((item) => item.orgId === orgId)
     .flatMap((item) => [
       {
-        id: `mv_${item.id}_out`, type: 'transfer' as const, direction: 'out' as const, status: 'settled' as const, currency: item.currency, amount: item.amount, fee: 0,
+        id: `mv_${item.id}_out`, type: 'internal_transfer' as const, direction: 'out' as const, status: 'completed' as const, currency: item.currency, amount: item.amount, fee: null,
         accountId: item.fromAccountId, accountName: accountName(item.fromAccountId), counterparty: accountName(item.toAccountId), counterpartyDoc: null,
         concept: item.concept, refId: item.id, createdAt: item.createdAt,
       },
       {
-        id: `mv_${item.id}_in`, type: 'transfer' as const, direction: 'in' as const, status: 'settled' as const, currency: item.currency, amount: item.amount, fee: 0,
+        id: `mv_${item.id}_in`, type: 'internal_transfer' as const, direction: 'in' as const, status: 'completed' as const, currency: item.currency, amount: item.amount, fee: null,
         accountId: item.toAccountId, accountName: accountName(item.toAccountId), counterparty: accountName(item.fromAccountId), counterpartyDoc: null,
         concept: item.concept, refId: item.id, createdAt: item.createdAt,
       },

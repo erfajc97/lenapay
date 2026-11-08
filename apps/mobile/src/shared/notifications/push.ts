@@ -3,6 +3,7 @@ import { Linking, Platform } from 'react-native';
 
 import { api, isMockApi } from '@/shared/api';
 import { config } from '@/shared/config/env';
+import { pushPlatform } from '@/shared/helpers/platform';
 
 /**
  * Push (R-NOT-1). Asked only from Settings after an explanation (ME13). In `mock` mode the
@@ -16,9 +17,9 @@ export async function enablePush(): Promise<PushResult> {
   const current = await Notifications.getPermissionsAsync();
   const status = current.granted ? current : await Notifications.requestPermissionsAsync();
   if (!status.granted) return 'denied';
-  if (isMockApi || !config.easProjectId) return 'enabled';
+  if (isMockApi() || !config.easProjectId) return 'enabled';
   const token = await Notifications.getExpoPushTokenAsync({ projectId: config.easProjectId });
-  await api.notifications.registerPushToken(token.data);
+  await api.notifications.registerPushToken(token.data, pushPlatform(Platform.OS));
   return 'enabled';
 }
 

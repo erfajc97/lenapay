@@ -12,7 +12,7 @@ import { Chip } from '@/shared/ui/Chip';
 import { Icon } from '@/shared/ui/Icon';
 import { Field, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
-import { EmptyState, SkeletonList } from '@/shared/ui/States';
+import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
 
 import { useMovementDetail } from './hooks/useMovementDetail';
 
@@ -25,10 +25,13 @@ export function MovementDetail() {
   if (!movement) {
     return (
       <Screen back>
-        <EmptyState icon="help-circle-outline" title={t('movements.notFound')} />
+        {detail.query.isLoading ? <SkeletonList rows={3} /> : null}
+        {detail.notFound ? <EmptyState icon="help-circle-outline" title={t('movements.notFound')} /> : null}
+        {detail.query.isError && !detail.notFound ? <ErrorState error={detail.query.error} onRetry={() => void detail.query.refetch()} /> : null}
       </Screen>
     );
   }
+  const counterparty = movement.counterparty ?? t('movements.unknownCounterparty');
 
   const incoming = movement.direction === 'in';
   const payout = detail.payout.data;
@@ -42,15 +45,15 @@ export function MovementDetail() {
         <AppText variant="title" tone={incoming ? 'success' : 'primary'}>
           {formatMoney(incoming ? movement.amount : -movement.amount, movement.currency, { signed: incoming })}
         </AppText>
-        <AppText tone="secondary">{t(`movements.title.${movement.type}.${movement.direction}`, { name: movement.counterparty })}</AppText>
+        <AppText tone="secondary">{t(`movements.title.${movement.type}.${movement.direction}`, { name: counterparty })}</AppText>
         <Chip label={t(`status.movement.${movement.status}`)} tone={MOVEMENT_STATUS_TONE[movement.status]} />
       </Card>
       <Card className="gap-1">
         <Field label={t('movements.date')} value={formatDateTime(movement.createdAt)} />
         <Field label={t('movements.account')} value={movement.accountName} />
-        <Field label={incoming ? t('movements.from') : t('movements.to')} value={movement.counterparty} />
+        <Field label={incoming ? t('movements.from') : t('movements.to')} value={counterparty} />
         {movement.counterpartyDoc ? <Field label={t('fields.cuit')} value={formatCuit(movement.counterpartyDoc)} mono /> : null}
-        {movement.fee > 0 ? <Field label={t('payout.fee')} value={formatMoney(movement.fee, movement.currency)} /> : null}
+        {movement.fee ? <Field label={t('payout.fee')} value={formatMoney(movement.fee, movement.currency)} /> : null}
         {movement.concept ? <Field label={t('fields.concept')} value={movement.concept} /> : null}
         <Field label={t('movements.reference')} value={movement.refId} mono />
       </Card>

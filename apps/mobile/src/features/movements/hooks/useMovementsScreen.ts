@@ -6,8 +6,9 @@ import type { Movement } from '@/shared/api/types';
 import { useMovements } from '@/shared/queries/movements';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { type MovementFilterDraft, useMovementFiltersStore } from '@/shared/stores/useMovementFiltersStore';
+import { formatDayInput, parseDayInput } from '@/shared/helpers/days';
 
-import { activeFilterCount, customRangeError, formatDayInput, parseDayInput, toMovementFilters } from '../helpers/filters';
+import { activeFilterCount, customRangeError, toMovementFilters } from '../helpers/filters';
 
 export type FilterKey = 'type' | 'status' | 'currency' | 'date';
 

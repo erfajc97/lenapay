@@ -22,9 +22,9 @@ export function DestinationCard({ destination }: { destination: Destination }) {
         </View>
       </View>
       <Field label={t('fields.cuit')} value={formatCuit(destination.holderCuit)} mono />
-      <Field label={t('fields.bank')} value={destination.bankName} />
-      <Field label={t('fields.cbu')} value={groupCbu(destination.cbu)} mono />
-      {destination.alias ? <Field label={t('fields.alias')} value={destination.alias} mono /> : null}
+      {destination.bankName ? <Field label={t('fields.bank')} value={destination.bankName} /> : null}
+      <Field label={t('fields.cbu')} value={groupCbu(destination.accountNumber)} mono />
+      {destination.type === 'alias' ? <Field label={t('fields.alias')} value={destination.value} mono /> : null}
     </Card>
   );
 }

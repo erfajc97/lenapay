@@ -32,7 +32,7 @@ const KEY_CONSTANT = /'((?:validation|kyc\.check|errors)\.[a-zA-Z_.]+)'/g;
 /** Keys built at runtime: prefix + every value the code can produce. */
 const DYNAMIC: Record<string, readonly string[]> = {
   'status.payout': ['pending_approval', 'approved', 'sending', 'settled', 'failed', 'rejected', 'cancelled'],
-  'status.movement': ['pending', 'settled', 'failed', 'cancelled'],
+  'status.movement': ['pending', 'completed', 'failed', 'cancelled'],
   'status.kyc': ['draft', 'submitted', 'approved', 'rejected'],
   roles: ['viewer', 'operator', 'approver', 'admin'],
   roleHelp: ['viewer', 'operator', 'approver', 'admin'],
@@ -42,19 +42,23 @@ const DYNAMIC: Record<string, readonly string[]> = {
   'accounts.archiveBlocked': ['not_empty', 'main', 'archived'],
   'approvals.blocked': ['creator', 'role'],
   'kyc.timeline': ['draft', 'submitted', 'approved', 'rejected'],
-  'kyc.doc': ['bylaws', 'afip_constancy', 'dni_front', 'selfie'],
+  'kyc.doc': ['bylaws', 'afip_constancy', 'dni_front', 'dni_back', 'selfie'],
+  docType: ['cuit', 'cuil', 'dni'],
   'movements.range': ['today', '7d', '30d', 'month', 'custom'],
   'movements.filter': ['type', 'status', 'currency', 'date'],
   'settings.theme': ['system', 'light', 'dark'],
   'settings.languages': ['system', 'esAR', 'enUS'],
-  'movements.type': ['payin', 'payout', 'transfer'],
-  'movements.kind': ['payin', 'payout', 'transfer'],
-  'movements.title': ['payin.in', 'payin.out', 'payout.in', 'payout.out', 'transfer.in', 'transfer.out'],
+  'movements.type': ['payin', 'payout', 'internal_transfer'],
+  'movements.kind': ['payin', 'payout', 'internal_transfer'],
+  'movements.title': ['payin.in', 'payin.out', 'payout.in', 'payout.out', 'internal_transfer.in', 'internal_transfer.out'],
   'payers.cvuStatus': ['active', 'disabled'],
   'payout.destinationHint': ['incomplete', 'invalid', 'cbu', 'cvu', 'alias'],
   'payout.destinationType': ['cbu', 'cvu', 'alias'],
   'payout.result': ['pending_approval.title', 'pending_approval.body', 'sent.title', 'sent.body'],
   'reconciliation.item': ['matched', 'missing_in_ledger', 'missing_at_psp'],
+  'reconciliation.status': ['queued', 'running', 'failed'],
+  'reconciliation.direction': ['in', 'out'],
+  'developer.mode': ['mock', 'live'],
   'transfer.blocker': ['from', 'to', 'same_account', 'amount', 'insufficient'],
   'home.kyc': ['draft.title', 'draft.body', 'draft.action', 'submitted.title', 'submitted.body', 'submitted.action', 'rejected.title', 'rejected.body', 'rejected.action'],
   'security.push': ['enabled', 'denied', 'unavailable'],
@@ -68,7 +72,9 @@ describe('es-AR locale', () => {
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     for (const match of text.matchAll(LITERAL)) if (match[1]) literal.add(match[1]);
-    for (const match of text.matchAll(KEY_CONSTANT)) if (match[1] && !file.includes(join('api', 'mock'))) literal.add(match[1]);
+    // The mock and the error-code catalog hold API codes (`validation.failed`), not i18n keys.
+    const holdsCodes = file.includes(join('api', 'mock')) || file.endsWith(join('api', 'errors.ts'));
+    for (const match of text.matchAll(KEY_CONSTANT)) if (match[1] && !holdsCodes) literal.add(match[1]);
   }
 
   it('has every literal key used in the source', () => {
@@ -85,13 +91,10 @@ describe('es-AR locale', () => {
   });
 
   it('has copy for every known API error code', async () => {
-    const { errorMessageKey, ApiError } = await import('@/shared/api/errors');
-    const codes = readFileSync(join(SRC, 'shared', 'api', 'errors.ts'), 'utf8').match(/'[a-z]+\.[a-z_]+'/g) ?? [];
-    const missing = codes
-      .map((quoted) => quoted.slice(1, -1))
-      .map((code) => errorMessageKey(new ApiError(code, 400)))
-      .filter((key) => !exists(key));
-    expect(missing).toEqual([]);
+    const { ERROR_CODES, errorMessageKey, ApiError } = await import('@/shared/api/errors');
+    const keys = ERROR_CODES.map((code) => errorMessageKey(new ApiError(code, 400)));
+    expect(keys.filter((key) => key === 'errors.generic')).toEqual([]);
+    expect(keys.filter((key) => !exists(key))).toEqual([]);
   });
 });
 

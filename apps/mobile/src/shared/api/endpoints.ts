@@ -6,9 +6,11 @@ const org = (orgId: string) => `/orgs/${encodeURIComponent(orgId)}`;
 const id = (value: string) => encodeURIComponent(value);
 
 export const endpoints = {
+  health: '/healthz',
   auth: {
     signup: '/auth/signup',
     verifyEmail: '/auth/verify-email',
+    resendCode: '/auth/resend-code',
     login: '/auth/login',
     refresh: '/auth/refresh',
     logout: '/auth/logout',
@@ -16,10 +18,12 @@ export const endpoints = {
     stepUpVerify: '/auth/step-up/verify',
   },
   me: '/me',
+  devices: '/devices',
   pushTokens: '/push-tokens',
   orgs: {
     list: '/orgs',
     members: (orgId: string) => `${org(orgId)}/members`,
+    member: (orgId: string, userId: string) => `${org(orgId)}/members/${id(userId)}`,
     invites: (orgId: string) => `${org(orgId)}/invites`,
   },
   kyc: {
@@ -50,14 +54,17 @@ export const endpoints = {
     reject: (orgId: string, payoutId: string) => `${org(orgId)}/payouts/${id(payoutId)}/reject`,
     cancel: (orgId: string, payoutId: string) => `${org(orgId)}/payouts/${id(payoutId)}/cancel`,
     proof: (orgId: string, payoutId: string) => `${org(orgId)}/payouts/${id(payoutId)}/proof.pdf`,
+    attachments: (orgId: string, payoutId: string) => `${org(orgId)}/payouts/${id(payoutId)}/attachments`,
     approvals: (orgId: string) => `${org(orgId)}/approvals`,
     resolveDestination: (orgId: string) => `${org(orgId)}/destinations/resolve`,
   },
   movements: {
     list: (orgId: string) => `${org(orgId)}/movements`,
+    one: (orgId: string, movementId: string) => `${org(orgId)}/movements/${id(movementId)}`,
   },
   reconciliation: {
     runs: (orgId: string) => `${org(orgId)}/reconciliation/runs`,
+    items: (orgId: string, runId: string) => `${org(orgId)}/reconciliation/runs/${id(runId)}/items`,
   },
   erp: {
     candidate: (orgId: string) => `${org(orgId)}/erp-link/candidate`,

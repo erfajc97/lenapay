@@ -23,13 +23,13 @@ export function useAccountsScreen() {
   });
 
   const all = accounts.data ? sortAccounts(accounts.data) : [];
-  const visible = all.filter((account) => showArchived || !account.archivedAt);
+  const visible = all.filter((account) => showArchived || !account.archived);
   const nameError = accountNameError(name);
 
   return {
     accounts,
     visible,
-    archivedCount: all.filter((account) => account.archivedAt).length,
+    archivedCount: all.filter((account) => account.archived).length,
     showArchived,
     toggleArchived: () => setShowArchived((value) => !value),
     canCreate: org ? moneyActionBlocker(org) === null : false,

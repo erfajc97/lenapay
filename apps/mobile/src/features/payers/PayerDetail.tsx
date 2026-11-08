@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { formatCuit, formatDni } from '@/shared/helpers/cuit';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
@@ -14,7 +13,7 @@ import { TextField } from '@/shared/ui/TextField';
 
 import { CvuCard } from './components/CvuCard';
 import { CvuQr } from './components/CvuQr';
-import { cvuQrPayload } from './helpers/payerRules';
+import { cvuQrPayload, formatDoc } from './helpers/payerRules';
 import { usePayerDetail } from './hooks/usePayerDetail';
 
 export function PayerDetail() {
@@ -37,7 +36,7 @@ export function PayerDetail() {
     );
   }
 
-  const doc = payer.docType === 'CUIT' ? formatCuit(payer.docNumber) : formatDni(payer.docNumber);
+  const doc = formatDoc(payer.docType, payer.docNumber);
   const { sheet } = detail;
   return (
     <Screen title={payer.name} back onRefresh={detail.payer.refetch}>
@@ -49,7 +48,7 @@ export function PayerDetail() {
             {payer.erpRef ? <Chip label={t('payers.fromErp')} tone="brand" /> : null}
           </View>
         </View>
-        <Field label={payer.docType === 'CUIT' ? t('docType.CUIT') : t('docType.DNI')} value={doc} mono />
+        <Field label={t(`docType.${payer.docType}`)} value={doc} mono />
         <Field label={t('fields.project')} value={payer.accountName} />
         {payer.email ? <Field label={t('fields.email')} value={payer.email} /> : null}
       </Card>

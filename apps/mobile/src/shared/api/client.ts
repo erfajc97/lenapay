@@ -7,6 +7,7 @@ import type {
   CreatePayoutRequest,
   Cvu,
   Destination,
+  Device,
   ErpCandidate,
   ErpLink,
   ErpLinkRequest,
@@ -20,6 +21,7 @@ import type {
   KycDocumentUpload,
   KycUpdateRequest,
   LiveEvent,
+  LocalUpload,
   LoginRequest,
   Me,
   Member,
@@ -31,17 +33,25 @@ import type {
   Payer,
   Payin,
   Payout,
+  PayoutAttachment,
   PayoutQuote,
   PayoutQuoteRequest,
+  PushPlatform,
+  ReconciliationItem,
   ReconciliationRun,
+  RegisterDeviceRequest,
   RejectPayoutRequest,
+  ResendCodeRequest,
+  RunReconciliationRequest,
   SignupRequest,
   SignupResponse,
   StepUpChallenge,
+  StepUpChallengeRequest,
   StepUpToken,
   StepUpVerifyRequest,
   UpdateAccountRequest,
   UpdateCvuRequest,
+  UpdateMemberRequest,
   VerifyEmailRequest,
 } from './types';
 
@@ -67,17 +77,20 @@ export interface LocalFile {
 
 /**
  * The typed client abstraction. `mock` and `live` both implement it; features only see
- * this interface through `api` (selected by EXPO_PUBLIC_API_MODE).
+ * this interface through `api` (mock or live, chosen at runtime by `shared/config/apiTarget`).
  */
 export interface LenapayApi {
   auth: {
     signup(body: SignupRequest): Promise<SignupResponse>;
-    verifyEmail(body: VerifyEmailRequest): Promise<AuthTokens>;
+    /** Verifies the email; the person then signs in (the contract answers 204, no tokens). */
+    verifyEmail(body: VerifyEmailRequest): Promise<void>;
+    resendCode(body: ResendCodeRequest): Promise<void>;
     login(body: LoginRequest): Promise<AuthTokens>;
     refresh(refreshToken: string): Promise<AuthTokens>;
     logout(): Promise<void>;
-    stepUpChallenge(): Promise<StepUpChallenge>;
+    stepUpChallenge(body: StepUpChallengeRequest): Promise<StepUpChallenge>;
     stepUpVerify(body: StepUpVerifyRequest): Promise<StepUpToken>;
+    registerDevice(body: RegisterDeviceRequest): Promise<Device>;
     me(): Promise<Me>;
   };
   orgs: {
@@ -85,6 +98,8 @@ export interface LenapayApi {
     create(body: CreateOrgRequest): Promise<Org>;
     members(orgId: string): Promise<Member[]>;
     invite(orgId: string, body: InviteRequest): Promise<Invite>;
+    updateMember(orgId: string, userId: string, body: UpdateMemberRequest): Promise<Member>;
+    removeMember(orgId: string, userId: string): Promise<void>;
   };
   kyc: {
     get(orgId: string): Promise<KycCase>;
@@ -118,13 +133,17 @@ export interface LenapayApi {
     approve(orgId: string, payoutId: string, options: MoneyActionOptions): Promise<Payout>;
     reject(orgId: string, payoutId: string, body: RejectPayoutRequest, options: MoneyActionOptions): Promise<Payout>;
     approvals(orgId: string): Promise<Payout[]>;
+    uploadAttachment(orgId: string, payoutId: string, file: LocalUpload): Promise<PayoutAttachment>;
     proof(orgId: string, payoutId: string): Promise<LocalFile>;
   };
   movements: {
     list(orgId: string, filters: MovementFilters, cursor: string | null): Promise<Page<Movement>>;
+    get(orgId: string, movementId: string): Promise<Movement>;
   };
   reconciliation: {
     runs(orgId: string): Promise<ReconciliationRun[]>;
+    items(orgId: string, runId: string): Promise<ReconciliationItem[]>;
+    run(orgId: string, body: RunReconciliationRequest): Promise<ReconciliationRun>;
   };
   erp: {
     candidate(orgId: string): Promise<ErpCandidate>;
@@ -132,7 +151,7 @@ export interface LenapayApi {
     get(orgId: string): Promise<ErpLink>;
   };
   notifications: {
-    registerPushToken(token: string): Promise<void>;
+    registerPushToken(token: string, platform: PushPlatform): Promise<void>;
   };
   events: {
     /** Same interface for the mock timer and the live SSE stream. Returns the unsubscribe. */

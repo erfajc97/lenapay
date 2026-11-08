@@ -2,10 +2,9 @@ import { Redirect, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
-import { Chip } from '@/shared/ui/Chip';
+import { DemoBadge } from '@/shared/ui/DemoBadge';
 import { MovementRow } from '@/shared/ui/MovementRow';
 import { Divider, LinkButton, Notice, SectionTitle } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
@@ -40,7 +39,7 @@ export function Home() {
   return (
     <Screen inTabs onRefresh={home.refresh}>
       <OrgHeader org={org} firstName={home.firstName} onSwitch={() => router.push('/orgs')} onProfile={() => router.push('/settings/profile')} />
-      {isMockApi ? <Chip label={t('common.demoMode')} tone="warning" /> : null}
+      <DemoBadge />
       {home.kycNotice ? (
         <Notice
           tone={home.kycNotice === 'rejected' ? 'danger' : 'warning'}
@@ -88,7 +87,7 @@ export function Home() {
           ))}
         </Card>
       </View>
-      {org.kycStatus === 'approved' && !org.erpLinked && org.role === 'admin' ? (
+      {home.erpInvite ? (
         <Card className="gap-3">
           <SectionTitle title={t('home.erpTitle')} />
           <Button label={t('home.erpAction')} variant="secondary" icon="link-outline" onPress={() => router.push('/erp-link')} compact />

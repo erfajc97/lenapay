@@ -24,7 +24,7 @@ export function LivePayinBanner() {
   }, [payin, dismiss]);
 
   if (!payin) return null;
-  const message = t('live.payin', { name: payin.payerName, amount: formatMoney(payin.amount, payin.currency), account: payin.accountName });
+  const message = t('live.payin', { name: payin.originName ?? t('movements.unknownCounterparty'), amount: formatMoney(payin.amount, payin.currency), account: payin.accountName });
   return (
     <View pointerEvents="box-none" className="absolute inset-x-0 px-4" style={{ top: insets.top + 8 }}>
       <Pressable

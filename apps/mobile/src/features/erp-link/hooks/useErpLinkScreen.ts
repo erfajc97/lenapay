@@ -6,7 +6,7 @@ import { useErpCandidate, useErpLink } from '@/shared/queries/erp';
 import { useActiveOrg } from '@/shared/queries/orgs';
 import { PAYERS_KEY } from '@/shared/queries/payers';
 
-import { erpStage, importPercent } from '../helpers/erpRules';
+import { erpStage } from '../helpers/erpRules';
 import { useLinkErp } from '../mutations/useLinkErp';
 
 export function useErpLinkScreen() {
@@ -25,7 +25,6 @@ export function useErpLinkScreen() {
     stage,
     link,
     candidate,
-    percent: link.data ? importPercent(link.data) : 0,
     sheetOpen,
     openSheet: () => setSheetOpen(true),
     closeSheet: () => setSheetOpen(false),

@@ -14,7 +14,7 @@ import { IconBadge } from '@/shared/ui/Rows';
 export const AccountCard = memo(function AccountCard({ account, onPress }: { account: Account; onPress: (account: Account) => void }) {
   const { t } = useTranslation();
   return (
-    <PressableCard onPress={() => onPress(account)} accessibilityLabel={account.name} className={`mb-3 gap-3 ${account.archivedAt ? 'opacity-60' : ''}`}>
+    <PressableCard onPress={() => onPress(account)} accessibilityLabel={account.name} className={`mb-3 gap-3 ${account.archived ? 'opacity-60' : ''}`}>
       <View className="flex-row items-center gap-3">
         <IconBadge name={account.kind === 'project' ? 'business-outline' : 'wallet-outline'} />
         <View className="flex-1 gap-1">
@@ -23,7 +23,7 @@ export const AccountCard = memo(function AccountCard({ account, onPress }: { acc
           </AppText>
           <View className="flex-row gap-2">
             <Chip label={t(`accounts.kind.${account.kind}`)} tone={account.kind === 'project' ? 'brand' : 'neutral'} />
-            {account.archivedAt ? <Chip label={t('accounts.archivedChip')} /> : null}
+            {account.archived ? <Chip label={t('accounts.archivedChip')} /> : null}
           </View>
         </View>
         <Icon name="chevron-forward" size={18} tone="text-muted" />
@@ -36,7 +36,7 @@ export const AccountCard = memo(function AccountCard({ account, onPress }: { acc
           </View>
         ))}
       </View>
-      {account.kind === 'project' ? (
+      {account.kind === 'project' && account.payersCount !== null ? (
         <AppText variant="caption" tone="muted">
           {t('accounts.payersCount', { count: account.payersCount })}
         </AppText>

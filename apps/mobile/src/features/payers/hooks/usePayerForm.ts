@@ -12,11 +12,11 @@ import { payerSchema, type PayerValues } from '../types';
 export function usePayerForm() {
   const { org } = useActiveOrg();
   const accounts = useAccounts(org?.id);
-  const projects = (accounts.data ?? []).filter((account) => account.kind === 'project' && !account.archivedAt);
+  const projects = (accounts.data ?? []).filter((account) => account.kind === 'project' && !account.archived);
   const create = useCreatePayer(org?.id);
   const form = useForm<PayerValues>({
     resolver: zodResolver(payerSchema),
-    defaultValues: { accountId: '', name: '', docType: 'CUIT', docNumber: '', email: '', currencies: ['ARS'] },
+    defaultValues: { accountId: '', name: '', docType: 'cuit', docNumber: '', email: '', currencies: ['ARS'] },
   });
   const currencies = useWatch({ control: form.control, name: 'currencies' });
 

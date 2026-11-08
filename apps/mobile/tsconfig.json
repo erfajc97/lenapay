@@ -4,7 +4,8 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@lenapay/api-types": ["../../packages/api-types/src/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "src/uniwind-types.d.ts"]

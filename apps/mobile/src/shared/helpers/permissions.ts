@@ -1,4 +1,4 @@
-import type { Org, Payout, Role } from '@/shared/api/types';
+import type { Member, Org, Payout, Role } from '@/shared/api/types';
 
 /**
  * Who may do what, decided in one place so every screen disables the same buttons the API
@@ -18,6 +18,19 @@ export function moneyActionBlocker(org: Pick<Org, 'kycStatus' | 'role'>): MoneyB
 }
 
 export function canManageTeam(role: Role): boolean {
+  return role === 'admin';
+}
+
+/**
+ * An admin edits other people's roles; never their own (the API's last-admin rule would
+ * otherwise be the only thing between an admin and locking the team out), never an invite.
+ */
+export function canEditMember(params: { role: Role; myUserId: string | null; member: Pick<Member, 'userId' | 'status'> }): boolean {
+  return canManageTeam(params.role) && params.member.status === 'active' && params.member.userId !== params.myUserId;
+}
+
+/** On-demand reconciliation runs are queued by admins only (POST /reconciliation/runs). */
+export function canRunReconciliation(role: Role): boolean {
   return role === 'admin';
 }
 

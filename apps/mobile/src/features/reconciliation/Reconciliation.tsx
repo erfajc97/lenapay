@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { usePullToRefresh } from '@/shared/hooks/usePullToRefresh';
 import { LIST_CONTENT_STYLE } from '@/shared/ui/listStyle';
+import { Button } from '@/shared/ui/Button';
 import { Notice } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/ui/States';
@@ -26,7 +27,12 @@ export function Reconciliation() {
   }
 
   return (
-    <Screen title={t('reconciliation.title')} back scroll={false}>
+    <Screen
+      title={t('reconciliation.title')}
+      back
+      scroll={false}
+      footer={screen.canRun ? <Button label={t('reconciliation.runToday')} icon="git-compare-outline" onPress={screen.runToday} loading={screen.running} /> : undefined}
+    >
       {screen.runs.isLoading ? (
         <View className="px-4">
           <SkeletonList rows={4} />

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { formatDayInput, parseDayInput } from '@/shared/helpers/days';
 import { EMPTY_FILTERS, type MovementFilterDraft } from '@/shared/stores/useMovementFiltersStore';
 
-import { activeFilterCount, customRangeError, formatDayInput, parseDayInput, toMovementFilters } from '../filters';
+import { activeFilterCount, customRangeError, toMovementFilters } from '../filters';
 
 const draft = (overrides: Partial<MovementFilterDraft>): MovementFilterDraft => ({ ...EMPTY_FILTERS, ...overrides });
 
@@ -17,8 +18,8 @@ describe('toMovementFilters', () => {
   });
 
   it('starts "last 7 days" six days ago, today included, as a business date', () => {
-    const filters = toMovementFilters(draft({ type: 'payin', status: 'settled', currency: 'USD', range: '7d' }), now);
-    expect(filters).toEqual({ type: 'payin', status: 'settled', currency: 'USD', from: '2026-11-01' });
+    const filters = toMovementFilters(draft({ type: 'payin', status: 'completed', currency: 'USD', range: '7d' }), now);
+    expect(filters).toEqual({ type: 'payin', status: 'completed', currency: 'USD', from: '2026-11-01' });
   });
 
   it('starts "last 30 days" twenty-nine days ago', () => {

@@ -23,7 +23,11 @@ interface RequestOptions {
   auth?: boolean;
 }
 
-export type Http = <T>(method: string, path: string, options?: RequestOptions) => Promise<T>;
+export interface Http {
+  <T>(method: string, path: string, options?: RequestOptions): Promise<T>;
+  /** The same single-flight refresh a 401 triggers (the SSE stream reuses it). */
+  refresh(): Promise<string | null>;
+}
 
 function buildUrl(baseUrl: string, path: string, query: RequestOptions['query']): string {
   const params = Object.entries(query ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== null && entry[1] !== '');
@@ -64,7 +68,7 @@ export function createHttp(deps: HttpDeps): Http {
     }
   }
 
-  return async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const auth = options.auth !== false;
     const url = buildUrl(deps.baseUrl, path, options.query);
     let response = await send(method, url, options, auth ? deps.getAccessToken() : null);
@@ -81,7 +85,10 @@ export function createHttp(deps: HttpDeps): Http {
       if (isApiErrorBody(body)) throw new ApiError(body.error.code, response.status, body.error.message);
       throw new ApiError(`http.${response.status}`, response.status);
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
-  };
+    // 202/204 and other empty answers have no body to parse.
+    const text = await response.text();
+    return (text === '' ? undefined : JSON.parse(text)) as T;
+  }
+
+  return Object.assign(request, { refresh: refreshOnce });
 }

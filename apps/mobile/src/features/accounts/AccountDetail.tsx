@@ -46,7 +46,7 @@ export function AccountDetail() {
     <Screen title={account.name} back onRefresh={detail.movements.refetch}>
       <View className="flex-row gap-2">
         <Chip label={t(`accounts.kind.${account.kind}`)} tone={account.kind === 'project' ? 'brand' : 'neutral'} />
-        {account.archivedAt ? <Chip label={t('accounts.archivedChip')} /> : null}
+        {account.archived ? <Chip label={t('accounts.archivedChip')} /> : null}
       </View>
       {account.balances.map((balance) => (
         <Card key={balance.currency} className="gap-3">
@@ -65,7 +65,7 @@ export function AccountDetail() {
           </View>
         </Card>
       ))}
-      {detail.canEdit && !account.archivedAt ? (
+      {detail.canEdit && !account.archived ? (
         <View className="flex-row gap-3">
           <View className="flex-1">
             <Button label={t('accounts.rename')} variant="secondary" icon="create-outline" onPress={detail.openRename} compact />

@@ -56,8 +56,8 @@ export function PayerForm() {
             value={field.value}
             onChange={field.onChange}
             options={[
-              { value: 'CUIT', label: t('docType.CUIT') },
-              { value: 'DNI', label: t('docType.DNI') },
+              { value: 'cuit', label: t('docType.cuit') },
+              { value: 'dni', label: t('docType.dni') },
             ]}
           />
         )}

@@ -21,7 +21,7 @@
   },
   "tabs": { "home": "Inicio", "accounts": "Cuentas", "payers": "Pagadores", "movements": "Movimientos", "more": "Más" },
   "currency": { "ARS": "Pesos", "USD": "Dólares" },
-  "docType": { "CUIT": "CUIT", "DNI": "DNI" },
+  "docType": { "cuit": "CUIT", "dni": "DNI", "cuil": "CUIL" },
   "roles": { "viewer": "Lectura", "operator": "Operador", "approver": "Aprobador", "admin": "Administrador" },
   "roleHelp": {
     "viewer": "Ve saldos y movimientos.",
@@ -43,7 +43,7 @@
       "rejected": "Rechazado",
       "cancelled": "Cancelado"
     },
-    "movement": { "pending": "Pendiente", "settled": "Acreditado", "failed": "Falló", "cancelled": "Cancelado" },
+    "movement": { "pending": "Pendiente", "completed": "Acreditado", "failed": "Falló", "cancelled": "Cancelado" },
     "kyc": { "draft": "Verificación pendiente", "submitted": "En revisión", "approved": "Verificada", "rejected": "Rechazada" }
   },
   "fields": {
@@ -73,12 +73,19 @@
     "payerName": "Nombre o razón social",
     "project": "Proyecto",
     "reason": "Motivo",
-    "role": "Rol"
+    "role": "Rol",
+    "street": "Calle",
+    "streetNumber": "Número",
+    "floor": "Piso / depto (opcional)",
+    "city": "Localidad",
+    "province": "Provincia",
+    "postalCode": "Código postal",
+    "birthDate": "Fecha de nacimiento",
+    "position": "Cargo"
   },
   "validation": {
     "account": "Elegí una cuenta.",
     "accountName": "Usá entre 3 y 40 caracteres.",
-    "address": "Ingresá el domicilio completo.",
     "alias": "Entre 6 y 20 caracteres: letras, números, puntos o guiones.",
     "amountInvalid": "Revisá el monto: usá coma para los centavos, por ejemplo 1.500,50.",
     "amountRequired": "Ingresá un monto.",
@@ -95,19 +102,23 @@
     "passwordLength": "Usá 8 caracteres o más.",
     "payerName": "Escribí el nombre completo.",
     "reason": "Contale al creador qué corregir (5 caracteres o más).",
-    "required": "Completá este dato."
+    "required": "Completá este dato.",
+    "street": "Ingresá la calle.",
+    "streetNumber": "Ingresá el número.",
+    "city": "Ingresá la localidad.",
+    "province": "Ingresá la provincia.",
+    "postalCode": "Ingresá el código postal.",
+    "birthDate": "Ingresá la fecha como DD/MM/AAAA.",
+    "position": "Ingresá el cargo."
   },
   "errors": {
     "generic": "Algo no salió bien. Probá de nuevo en un momento.",
     "auth_invalid_credentials": "Email o contraseña incorrectos.",
-    "auth_invalid_code": "El código no es correcto o venció.",
     "auth_email_taken": "Ya hay una cuenta con ese email. Probá ingresar.",
     "auth_session_expired": "Tu sesión venció. Ingresá de nuevo.",
     "stepup_cancelled": "Cancelaste la confirmación.",
     "stepup_failed": "No pudimos confirmar que sos vos. Probá de nuevo.",
     "stepup_device_key_unavailable": "Este dispositivo todavía no puede firmar con biometría. Confirmá con tu contraseña.",
-    "payout_insufficient_funds": "No tenés saldo disponible suficiente (incluye la comisión).",
-    "payout_creator_cannot_approve": "Quien crea un pago no puede aprobarlo.",
     "payout_invalid_state": "Este pago ya no se puede modificar.",
     "destination_not_found": "No encontramos esa cuenta. Revisá el CBU, CVU o alias.",
     "kyc_not_approved": "La verificación todavía no está aprobada.",
@@ -117,11 +128,57 @@
     "transfer_same_account": "Elegí dos cuentas distintas.",
     "cvu_already_exists": "Ese pagador ya tiene CVU en esa moneda.",
     "cvu_alias_taken": "Ese alias ya está en uso. Probá con otro.",
-    "idempotency_conflict": "Esta operación ya se envió con otros datos. Empezá una nueva.",
-    "erp_invalid_credentials": "Usuario o contraseña de Lebane incorrectos.",
-    "role_forbidden": "Tu rol no permite esta acción.",
     "network_offline": "Sin conexión. Revisá tu internet y probá de nuevo.",
-    "network_timeout": "El servidor tardó demasiado. Probá de nuevo."
+    "network_timeout": "El servidor tardó demasiado. Probá de nuevo.",
+    "validation_failed": "Revisá los datos: hay algo que no está bien.",
+    "request_too_large": "El archivo es demasiado grande (máximo 10 MB).",
+    "request_timeout": "El servidor tardó demasiado. Probá de nuevo.",
+    "request_rate_limited": "Hiciste muchos intentos seguidos. Esperá un momento y probá de nuevo.",
+    "resource_not_found": "No encontramos lo que buscabas.",
+    "resource_conflict": "Ya existe algo con esos datos.",
+    "operation_in_progress": "Esta operación ya se está procesando. Esperá unos segundos.",
+    "auth_forbidden": "Tu rol no permite esta acción.",
+    "auth_step_up_required": "Confirmá que sos vos para seguir.",
+    "auth_mfa_required": "Ingresá el código de tu segundo factor.",
+    "auth_email_not_verified": "Primero verificá tu email con el código que te mandamos.",
+    "auth_code_invalid": "El código no es correcto o venció.",
+    "auth_challenge_invalid": "La confirmación venció o no es válida. Probá de nuevo.",
+    "device_not_found": "Este dispositivo ya no está registrado. Confirmá con tu contraseña.",
+    "idempotency_key_reused": "Esta operación ya se envió con otros datos. Empezá una nueva.",
+    "org_not_found": "No encontramos esa organización.",
+    "member_already_exists": "Esa persona ya es parte del equipo.",
+    "member_not_found": "Esa persona ya no es parte del equipo.",
+    "user_not_found": "No hay una cuenta con ese email.",
+    "invite_not_found": "No encontramos esa invitación.",
+    "invite_expired": "La invitación venció. Pedí una nueva.",
+    "role_escalation_forbidden": "No podés dar un rol más alto que el tuyo.",
+    "org_last_admin": "La organización necesita al menos un administrador.",
+    "org_personal_mode_disabled": "El modo personal no está habilitado para tu cuenta.",
+    "kyc_case_not_found": "No encontramos la verificación de esta organización.",
+    "kyc_invalid_state": "La verificación ya fue enviada: no se puede modificar ahora.",
+    "kyc_document_invalid": "Ese archivo no sirve: subí un PDF, JPG o PNG legible.",
+    "money_invalid_amount": "El monto no es válido.",
+    "money_currency_mismatch": "Las monedas no coinciden.",
+    "account_not_found": "No encontramos esa cuenta.",
+    "account_not_archivable": "Solo se pueden archivar cuentas de proyecto.",
+    "ledger_insufficient_funds": "No tenés saldo disponible suficiente (incluye la comisión).",
+    "ledger_hold_not_active": "Este pago ya no tiene fondos reservados.",
+    "movement_not_found": "No encontramos ese movimiento.",
+    "payer_not_found": "No encontramos ese pagador.",
+    "cvu_not_found": "No encontramos ese CVU.",
+    "cvu_disabled": "Ese CVU está deshabilitado.",
+    "payin_not_found": "No encontramos ese cobro.",
+    "provider_unavailable": "El banco no responde en este momento. Probá en unos minutos.",
+    "destination_invalid": "Revisá el dato: no es un CBU, CVU ni alias válido.",
+    "payout_not_found": "No encontramos ese pago.",
+    "payout_self_approval_forbidden": "Quien crea un pago no puede aprobarlo.",
+    "payout_proof_unavailable": "El comprobante está disponible cuando el pago se acredita.",
+    "payout_attachment_invalid": "Ese adjunto no sirve: subí un PDF, JPG o PNG (hasta 10 por pago).",
+    "reconciliation_run_not_found": "No encontramos esa conciliación.",
+    "erp_link_not_found": "La empresa todavía no está vinculada con Lebane.",
+    "erp_link_no_candidate": "No encontramos tu empresa en Lebane.",
+    "erp_link_credentials_invalid": "Usuario o contraseña de Lebane incorrectos.",
+    "erp_link_already_linked": "La empresa ya está vinculada con Lebane."
   },
   "demo": {
     "title": "Modo demo",
@@ -161,7 +218,10 @@
   "verify": {
     "title": "Verificá tu email",
     "body": "Te mandamos un código de 6 números a {{email}}.",
-    "submit": "Verificar"
+    "submit": "Verificar",
+    "verified": "Email verificado. Ingresá con tu contraseña.",
+    "resent": "Si el email está registrado, te mandamos un código nuevo.",
+    "resend": "Reenviar código"
   },
   "unlock": {
     "title": "Hola de nuevo",
@@ -316,7 +376,8 @@
         "body": "Cuando lo apruebe otra persona del equipo, se lo transferimos a {{name}}."
       },
       "sent": { "title": "Transferencia enviada", "body": "Le estamos transfiriendo a {{name}}. Te avisamos cuando se acredite." }
-    }
+    },
+    "attachmentFailed": "El pago se creó, pero no pudimos subir el adjunto."
   },
   "approvals": {
     "title": "Aprobaciones",
@@ -339,7 +400,8 @@
     "blocked": {
       "creator": "Vos creaste este pago: lo tiene que aprobar otra persona.",
       "role": "Tu rol no puede aprobar pagos."
-    }
+    },
+    "unknownPerson": "Alguien del equipo"
   },
   "transfer": {
     "title": "Mover entre cuentas",
@@ -360,10 +422,10 @@
       "screen": "Movimientos",
       "payin": { "in": "Cobro de {{name}}", "out": "Cobro de {{name}}" },
       "payout": { "in": "Pago a {{name}}", "out": "Pago a {{name}}" },
-      "transfer": { "in": "Desde {{name}}", "out": "Hacia {{name}}" }
+      "internal_transfer": { "in": "Desde {{name}}", "out": "Hacia {{name}}" }
     },
-    "type": { "payin": "Cobros", "payout": "Pagos", "transfer": "Entre cuentas" },
-    "kind": { "payin": "Cobro", "payout": "Pago", "transfer": "Entre cuentas" },
+    "type": { "payin": "Cobros", "payout": "Pagos", "internal_transfer": "Entre cuentas" },
+    "kind": { "payin": "Cobro", "payout": "Pago", "internal_transfer": "Entre cuentas" },
     "range": { "today": "Hoy", "7d": "7 días", "30d": "30 días", "month": "Este mes", "custom": "Personalizado" },
     "filter": {
       "type": "Tipo",
@@ -393,7 +455,8 @@
     "gross": "Monto transferido",
     "net": "Acreditado",
     "timeline": "Estado del pago",
-    "shareProof": "Compartir comprobante"
+    "shareProof": "Compartir comprobante",
+    "unknownCounterparty": "Sin nombre"
   },
   "proof": {
     "title": "Comprobante de transferencia",
@@ -426,7 +489,19 @@
     "ledgerTotal": "Total según Lenapay",
     "unmatched": "Para revisar",
     "matchedTitle": "Conciliados",
-    "item": { "matched": "Conciliado", "missing_in_ledger": "Falta en Lenapay", "missing_at_psp": "Falta en el banco" }
+    "item": { "matched": "Conciliado", "missing_in_ledger": "Falta en Lenapay", "missing_at_psp": "Falta en el banco" },
+    "runToday": "Conciliar hoy",
+    "runQueued": "Pedimos la conciliación de hoy. Aparece en unos segundos.",
+    "noItems": "Esta conciliación no tiene movimientos.",
+    "status": {
+      "queued": "En cola",
+      "running": "En proceso",
+      "failed": "Falló"
+    },
+    "direction": {
+      "in": "Ingreso",
+      "out": "Egreso"
+    }
   },
   "erp": {
     "title": "Vincular con Lebane ERP",
@@ -435,19 +510,19 @@
     "notFoundTitle": "No encontramos tu empresa en Lebane",
     "notFoundBody": "Buscamos por el CUIT verificado. Podés seguir usando Lenapay sin vincular.",
     "found": "Encontramos tu empresa en Lebane",
-    "projects": "Proyectos",
-    "buyers": "Compradores",
     "link": "Vincular",
     "credentialsTitle": "Confirmá con tu cuenta Lebane",
     "credentialsBody": "Para vincular, ingresá con un usuario administrador de la empresa en Lebane.",
     "confirmLink": "Vincular e importar",
     "linkStarted": "Vinculamos la empresa. Estamos importando tus datos.",
-    "importing": "Importando… {{percent}} %",
+    "importing": "Importando tus datos…",
     "linkedTitle": "Empresa vinculada",
-    "linkedBody_one": "Importamos tus proyectos y {{count}} comprador.",
-    "linkedBody_other": "Importamos tus proyectos y {{count}} compradores.",
-    "importedProject": "Proyecto importado",
-    "seeAccounts": "Ver cuentas"
+    "seeAccounts": "Ver cuentas",
+    "erpId": "Id en Lebane",
+    "importingBody": "Estamos trayendo los proyectos y compradores de {{name}}.",
+    "failedTitle": "La importación falló",
+    "failedBody": "Escribinos y la reintentamos desde Lebane.",
+    "linkedBody": "{{name}} quedó vinculada: tus proyectos ya son cuentas y tus compradores, pagadores."
   },
   "orgs": {
     "title": "Tus organizaciones",
@@ -463,7 +538,12 @@
     "expires": "La invitación vence en 7 días.",
     "pendingInvite": "Invitación pendiente",
     "readOnly": "Solo los administradores pueden invitar y cambiar roles.",
-    "empty": "Todavía no hay nadie más en el equipo"
+    "empty": "Todavía no hay nadie más en el equipo",
+    "roleChanged": "Cambiamos el rol de {{email}}",
+    "removed": "Quitamos a {{email}} del equipo",
+    "memberTitle": "Persona del equipo",
+    "remove": "Quitar del equipo",
+    "confirmRemove": "Tocá de nuevo para quitar"
   },
   "onboarding": {
     "title": "Abrí tu cuenta",
@@ -487,10 +567,11 @@
       "companyData": "Datos de la empresa",
       "bylaws": "Estatuto",
       "afip": "Constancia de AFIP",
-      "representatives": "Representantes con DNI y selfie",
-      "personData": "Nombre y DNI",
-      "dniFront": "Foto del DNI",
-      "selfie": "Selfie"
+      "representatives": "Representantes con DNI (frente y dorso) y selfie",
+      "personData": "Tus datos y domicilio",
+      "dniFront": "Frente del DNI",
+      "selfie": "Selfie",
+      "dniBack": "Dorso del DNI"
     },
     "companyData": "Datos de la empresa",
     "personData": "Tus datos",
@@ -498,8 +579,7 @@
     "documents": "Documentación",
     "representatives": "Representantes",
     "addRepresentative": "Agregar representante",
-    "dniLine": "DNI {{dni}}",
-    "doc": { "bylaws": "Estatuto social", "afip_constancy": "Constancia de inscripción AFIP", "dni_front": "Foto del DNI", "selfie": "Selfie" },
+    "doc": { "bylaws": "Estatuto social", "afip_constancy": "Constancia de inscripción AFIP", "dni_front": "Frente del DNI", "selfie": "Selfie", "dni_back": "Dorso del DNI" },
     "upload": "Subir",
     "loaded": "Cargado",
     "takeSelfie": "Tomar selfie",
@@ -516,7 +596,9 @@
     "approvedBody": "Ya podés cobrar con CVU y hacer pagos.",
     "rejectedTitle": "Rechazamos la verificación",
     "goHome": "Ir al inicio",
-    "fix": "Completar o corregir datos"
+    "fix": "Completar o corregir datos",
+    "representativeLine": "DNI {{dni}} · {{position}}",
+    "saveCompanyFirst": "Primero guardá los datos de la empresa."
   },
   "security": {
     "title": "Seguridad",
@@ -565,5 +647,26 @@
     "language": "Idioma",
     "languageBody": "Sistema sigue el idioma de tu teléfono. Los montos siguen en pesos o dólares.",
     "languages": { "system": "Sistema", "esAR": "Español (Argentina)", "enUS": "English (US)" }
+  },
+  "developer": {
+    "title": "Desarrollador",
+    "rowBody": "API demo o real, y su URL",
+    "unavailable": "Solo en builds de desarrollo.",
+    "current": "En uso",
+    "buildDefault": "Valor del build",
+    "modeLabel": "Modo",
+    "mode": {
+      "mock": "Demo (mock)",
+      "live": "API real (live)"
+    },
+    "url": "URL de la API",
+    "urlHint": "En el teléfono, la IP de tu PC en la red local (no localhost).",
+    "urlInvalid": "Ingresá una URL http(s) completa, por ejemplo http://192.168.68.53:18080.",
+    "check": "Probar conexión",
+    "reachable": "La API respondió OK.",
+    "apply": "Aplicar y cerrar sesión",
+    "applied": "Listo. Ingresá de nuevo contra la API elegida.",
+    "reset": "Volver al valor del build",
+    "signOutNote": "Al aplicar se cierra la sesión: los datos y el acceso son de cada API."
   }
 }

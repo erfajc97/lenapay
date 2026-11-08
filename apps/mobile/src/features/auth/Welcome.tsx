@@ -2,12 +2,13 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
+import { config } from '@/shared/config/env';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
-import { Chip } from '@/shared/ui/Chip';
+import { DemoBadge } from '@/shared/ui/DemoBadge';
 import { Icon } from '@/shared/ui/Icon';
+import { LinkButton } from '@/shared/ui/Rows';
 import { Screen } from '@/shared/ui/Screen';
 import { Wordmark } from '@/shared/ui/Wordmark';
 
@@ -32,7 +33,7 @@ export function Welcome() {
       <View className="gap-6 pt-10">
         <View className="flex-row items-start justify-between">
           <Wordmark byLebane />
-          {isMockApi ? <Chip label={t('common.demoMode')} tone="warning" /> : null}
+          <DemoBadge />
         </View>
         <AppText variant="title">{t('welcome.tagline')}</AppText>
         <AppText tone="secondary">{t('welcome.body')}</AppText>
@@ -46,6 +47,11 @@ export function Welcome() {
             </View>
           ))}
         </Card>
+        {config.devTools ? (
+          <View className="items-start">
+            <LinkButton label={t('developer.title')} onPress={() => router.push('/developer')} />
+          </View>
+        ) : null}
       </View>
     </Screen>
   );

@@ -11,14 +11,15 @@ import { AppText } from './AppText';
 import { Chip } from './Chip';
 import { IconBadge } from './Rows';
 
-const ICONS = { payin: 'arrow-down', payout: 'arrow-up', transfer: 'swap-horizontal' } as const;
+const ICONS = { payin: 'arrow-down', payout: 'arrow-up', internal_transfer: 'swap-horizontal' } as const;
 
 /** One movement row (memoised for FlashList, ME8). Credits in green with a + sign. */
 export const MovementRow = memo(function MovementRow({ movement, onPress }: { movement: Movement; onPress: (movement: Movement) => void }) {
   const { t } = useTranslation();
   const incoming = movement.direction === 'in';
   const amount = formatMoney(incoming ? movement.amount : -movement.amount, movement.currency, { signed: incoming });
-  const title = t(`movements.title.${movement.type}.${movement.direction}`, { name: movement.counterparty });
+  const name = movement.counterparty ?? t('movements.unknownCounterparty');
+  const title = t(`movements.title.${movement.type}.${movement.direction}`, { name });
   return (
     <Pressable
       onPress={() => onPress(movement)}
@@ -29,7 +30,7 @@ export const MovementRow = memo(function MovementRow({ movement, onPress }: { mo
       <IconBadge name={ICONS[movement.type]} tone={incoming ? 'success' : 'text-primary'} soft={incoming ? 'bg-success-bg' : 'bg-border-subtle'} />
       <View className="flex-1 gap-0.5">
         <AppText variant="bodyStrong" numberOfLines={1}>
-          {movement.counterparty}
+          {name}
         </AppText>
         <AppText variant="caption" tone="muted" numberOfLines={1}>
           {`${t(`movements.kind.${movement.type}`)} · ${movement.accountName}`}
@@ -42,7 +43,7 @@ export const MovementRow = memo(function MovementRow({ movement, onPress }: { mo
         <AppText variant="bodyStrong" tone={incoming ? 'success' : 'primary'}>
           {amount}
         </AppText>
-        {movement.status !== 'settled' ? <Chip label={t(`status.movement.${movement.status}`)} tone={MOVEMENT_STATUS_TONE[movement.status]} /> : null}
+        {movement.status !== 'completed' ?<Chip label={t(`status.movement.${movement.status}`)} tone={MOVEMENT_STATUS_TONE[movement.status]} /> : null}
       </View>
     </Pressable>
   );

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { isMockApi } from '@/shared/api';
+import { useIsMockApi } from '@/shared/api';
 import { AppText } from '@/shared/ui/AppText';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
@@ -15,7 +15,8 @@ import { useLoginForm } from './hooks/useAuthForms';
 /** "Entrar con tu cuenta Lebane" (R-ID-4): same login, identity provider `lebane`. */
 export function LebaneLogin() {
   const { t } = useTranslation();
-  const { form, submit, pending } = useLoginForm('lebane');
+  const { form, submit, pending } = useLoginForm();
+  const isMock = useIsMockApi();
   return (
     <Screen title={t('lebane.title')} back footer={<Button label={t('lebane.submit')} icon="business" onPress={submit} loading={pending} />}>
       <Card className="flex-row items-center gap-3">
@@ -29,7 +30,7 @@ export function LebaneLogin() {
           </AppText>
         </View>
       </Card>
-      <DemoHint visible={isMockApi} title={t('demo.title')} body={t('demo.login')} />
+      <DemoHint visible={isMock} title={t('demo.title')} body={t('demo.login')} />
       <FormField control={form.control} name="email" label={t('fields.lebaneUser')} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="username" returnKeyType="next" />
       <FormField control={form.control} name="password" label={t('fields.password')} secureTextEntry autoComplete="current-password" textContentType="password" returnKeyType="go" onSubmitEditing={submit} />
     </Screen>

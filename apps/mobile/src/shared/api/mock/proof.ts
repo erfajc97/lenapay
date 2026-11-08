@@ -22,11 +22,11 @@ export async function renderProofPdf(payout: Payout): Promise<LocalFile> {
     [t('proof.fee'), formatMoney(payout.fee, payout.currency)],
     [t('proof.to'), payout.destination.holderName],
     [t('proof.cuit'), formatCuit(payout.destination.holderCuit)],
-    [t('proof.cbu'), payout.destination.cbu],
-    [t('proof.bank'), payout.destination.bankName],
+    [t('proof.cbu'), payout.destination.accountNumber],
+    [t('proof.bank'), payout.destination.bankName ?? ''],
     [t('proof.from'), payout.accountName],
     [t('proof.concept'), payout.concept],
-    [t('proof.date'), formatDateTime(payout.events.at(-1)?.at ?? payout.createdAt)],
+    [t('proof.date'), formatDateTime(payout.settledAt ?? payout.createdAt)],
     [t('proof.reference'), payout.id],
   ];
   const html = `<html><body style="font-family: Helvetica, Arial, sans-serif; padding: 32px;">

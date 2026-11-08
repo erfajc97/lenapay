@@ -1,154 +1,113 @@
+import type { components } from '@lenapay/api-types';
+
 /**
- * Lenapay API DTOs (architecture §5). This is the ONE file to swap for
- * `@lenapay/api-types` once the generated contract types exist: every service, mock and
- * screen imports its shapes from here.
- *
- * Money is always integer minor units + ISO currency (R-NF-2).
+ * The app's API types. Every wire shape comes from the generated contract types
+ * (`@lenapay/api-types`, `make gen`); this file only re-exports them and adds the few view
+ * models the screens need (money as plain minor units, names joined in). The live client maps
+ * contract DTOs to these view models (`live/mappers.ts`); the mock backend produces them
+ * directly. Money is always integer minor units + ISO currency (R-NF-2).
  */
+type Schemas = components['schemas'];
 
-export type Currency = 'ARS' | 'USD';
-export const CURRENCIES: readonly Currency[] = ['ARS', 'USD'];
-
-export type Role = 'viewer' | 'operator' | 'approver' | 'admin';
-export const ROLES: readonly Role[] = ['viewer', 'operator', 'approver', 'admin'];
-export type OrgKind = 'company' | 'personal';
-export type KycStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
-
-export interface ApiErrorBody {
-  error: { code: string; message: string; details?: Record<string, unknown> };
+/**
+ * Exhaustive list of a contract enum: the compiler fails when the contract adds a member the
+ * app does not list, so a new role or currency cannot be silently missing from a picker.
+ */
+function enumValues<T extends string>() {
+  return <const V extends readonly T[]>(values: V & ([T] extends [V[number]] ? unknown : 'misses a contract member')): readonly T[] => values;
 }
 
-// ── Auth ────────────────────────────────────────────────────────────────────────────────
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-}
-export interface SignupRequest {
-  email: string;
-  password: string;
-  fullName: string;
-}
-export interface SignupResponse {
-  userId: string;
-  email: string;
-}
-export interface VerifyEmailRequest {
-  email: string;
-  code: string;
-}
-export interface LoginRequest {
-  email: string;
-  password: string;
-  provider?: 'lebane';
-}
-export interface StepUpChallenge {
-  challengeId: string;
-  nonce: string;
-  expiresAt: string;
-}
-export interface StepUpVerifyRequest {
-  challengeId: string;
-  method: 'device_key' | 'password';
-  signature?: string;
-  password?: string;
-}
-export interface StepUpToken {
-  stepUpToken: string;
-  expiresAt: string;
-}
-export interface Membership {
-  orgId: string;
-  role: Role;
-}
+// ── Contract enums ──────────────────────────────────────────────────────────────────────
+export type Currency = Schemas['Currency'];
+export const CURRENCIES = enumValues<Currency>()(['ARS', 'USD']);
+export type Role = Schemas['Role'];
+export const ROLES = enumValues<Role>()(['viewer', 'operator', 'approver', 'admin']);
+export type OrgKind = Schemas['OrgKind'];
+export type KycStatus = Schemas['KycStatus'];
+export type DocType = Schemas['DocType'];
+export type AccountKind = Schemas['AccountKind'];
+export type PayoutStatus = Schemas['PayoutStatus'];
+export type MovementType = Schemas['MovementType'];
+export const MOVEMENT_TYPES = enumValues<MovementType>()(['payin', 'payout', 'internal_transfer']);
+export type MovementStatus = Schemas['MovementStatus'];
+export const MOVEMENT_STATUSES = enumValues<MovementStatus>()(['pending', 'completed', 'failed', 'cancelled']);
+type MovementDirection = Schemas['MovementDirection'];
+export type KycDocumentKind = Schemas['KycDocumentKind'];
+type ReconciliationItemStatus = Schemas['ReconciliationItemStatus'];
+export type PushPlatform = Schemas['RegisterPushTokenRequest']['platform'];
+
+// ── Contract DTOs used as they are ──────────────────────────────────────────────────────
+export type ApiErrorBody = Schemas['Error'];
+export type AuthTokens = Schemas['TokenPair'];
+export type SignupRequest = Schemas['SignupRequest'];
+export type SignupResponse = Schemas['SignupResponse'];
+export type VerifyEmailRequest = Schemas['VerifyEmailRequest'];
+export type ResendCodeRequest = Schemas['ResendCodeRequest'];
+export type LoginRequest = Schemas['LoginRequest'];
+export type StepUpChallengeRequest = Schemas['StepUpChallengeRequest'];
+export type StepUpChallenge = Schemas['StepUpChallenge'];
+export type StepUpVerifyRequest = Schemas['StepUpVerifyRequest'];
+export type StepUpToken = Schemas['StepUpToken'];
+export type RegisterDeviceRequest = Schemas['RegisterDeviceRequest'];
+export type Device = Schemas['Device'];
+type Membership = Schemas['Membership'];
+export type Org = Schemas['Organization'];
+export type CreateOrgRequest = Schemas['CreateOrgRequest'];
+export type InviteRequest = Schemas['CreateInviteRequest'];
+export type Invite = Schemas['Invite'];
+export type UpdateMemberRequest = Schemas['UpdateMemberRequest'];
+export type Address = Schemas['Address'];
+export type KycPersonData = Schemas['KycPersonData'];
+export type KycUpdateRequest = Schemas['UpdateKycRequest'];
+export type KycDocument = Schemas['KycDocument'];
+export type KycCase = Schemas['KycCase'];
+export type CreateAccountRequest = Schemas['CreateAccountRequest'];
+export type UpdateAccountRequest = Schemas['UpdateAccountRequest'];
+export type Cvu = Schemas['Cvu'];
+export type CreatePayerRequest = Schemas['CreatePayerRequest'];
+export type IssueCvuRequest = Schemas['CreateCvuRequest'];
+export type UpdateCvuRequest = Schemas['UpdateCvuRequest'];
+export type Destination = Schemas['Destination'];
+export type PayoutAttachment = Schemas['PayoutAttachment'];
+export type RejectPayoutRequest = Schemas['RejectPayoutRequest'];
+export type ErpCandidate = Schemas['ErpLinkCandidate'];
+export type ErpLinkRequest = Schemas['CreateErpLinkRequest'];
+export type RunReconciliationRequest = Schemas['RunReconciliationRequest'];
+
+// ── View models (mapped from the contract in live/mappers.ts) ─────────────────────────────
 export interface Me {
   id: string;
   email: string;
-  fullName: string;
+  /** Not in the contract yet: null in live mode (screens fall back to the email). */
+  fullName: string | null;
   mfaEnabled: boolean;
+  /** The person owns a personal wallet (a `personal` membership). */
   personalModeEnabled: boolean;
   memberships: Membership[];
 }
 
-// ── Orgs and team ───────────────────────────────────────────────────────────────────────
-export interface Org {
-  id: string;
-  kind: OrgKind;
-  legalName: string;
-  cuit: string | null;
-  kycStatus: KycStatus;
-  role: Role;
-  erpLinked: boolean;
-}
-export interface CreateOrgRequest {
-  kind: OrgKind;
-  legalName: string;
-}
 export interface Member {
   userId: string;
-  fullName: string;
   email: string;
+  /** Not in the contract yet: null in live mode. */
+  fullName: string | null;
   role: Role;
+  /** Live lists members only; the mock also lists pending invites. */
   status: 'active' | 'invited';
 }
-export interface InviteRequest {
-  email: string;
-  role: Role;
-}
-export interface Invite {
-  id: string;
-  email: string;
-  role: Role;
-  expiresAt: string;
-}
 
-// ── KYC ─────────────────────────────────────────────────────────────────────────────────
-export type KycDocumentType = 'bylaws' | 'afip_constancy' | 'dni_front' | 'dni_back' | 'selfie';
-export interface KycDocument {
-  id: string;
-  type: KycDocumentType;
-  fileName: string;
-  representativeId: string | null;
-  uploadedAt: string;
-}
-export interface Representative {
-  id: string;
-  fullName: string;
-  dni: string;
-}
-export interface KycCase {
-  id: string;
-  orgId: string;
-  kind: 'company' | 'person';
-  status: KycStatus;
-  cuit: string | null;
-  legalName: string | null;
-  legalAddress: string | null;
-  fullName: string | null;
-  dni: string | null;
-  representatives: Representative[];
-  documents: KycDocument[];
-  timeline: { status: KycStatus; at: string }[];
-  rejectionReason: string | null;
-}
-export interface KycUpdateRequest {
-  kind: 'company' | 'person';
-  cuit?: string;
-  legalName?: string;
-  legalAddress?: string;
-  fullName?: string;
-  dni?: string;
-  representatives?: Representative[];
-}
-export interface KycDocumentUpload {
-  type: KycDocumentType;
+/** A file picked on the device, ready for a multipart upload. */
+export interface LocalUpload {
   fileName: string;
   fileUri: string;
-  representativeId?: string;
+  mimeType: string;
 }
 
-// ── Accounts and balances ───────────────────────────────────────────────────────────────
-export type AccountKind = 'main' | 'project' | 'personal';
+export interface KycDocumentUpload extends LocalUpload {
+  kind: KycDocumentKind;
+  representativeDni?: string;
+}
+
 export interface Balance {
   currency: Currency;
   /** Posted ledger balance, minor units. */
@@ -158,24 +117,23 @@ export interface Balance {
   /** posted − held, minor units. */
   available: number;
 }
+
 export interface Account {
   id: string;
   kind: AccountKind;
   name: string;
-  archivedAt: string | null;
+  archived: boolean;
+  erpProjectRef: string | null;
   balances: Balance[];
-  payersCount: number;
+  /** Mock only (the contract has no count): null in live mode. */
+  payersCount: number | null;
+  createdAt: string;
 }
+
 export interface OrgBalances {
   totals: Balance[];
 }
-export interface CreateAccountRequest {
-  name: string;
-}
-export interface UpdateAccountRequest {
-  name?: string;
-  archived?: boolean;
-}
+
 export interface InternalTransferRequest {
   fromAccountId: string;
   toAccountId: string;
@@ -183,110 +141,73 @@ export interface InternalTransferRequest {
   amount: number;
   concept: string;
 }
+
 export interface InternalTransfer {
   id: string;
   fromAccountId: string;
   toAccountId: string;
   currency: Currency;
   amount: number;
+  concept: string | null;
   createdAt: string;
 }
 
-// ── Payers and CVUs ─────────────────────────────────────────────────────────────────────
-export type DocType = 'CUIT' | 'DNI';
-export interface Cvu {
-  id: string;
-  payerId: string;
-  currency: Currency;
-  cvu: string;
-  alias: string;
-  status: 'active' | 'disabled';
-}
-export interface Payer {
-  id: string;
-  accountId: string;
+export type Payer = Schemas['Payer'] & {
+  /** Joined from the org's accounts. */
   accountName: string;
-  name: string;
-  docType: DocType;
-  docNumber: string;
-  email: string | null;
-  erpRef: string | null;
-  cvus: Cvu[];
-  createdAt: string;
-}
-export interface CreatePayerRequest {
-  accountId: string;
-  name: string;
-  docType: DocType;
-  docNumber: string;
-  email?: string;
-}
-export interface IssueCvuRequest {
-  currency: Currency;
-}
-export interface UpdateCvuRequest {
-  alias: string;
-}
+};
 
-// ── Payins ──────────────────────────────────────────────────────────────────────────────
 export interface Payin {
   id: string;
-  cvuId: string;
-  payerId: string;
-  payerName: string;
   accountId: string;
   accountName: string;
+  payerId: string | null;
+  cvuId: string;
   currency: Currency;
+  /** Gross amount the payer sent, minor units. */
   amount: number;
   fee: number;
   net: number;
-  originName: string;
-  originCuit: string;
+  originName: string | null;
+  originCuit: string | null;
   createdAt: string;
 }
 
-// ── Payouts and approvals ───────────────────────────────────────────────────────────────
-export type PayoutStatus =
-  | 'pending_approval'
-  | 'approved'
-  | 'sending'
-  | 'settled'
-  | 'failed'
-  | 'rejected'
-  | 'cancelled';
-export interface Destination {
-  type: 'cbu' | 'cvu' | 'alias';
-  cbu: string;
-  alias: string | null;
-  holderName: string;
-  holderCuit: string;
-  bankName: string;
-}
 export interface PayoutQuoteRequest {
   accountId: string;
   currency: Currency;
   amount: number;
+  to: string;
 }
+
 export interface PayoutQuote {
-  accountId: string;
   currency: Currency;
   amount: number;
   fee: number;
   total: number;
-  available: number;
+  /** Available balance after holding the total; negative means it does not fit. */
+  availableAfter: number;
 }
+
 export interface CreatePayoutRequest {
   accountId: string;
   currency: Currency;
   amount: number;
   to: string;
   concept: string;
-  attachmentName?: string;
 }
-export interface PersonRef {
+
+/** A member referenced by a payout; the label is the name or email when known. */
+interface PersonRef {
   userId: string;
-  fullName: string;
+  label: string | null;
 }
+
+interface PayoutEvent {
+  status: PayoutStatus;
+  at: string;
+}
+
 export interface Payout {
   id: string;
   accountId: string;
@@ -294,39 +215,37 @@ export interface Payout {
   currency: Currency;
   amount: number;
   fee: number;
+  total: number;
   destination: Destination;
   concept: string;
-  attachmentName: string | null;
   status: PayoutStatus;
   createdBy: PersonRef;
-  decidedBy: PersonRef | null;
-  rejectionReason: string | null;
+  approvedBy: PersonRef | null;
+  rejectReason: string | null;
+  failureCode: string | null;
+  attachments: PayoutAttachment[];
+  events: PayoutEvent[];
   createdAt: string;
-  events: { status: PayoutStatus; at: string }[];
-}
-export interface RejectPayoutRequest {
-  reason: string;
+  settledAt: string | null;
 }
 
-// ── Movements ───────────────────────────────────────────────────────────────────────────
-export type MovementType = 'payin' | 'payout' | 'transfer';
-export type MovementStatus = 'pending' | 'settled' | 'failed' | 'cancelled';
 export interface Movement {
   id: string;
   type: MovementType;
-  direction: 'in' | 'out';
+  direction: MovementDirection;
   status: MovementStatus;
   currency: Currency;
   amount: number;
-  fee: number;
+  fee: number | null;
   accountId: string;
   accountName: string;
-  counterparty: string;
+  counterparty: string | null;
   counterpartyDoc: string | null;
   concept: string | null;
   refId: string;
   createdAt: string;
 }
+
 export interface MovementFilters {
   account?: string;
   type?: MovementType;
@@ -335,54 +254,53 @@ export interface MovementFilters {
   from?: string;
   to?: string;
 }
+
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
 }
 
-// ── Reconciliation ──────────────────────────────────────────────────────────────────────
-export type ReconItemStatus = 'matched' | 'missing_in_ledger' | 'missing_at_psp';
-export interface ReconciliationItem {
-  id: string;
-  status: ReconItemStatus;
-  providerTransferId: string;
-  amount: number;
-  description: string;
-}
 export interface ReconciliationRun {
   id: string;
   currency: Currency;
   day: string;
+  status: Schemas['ReconciliationRunStatus'];
   matched: number;
   missingInLedger: number;
   missingAtPsp: number;
   pspTotal: number;
   ledgerTotal: number;
-  items: ReconciliationItem[];
+  difference: number;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface ReconciliationItem {
+  id: string;
+  status: ReconciliationItemStatus;
+  providerTransferId: string;
+  direction: MovementDirection;
+  /** Null when the transfer is missing at the PSP. */
+  pspAmount: number | null;
+  /** Null when the transfer is missing in the ledger. */
+  ledgerAmount: number | null;
   createdAt: string;
 }
 
-// ── ERP link ────────────────────────────────────────────────────────────────────────────
-export interface ErpCandidate {
-  found: boolean;
-  erpOrgName: string | null;
-  cuit: string | null;
-  projectsCount: number;
-  buyersCount: number;
-}
-export interface ErpLinkRequest {
-  username: string;
-  password: string;
-}
+export type ErpLinkStatus = 'not_linked' | 'importing' | 'linked' | 'failed';
+
 export interface ErpLink {
-  status: 'not_linked' | 'importing' | 'linked';
+  status: ErpLinkStatus;
+  displayName: string | null;
   linkedAt: string | null;
-  projects: { done: number; total: number };
-  payers: { done: number; total: number };
-  importedProjects: string[];
+  importedAt: string | null;
 }
 
 // ── Realtime ────────────────────────────────────────────────────────────────────────────
 export type LiveEvent =
   | { type: 'payin.credited'; payin: Payin }
-  | { type: 'payout.updated'; payout: Payout };
+  | { type: 'payout.updated'; payout: Payout }
+  | { type: 'approval.requested'; payout: Payout }
+  | { type: 'balance.changed'; accountId: string | null }
+  /** App-level: the stream reconnected and frames may have been missed, so refetch. */
+  | { type: 'resync' };

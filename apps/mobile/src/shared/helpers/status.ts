@@ -14,7 +14,7 @@ export const PAYOUT_STATUS_TONE: Record<PayoutStatus, ChipTone> = {
 
 export const MOVEMENT_STATUS_TONE: Record<MovementStatus, ChipTone> = {
   pending: 'warning',
-  settled: 'success',
+  completed: 'success',
   failed: 'danger',
   cancelled: 'neutral',
 };

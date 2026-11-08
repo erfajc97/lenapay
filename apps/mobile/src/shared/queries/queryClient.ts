@@ -18,6 +18,9 @@ export const queryClient = new QueryClient({
   },
 });
 
-/** Cached server data survives a restart (no secrets in it); the API mode busts it. */
+/**
+ * Cached server data survives a restart (no secrets in it). The build's API mode and the
+ * view-model version bust it; a runtime switch in Settings → Desarrollador clears it.
+ */
 export const queryPersister = createAsyncStoragePersister({ storage: AsyncStorage, key: 'lenapay.queryCache' });
-export const PERSIST_BUSTER = `${config.apiMode}-1`;
+export const PERSIST_BUSTER = `${config.env.mode}-2`;

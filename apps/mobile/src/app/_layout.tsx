@@ -23,6 +23,8 @@ function RootStack() {
       <Stack.Protected guard={status === 'active'}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
+      {/* Reachable signed in or out: a wrong API URL must not lock the owner out of fixing it. */}
+      <Stack.Screen name="developer" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

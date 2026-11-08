@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 
 import { api } from '@/shared/api';
-import type { CreateOrgRequest, KycDocumentType, KycUpdateRequest } from '@/shared/api/types';
+import type { CreateOrgRequest, KycDocumentKind, KycUpdateRequest } from '@/shared/api/types';
 import { confirmHaptic } from '@/shared/feedback/haptics';
 import { notifyError, notifySuccess } from '@/shared/feedback/mutationFeedback';
 import { KYC_KEY, ORGS_KEY } from '@/shared/queries/orgs';
@@ -40,10 +40,10 @@ export function useSaveKyc(orgId: string | undefined) {
 export function useUploadKycDocument(orgId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { type: KycDocumentType; representativeId?: string }) => {
-      const file = await pickKycFile(input.type);
+    mutationFn: async (input: { kind: KycDocumentKind; representativeDni?: string }) => {
+      const file = await pickKycFile(input.kind);
       if (!file) return null;
-      return api.kyc.uploadDocument(orgId ?? '', { type: input.type, representativeId: input.representativeId, ...file });
+      return api.kyc.uploadDocument(orgId ?? '', { kind: input.kind, representativeDni: input.representativeDni, ...file });
     },
     onSuccess: (document) => {
       if (!document) return;

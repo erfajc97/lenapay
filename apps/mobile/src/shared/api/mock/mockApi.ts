@@ -40,11 +40,13 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
     auth: {
       signup: (body) => respond(() => backend.signup(body)),
       verifyEmail: (body) => respond(() => backend.verifyEmail(body)),
+      resendCode: () => respond(() => undefined),
       login: (body) => respond(() => backend.login(body)),
       refresh: () => respond(() => backend.refresh()),
       logout: () => respond(() => backend.logout()),
-      stepUpChallenge: () => respond(() => backend.stepUpChallenge()),
+      stepUpChallenge: (body) => respond(() => backend.stepUpChallenge(body)),
       stepUpVerify: (body) => respond(() => backend.stepUpVerify(body)),
+      registerDevice: (body) => respond(() => backend.registerDevice(body)),
       me: () => respond(() => backend.me()),
     },
     orgs: {
@@ -52,6 +54,8 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
       create: (body) => respond(() => backend.createOrg(body)),
       members: (orgId) => respond(() => backend.members(orgId)),
       invite: (orgId, body) => respond(() => backend.invite(orgId, body)),
+      updateMember: (orgId, userId, body) => respond(() => backend.updateMember(orgId, userId, body)),
+      removeMember: (orgId, userId) => respond(() => backend.removeMember(orgId, userId)),
     },
     kyc: {
       get: (orgId) => respond(() => backend.getKyc(orgId)),
@@ -85,13 +89,17 @@ export function createMockApi(options: { latencyMs?: number; backend?: MockBacke
       approve: (orgId, payoutId, credentials) => respond(() => backend.approvePayout(orgId, payoutId, credentials)),
       reject: (orgId, payoutId, body, credentials) => respond(() => backend.rejectPayout(orgId, payoutId, body.reason, credentials)),
       approvals: (orgId) => respond(() => backend.listApprovals(orgId)),
+      uploadAttachment: (orgId, payoutId, file) => respond(() => backend.uploadAttachment(orgId, payoutId, file)),
       proof: (orgId, payoutId) => respond(() => renderProofPdf(backend.getPayout(orgId, payoutId))),
     },
     movements: {
       list: (orgId, filters, cursor) => respond(() => backend.listMovements(orgId, filters, cursor)),
+      get: (orgId, movementId) => respond(() => backend.getMovement(orgId, movementId)),
     },
     reconciliation: {
       runs: (orgId) => respond(() => backend.reconciliationRuns(orgId)),
+      items: (orgId, runId) => respond(() => backend.reconciliationItems(orgId, runId)),
+      run: (orgId, body) => respond(() => backend.runReconciliation(orgId, body)),
     },
     erp: {
       candidate: (orgId) => respond(() => backend.erpCandidate(orgId)),

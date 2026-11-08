@@ -33,9 +33,9 @@ export function hasErrors(errors: DetailsErrors): boolean {
   return Object.values(errors).some((error) => error !== null);
 }
 
-/** R-OUT-2: amount + fee is held on creation, so it must fit in the available balance. */
-export function reviewBlocker(quote: Pick<PayoutQuote, 'total' | 'available'>): 'insufficient' | null {
-  return quote.total > quote.available ? 'insufficient' : null;
+/** R-OUT-2: amount + fee is held on creation, so what is left after holding it cannot go below 0. */
+export function reviewBlocker(quote: Pick<PayoutQuote, 'availableAfter'>): 'insufficient' | null {
+  return quote.availableAfter < 0 ? 'insufficient' : null;
 }
 
 /** What the person sees after confirming: company payouts wait for a second person (R-OUT-4). */

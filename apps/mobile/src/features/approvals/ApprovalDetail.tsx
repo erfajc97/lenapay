@@ -74,14 +74,16 @@ export function ApprovalDetail() {
       </Card>
       <Card className="gap-1">
         <Field label={t('approvals.to')} value={payout.destination.holderName} />
-        <Field label={t('fields.cbu')} value={payout.destination.cbu} mono />
-        <Field label={t('fields.bank')} value={payout.destination.bankName} />
+        <Field label={t('fields.cbu')} value={payout.destination.accountNumber} mono />
+        {payout.destination.bankName ? <Field label={t('fields.bank')} value={payout.destination.bankName} /> : null}
         <Field label={t('payout.fromAccount')} value={payout.accountName} />
         <Field label={t('fields.concept')} value={payout.concept} />
-        {payout.attachmentName ? <Field label={t('fields.attachment')} value={payout.attachmentName} /> : null}
-        <Field label={t('approvals.createdByLabel')} value={`${payout.createdBy.fullName} · ${formatDateTime(payout.createdAt)}`} />
+        {payout.attachments.map((attachment) => (
+          <Field key={attachment.id} label={t('fields.attachment')} value={attachment.fileName} />
+        ))}
+        <Field label={t('approvals.createdByLabel')} value={`${payout.createdBy.label ?? t('approvals.unknownPerson')} · ${formatDateTime(payout.createdAt)}`} />
       </Card>
-      {payout.rejectionReason ? <Notice tone="danger" icon="close-circle-outline" title={t('approvals.rejectionReason')} body={payout.rejectionReason} /> : null}
+      {payout.rejectReason ? <Notice tone="danger" icon="close-circle-outline" title={t('approvals.rejectionReason')} body={payout.rejectReason} /> : null}
 
       <Sheet visible={detail.rejecting} title={t('approvals.rejectTitle')} onClose={detail.closeReject} onDismissed={detail.rejectSheetDismissed}>
         <TextField

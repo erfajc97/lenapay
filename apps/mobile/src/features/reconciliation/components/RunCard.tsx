@@ -22,7 +22,10 @@ export const RunCard = memo(function RunCard({ run, onPress }: { run: Reconcilia
         <AppText variant="bodyStrong">
           {formatDay(run.day)}
         </AppText>
-        <CurrencyChip currency={run.currency} />
+        <View className="flex-row items-center gap-2">
+          {run.status === 'completed' ? null : <Chip label={t(`reconciliation.status.${run.status}`)} tone={run.status === 'failed' ? 'danger' : 'warning'} />}
+          <CurrencyChip currency={run.currency} />
+        </View>
       </View>
       <View className="flex-row gap-2">
         <Chip label={t('reconciliation.matched', { count: run.matched })} tone="success" />

@@ -22,8 +22,8 @@ export function Profile() {
       {me.data ? (
         <Card className="gap-2">
           <View className="flex-row items-center gap-3">
-            <Avatar name={me.data.fullName} />
-            <AppText variant="subheading">{me.data.fullName}</AppText>
+            <Avatar name={me.data.fullName ?? me.data.email} />
+            <AppText variant="subheading">{me.data.fullName ?? me.data.email}</AppText>
           </View>
           <Field label={t('fields.email')} value={me.data.email} />
         </Card>

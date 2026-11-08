@@ -39,7 +39,7 @@ export function usePayerDetail() {
     closeSheet,
     openQr: (cvu: Cvu) => setSheet({ kind: 'qr', cvu }),
     openAlias: (cvu: Cvu) => {
-      setAlias(cvu.alias);
+      setAlias(cvu.alias ?? '');
       setSheet({ kind: 'alias', cvu });
     },
     openDisable: (cvu: Cvu) => setSheet({ kind: 'disable', cvu }),

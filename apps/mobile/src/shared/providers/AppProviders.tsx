@@ -19,6 +19,7 @@ import { PERSIST_BUSTER, queryClient, queryPersister } from '@/shared/queries/qu
 import { LivePayinBanner } from '@/shared/realtime/LivePayinBanner';
 import { useBootSession } from '@/shared/session/useBootSession';
 import { StepUpSheet } from '@/shared/stepup/StepUpSheet';
+import { useApiTargetHydrated } from '@/shared/stores/useApiTargetStore';
 import { usePreferencesHydrated } from '@/shared/stores/usePreferencesStore';
 import { useSessionStore } from '@/shared/stores/useSessionStore';
 import { useApplyThemePreference } from '@/shared/theme/useApplyThemePreference';
@@ -52,8 +53,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   useApplyLanguagePreference();
   const booting = useSessionStore((state) => state.status === 'booting');
   const preferencesHydrated = usePreferencesHydrated();
+  // The first request must already go to the API picked in Settings → Desarrollador.
+  const apiTargetHydrated = useApiTargetHydrated();
   const fontsReady = fontsLoaded || Boolean(fontError);
-  const ready = fontsReady && preferencesHydrated && !booting;
+  const ready = fontsReady && preferencesHydrated && apiTargetHydrated && !booting;
   const [launching, setLaunching] = useState(true);
   const hideNativeSplash = useCallback(() => {
     SplashScreen.hideAsync().catch(() => undefined);

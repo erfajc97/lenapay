@@ -61,4 +61,18 @@ describe('createHttp', () => {
     const http = createHttp(deps({ fetchImpl: vi.fn(async () => Promise.reject(new TypeError('Network request failed'))) }));
     await expect(http('GET', '/me')).rejects.toMatchObject({ code: 'network.offline' });
   });
+
+  it('reads an empty 202/204 answer as undefined (resend-code, verify-email)', async () => {
+    const http = createHttp(deps({ fetchImpl: vi.fn(async () => new Response(null, { status: 202 })) }));
+    await expect(http('POST', '/auth/resend-code', { auth: false, body: { email: 'a@b.c' } })).resolves.toBeUndefined();
+    const noContent = createHttp(deps({ fetchImpl: vi.fn(async () => new Response(null, { status: 204 })) }));
+    await expect(noContent('POST', '/auth/verify-email', { auth: false })).resolves.toBeUndefined();
+  });
+
+  it('shares its single-flight refresh with the SSE stream', async () => {
+    const refreshSession = vi.fn(async () => 'new');
+    const http = createHttp(deps({ refreshSession }));
+    await Promise.all([http.refresh(), http.refresh()]);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+  });
 });
