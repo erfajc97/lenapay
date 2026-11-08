@@ -24,7 +24,57 @@
       "name": "Juan González",
       "docType": "dni",
       "docNumber": "25407370",
-      "email": "juan.gonzalez@example.com"
+      "email": "juan.gonzalez@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 67500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 68750000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 70000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 71250000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 72500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 73750000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        }
+      ]
     },
     {
       "ref": "erp-org-008-buyer-002",
@@ -32,7 +82,57 @@
       "name": "Federico Álvarez",
       "docType": "dni",
       "docNumber": "26420949",
-      "email": "federico.alvarez@example.com"
+      "email": "federico.alvarez@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 50000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 51250000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 52500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 53750000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 55000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 56250000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        }
+      ]
     },
     {
       "ref": "erp-org-008-buyer-003",
@@ -40,14 +140,114 @@
       "name": "Carolina Pereyra",
       "docType": "dni",
       "docNumber": "27434528",
-      "email": "carolina.pereyra@example.com"
+      "email": "carolina.pereyra@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 83750000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 85000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 86250000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 87500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 88750000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        }
+      ]
     },
     {
       "ref": "erp-org-008-buyer-004",
       "projectRef": "erp-org-008-prj-tyb",
       "name": "López Inversiones SRL",
       "docType": "cuit",
-      "docNumber": "30700301296"
+      "docNumber": "30700301296",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 66250000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 67500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 68750000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 70000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 71250000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "UVA"
+        }
+      ]
     }
   ]
 }

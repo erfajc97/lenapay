@@ -24,7 +24,57 @@
       "name": "Lucía Acosta",
       "docType": "dni",
       "docNumber": "21353054",
-      "email": "lucia.acosta@example.com"
+      "email": "lucia.acosta@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        }
+      ]
     },
     {
       "ref": "erp-org-007-buyer-002",
@@ -32,7 +82,57 @@
       "name": "Santiago Castro",
       "docType": "dni",
       "docNumber": "22366633",
-      "email": "santiago.castro@example.com"
+      "email": "santiago.castro@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        }
+      ]
     },
     {
       "ref": "erp-org-007-buyer-003",
@@ -40,14 +140,114 @@
       "name": "Julieta Sánchez",
       "docType": "dni",
       "docNumber": "23380212",
-      "email": "julieta.sanchez@example.com"
+      "email": "julieta.sanchez@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        }
+      ]
     },
     {
       "ref": "erp-org-007-buyer-004",
       "projectRef": "erp-org-007-prj-tds",
       "name": "Herrera Inversiones SRL",
       "docType": "cuit",
-      "docNumber": "30700264773"
+      "docNumber": "30700264773",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": null
+        }
+      ]
     }
   ]
 }

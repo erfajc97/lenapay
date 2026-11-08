@@ -24,7 +24,57 @@
       "name": "Florencia Suárez",
       "docType": "dni",
       "docNumber": "30135790",
-      "email": "florencia.suarez@example.com"
+      "email": "florencia.suarez@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 66250000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 67500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 68750000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 70000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 71250000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        }
+      ]
     },
     {
       "ref": "erp-org-003-buyer-002",
@@ -32,7 +82,57 @@
       "name": "Matías Rodríguez",
       "docType": "dni",
       "docNumber": "31149369",
-      "email": "matias.rodriguez@example.com"
+      "email": "matias.rodriguez@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 47500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 48750000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 50000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 51250000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 52500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 53750000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        }
+      ]
     },
     {
       "ref": "erp-org-003-buyer-003",
@@ -40,14 +140,114 @@
       "name": "Micaela Torres",
       "docType": "dni",
       "docNumber": "32162948",
-      "email": "micaela.torres@example.com"
+      "email": "micaela.torres@example.com",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 80000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 81250000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 82500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 83750000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 85000000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 86250000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        }
+      ]
     },
     {
       "ref": "erp-org-003-buyer-004",
       "projectRef": "erp-org-003-prj-lit",
       "name": "Gutiérrez Inversiones SRL",
       "docType": "cuit",
-      "docNumber": "30700118696"
+      "docNumber": "30700118696",
+      "installments": [
+        {
+          "number": 1,
+          "dueDate": "2026-07-10",
+          "amountMinor": 62500000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 2,
+          "dueDate": "2026-08-10",
+          "amountMinor": 63750000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 3,
+          "dueDate": "2026-09-10",
+          "amountMinor": 65000000,
+          "currency": "ARS",
+          "status": "paid",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 4,
+          "dueDate": "2026-10-10",
+          "amountMinor": 66250000,
+          "currency": "ARS",
+          "status": "overdue",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 5,
+          "dueDate": "2026-11-10",
+          "amountMinor": 67500000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        },
+        {
+          "number": 6,
+          "dueDate": "2026-12-10",
+          "amountMinor": 68750000,
+          "currency": "ARS",
+          "status": "pending",
+          "adjustmentIndex": "CAC"
+        }
+      ]
     }
   ]
 }

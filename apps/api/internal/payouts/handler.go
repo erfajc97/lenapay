@@ -74,7 +74,7 @@ func (h *Handler) CreatePayout(ctx context.Context, req api.CreatePayoutRequestO
 	if err != nil {
 		return nil, err
 	}
-	return api.CreatePayout201JSONResponse(payoutToAPI(po)), nil
+	return api.CreatePayout201JSONResponse(PayoutToAPI(po)), nil
 }
 
 // GetPayout implements api.StrictServerInterface.
@@ -87,7 +87,7 @@ func (h *Handler) GetPayout(ctx context.Context, req api.GetPayoutRequestObject)
 	if err != nil {
 		return nil, err
 	}
-	return api.GetPayout200JSONResponse(payoutToAPI(po)), nil
+	return api.GetPayout200JSONResponse(PayoutToAPI(po)), nil
 }
 
 // ApprovePayout implements api.StrictServerInterface.
@@ -100,7 +100,7 @@ func (h *Handler) ApprovePayout(ctx context.Context, req api.ApprovePayoutReques
 	if err != nil {
 		return nil, err
 	}
-	return api.ApprovePayout200JSONResponse(payoutToAPI(po)), nil
+	return api.ApprovePayout200JSONResponse(PayoutToAPI(po)), nil
 }
 
 // RejectPayout implements api.StrictServerInterface.
@@ -116,7 +116,7 @@ func (h *Handler) RejectPayout(ctx context.Context, req api.RejectPayoutRequestO
 	if err != nil {
 		return nil, err
 	}
-	return api.RejectPayout200JSONResponse(payoutToAPI(po)), nil
+	return api.RejectPayout200JSONResponse(PayoutToAPI(po)), nil
 }
 
 // CancelPayout implements api.StrictServerInterface.
@@ -129,7 +129,7 @@ func (h *Handler) CancelPayout(ctx context.Context, req api.CancelPayoutRequestO
 	if err != nil {
 		return nil, err
 	}
-	return api.CancelPayout200JSONResponse(payoutToAPI(po)), nil
+	return api.CancelPayout200JSONResponse(PayoutToAPI(po)), nil
 }
 
 // GetPayoutProof implements api.StrictServerInterface.
@@ -161,7 +161,7 @@ func (h *Handler) ListApprovals(ctx context.Context, req api.ListApprovalsReques
 	}
 	items := make([]api.Payout, 0, len(pg.Items))
 	for _, po := range pg.Items {
-		items = append(items, payoutToAPI(po))
+		items = append(items, PayoutToAPI(po))
 	}
 	return api.ListApprovals200JSONResponse{Items: items, NextCursor: pg.NextCursor}, nil
 }
@@ -245,7 +245,9 @@ func attachmentToAPI(a Attachment) api.PayoutAttachment {
 	}
 }
 
-func payoutToAPI(po Payout) api.Payout {
+// PayoutToAPI builds the contract's Payout field by field (A5); payerview answers its pay
+// operation with it too, so a payout looks the same on every door (G12).
+func PayoutToAPI(po Payout) api.Payout {
 	total, err := po.Total()
 	if err != nil { // amount + fee was summed when the hold was taken; it cannot overflow now
 		total = po.Amount

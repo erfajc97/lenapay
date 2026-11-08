@@ -13,10 +13,12 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
 // DevPassword is the one password the fake ERP accepts for any of its users. It is a fixture
@@ -49,12 +51,22 @@ type fixtureUser struct {
 }
 
 type fixtureBuyer struct {
-	Ref        string  `json:"ref"`
-	ProjectRef string  `json:"projectRef"`
-	Name       string  `json:"name"`
-	DocType    string  `json:"docType"`
-	DocNumber  string  `json:"docNumber"`
-	Email      *string `json:"email"`
+	Ref          string               `json:"ref"`
+	ProjectRef   string               `json:"projectRef"`
+	Name         string               `json:"name"`
+	DocType      string               `json:"docType"`
+	DocNumber    string               `json:"docNumber"`
+	Email        *string              `json:"email"`
+	Installments []fixtureInstallment `json:"installments"`
+}
+
+type fixtureInstallment struct {
+	Number          int     `json:"number"`
+	DueDate         string  `json:"dueDate"` // YYYY-MM-DD
+	AmountMinor     int64   `json:"amountMinor"`
+	Currency        string  `json:"currency"`
+	Status          string  `json:"status"`
+	AdjustmentIndex *string `json:"adjustmentIndex"`
 }
 
 func (d *Directory) load() ([]fixtureOrg, error) {
@@ -147,6 +159,51 @@ func (d *Directory) Buyers(_ context.Context, erpOrgID string) ([]erplink.Buyer,
 		out = append(out, erplink.Buyer{Ref: b.Ref, ProjectRef: b.ProjectRef, Name: b.Name, DocType: b.DocType, DocNumber: b.DocNumber, Email: b.Email})
 	}
 	return out, nil
+}
+
+// Installments implements erplink.Directory: the buyer's plan from the fixture, by number (an
+// unknown buyer has none). A malformed installment is a fixture error, never skipped.
+func (d *Directory) Installments(_ context.Context, erpOrgID, buyerRef string) ([]erplink.Installment, error) {
+	o, ok, err := d.org(erpOrgID)
+	if err != nil || !ok {
+		return nil, notFound(erpOrgID, err)
+	}
+	i := slices.IndexFunc(o.Buyers, func(b fixtureBuyer) bool { return b.Ref == buyerRef })
+	if i < 0 {
+		return []erplink.Installment{}, nil
+	}
+	out := make([]erplink.Installment, 0, len(o.Buyers[i].Installments))
+	for _, in := range o.Buyers[i].Installments {
+		inst, err := in.toInstallment()
+		if err != nil {
+			return nil, fmt.Errorf("erp fake: %s installment %d: %w", buyerRef, in.Number, err)
+		}
+		out = append(out, inst)
+	}
+	slices.SortFunc(out, func(a, b erplink.Installment) int { return a.Number - b.Number })
+	return out, nil
+}
+
+func (in fixtureInstallment) toInstallment() (erplink.Installment, error) {
+	due, err := time.Parse(time.DateOnly, in.DueDate)
+	if err != nil {
+		return erplink.Installment{}, fmt.Errorf("due date: %w", err)
+	}
+	currency, err := money.ParseCurrency(in.Currency)
+	if err != nil {
+		return erplink.Installment{}, err
+	}
+	status := erplink.InstallmentStatus(in.Status)
+	if !slices.Contains([]erplink.InstallmentStatus{erplink.InstallmentPending, erplink.InstallmentPaid, erplink.InstallmentOverdue}, status) {
+		return erplink.Installment{}, fmt.Errorf("status %q", in.Status)
+	}
+	if in.Number < 1 || in.AmountMinor <= 0 {
+		return erplink.Installment{}, fmt.Errorf("number or amount out of range")
+	}
+	return erplink.Installment{
+		Number: in.Number, DueDate: due, Amount: money.New(in.AmountMinor, currency), Status: status,
+		AdjustmentIndex: in.AdjustmentIndex,
+	}, nil
 }
 
 func notFound(erpOrgID string, err error) error {

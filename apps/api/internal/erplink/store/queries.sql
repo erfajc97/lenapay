@@ -23,3 +23,6 @@ SELECT * FROM erp_links WHERE org_id = sqlc.arg(org_id);
 UPDATE erp_links
 SET import_status = sqlc.arg(import_status), imported_at = sqlc.narg(imported_at), snapshot = sqlc.arg(snapshot)
 WHERE org_id = sqlc.arg(org_id);
+
+-- name: ListLinkedOrgIDs :many
+SELECT org_id FROM erp_links WHERE org_id = ANY(sqlc.arg(org_ids)::uuid[]) ORDER BY org_id;

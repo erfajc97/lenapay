@@ -51,16 +51,21 @@ changes nothing.
 |---|---|
 | `demo@lenapay.app` | admin of **Desarrollos Del Sur SA** (CUIT 30-71234567-8, KYC approved, found in the ERP fixture index) |
 | `approver@lenapay.app` | approver of the same org; created the two payouts waiting for `demo@` to approve |
-| `persona@lenapay.app` | personal wallet "Lucía Fernández" (personal mode on), with ARS and USD CVUs |
+| `persona@lenapay.app` | personal wallet "Lucía Fernández" (personal mode on, DNI 30.123.456), with ARS and USD CVUs and ARS 3.000.000 to pay with; "Mis pagos" shows 2 companies |
+| `andina@lenapay.app` | admin of **Constructora Andina SRL** (CUIT 30-71553201-4), linked to its ERP org (fixtures `erp-org-002`) |
 
 Dataset: project accounts "Torre Palermo" and "Barrio Nordelta Lote 12"; 8 payers with ARS CVUs
-(3 also USD); 15 payins credited through the ledger; 3 payouts (2 pending approval, 1 settled
-with its proof PDF); an internal transfer; a reconciliation run. Email codes are always `123456`
+(3 also USD), one of them Lucía by her DNI; 17 payins credited through the ledger; 3 payouts (2 pending approval, 1 settled
+with its proof PDF); an internal transfer; a reconciliation run. "Mis pagos": the ERP import
+of Constructora Andina creates Lucía as a buyer by her CUIT 27-30123456-8 (12 CAC installments in
+the fixture), with an ARS CVU and 2 payins, so `GET /me/payments/companies` as `persona@` lists
+both companies with history, and the Andina one with installments. Email codes are always `123456`
 (`DEV_FIXED_EMAIL_CODE`) and a submitted company KYC is auto-approved after 8 s
 (`DEV_KYC_AUTO_APPROVE_SECONDS`); both are development-only and refused/ignored in production.
 
 `node scripts/smoke.mjs` walks the whole path with fresh users (signup → KYC → CVU → payin →
-SSE → payout → second approver → settle → attachment + proof → reconciliation) and exits 1 on
+SSE → payout → second approver → settle → attachment + proof → reconciliation → "Mis pagos":
+a verified person sees, hides/shows and pays the company) and exits 1 on
 any failure; `node scripts/p95.mjs` times the hot reads (R-NF-1) on the seeded stack.
 
 ## Testing

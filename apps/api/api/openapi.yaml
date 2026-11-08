@@ -25,6 +25,7 @@ tags:
   - name: reconciliation
   - name: erplink
   - name: realtime
+  - name: mypayments
   - name: notifications
 
 paths:
@@ -1062,6 +1063,109 @@ paths:
         '204': { description: Token registered for the caller. }
         default: { $ref: '#/components/responses/Error' }
 
+  # ---------------------------------------------------------------- my payments (payer view)
+  /me/payments/companies:
+    get:
+      operationId: listMyPaymentCompanies
+      tags: [mypayments]
+      description: |
+        "Mis pagos": the companies the caller pays to. The caller must own a personal org whose
+        KYC is approved with a verified DNI; payers of any company whose document is that DNI
+        (or a CUIT/CUIL whose middle 8 digits are it) are linked on KYC approval and again on
+        every read. Only the company's display name, the project, the caller's own CVUs and
+        the caller's own payins are exposed. `kyc.not_approved` when the caller has no
+        verified personal org.
+      parameters:
+        - name: includeHidden
+          in: query
+          description: Also list the companies the caller hid.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Linked companies, newest match first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPaymentCompanyList' }
+        default: { $ref: '#/components/responses/Error' }
+  /me/payments/companies/{linkId}:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    patch:
+      operationId: updateMyPaymentCompany
+      tags: [mypayments]
+      description: Hides or shows a company in the list (`payer_link.not_found` when not the caller's).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMyPaymentCompanyRequest' }
+      responses:
+        '200':
+          description: The company with its new visibility.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPaymentCompany' }
+        default: { $ref: '#/components/responses/Error' }
+  /me/payments/companies/{linkId}/payins:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get:
+      operationId: listMyPaymentCompanyPayins
+      tags: [mypayments]
+      description: The caller's payins to that company's CVUs, newest first.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Payins page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPaymentPayinList' }
+        default: { $ref: '#/components/responses/Error' }
+  /me/payments/companies/{linkId}/installments:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get:
+      operationId: listMyPaymentCompanyInstallments
+      tags: [mypayments]
+      description: |
+        The caller's installments (cuotas) from the company's ERP. `erpLinked` is false and
+        `items` empty when the company is not linked to the ERP.
+      responses:
+        '200':
+          description: Installments by number.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPaymentInstallments' }
+        default: { $ref: '#/components/responses/Error' }
+  /me/payments/companies/{linkId}/pay:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    post:
+      operationId: payMyPaymentCompany
+      tags: [mypayments]
+      description: |
+        Pays the company from the caller's personal account to the caller's CVU at that
+        company in the amount's currency (`money.currency_mismatch` when there is none). A
+        personal payout is sent directly (no approval). `installmentNumber` must be one of the
+        caller's installments (`installment.not_found`) and is written in the concept.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/StepUpTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayMyPaymentCompanyRequest' }
+      responses:
+        '201':
+          description: Payout created from the personal account (or the stored response replayed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        default: { $ref: '#/components/responses/Error' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1091,6 +1195,11 @@ components:
       schema: { type: string, format: uuid }
     CvuId:
       name: cvuId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    LinkId:
+      name: linkId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -2045,6 +2154,110 @@ components:
         linkedAt: { type: string, format: date-time }
         importStatus: { $ref: '#/components/schemas/ErpImportStatus' }
         importedAt: { type: string, format: date-time, nullable: true }
+
+    # ---------- my payments (payer view)
+    MyPaymentCvu:
+      type: object
+      additionalProperties: false
+      required: [currency, cvu, alias]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        cvu: { type: string, pattern: '^[0-9]{22}$', maxLength: 22 }
+        alias: { type: string, nullable: true }
+    MyPaymentCompany:
+      type: object
+      additionalProperties: false
+      required: [linkId, companyName, projectName, cvus, totalPaid, lastPaymentAt, erpLinked, hidden]
+      properties:
+        linkId: { type: string, format: uuid }
+        companyName: { type: string }
+        projectName:
+          type: string
+          nullable: true
+          description: The project account the caller pays into; null for the company's main account.
+        cvus:
+          type: array
+          description: The caller's active CVUs at this company.
+          items: { $ref: '#/components/schemas/MyPaymentCvu' }
+        totalPaid:
+          type: array
+          description: Sum of the caller's credited payins, one entry per currency paid.
+          items: { $ref: '#/components/schemas/Money' }
+        lastPaymentAt: { type: string, format: date-time, nullable: true }
+        erpLinked: { type: boolean }
+        hidden: { type: boolean }
+    MyPaymentCompanyList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MyPaymentCompany' }
+    UpdateMyPaymentCompanyRequest:
+      type: object
+      additionalProperties: false
+      required: [hidden]
+      properties:
+        hidden: { type: boolean }
+    MyPaymentPayin:
+      type: object
+      additionalProperties: false
+      required: [id, cvu, amount, status, createdAt, creditedAt]
+      properties:
+        id: { type: string, format: uuid }
+        cvu: { type: string, pattern: '^[0-9]{22}$', maxLength: 22 }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { $ref: '#/components/schemas/PayinStatus' }
+        createdAt: { type: string, format: date-time }
+        creditedAt: { type: string, format: date-time, nullable: true }
+    MyPaymentPayinList:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MyPaymentPayin' }
+        nextCursor: { type: string, nullable: true }
+    InstallmentStatus:
+      type: string
+      enum: [pending, paid, overdue]
+    AdjustmentIndex:
+      type: string
+      description: Index the installment is adjusted by (CAC construction cost, UVA purchasing power).
+      enum: [CAC, UVA]
+    MyPaymentInstallment:
+      type: object
+      additionalProperties: false
+      required: [number, dueDate, amount, status, adjustmentIndex]
+      properties:
+        number: { type: integer, minimum: 1, maximum: 999 }
+        dueDate: { type: string, format: date }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { $ref: '#/components/schemas/InstallmentStatus' }
+        adjustmentIndex:
+          type: string
+          nullable: true
+          description: Index the installment is adjusted by (CAC construction cost, UVA purchasing power); null when fixed.
+          enum: [CAC, UVA]
+    MyPaymentInstallments:
+      type: object
+      additionalProperties: false
+      required: [erpLinked, items]
+      properties:
+        erpLinked: { type: boolean }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MyPaymentInstallment' }
+    PayMyPaymentCompanyRequest:
+      type: object
+      additionalProperties: false
+      required: [amount]
+      properties:
+        amount: { $ref: '#/components/schemas/Money' }
+        installmentNumber: { type: integer, minimum: 1, maximum: 999 }
+        concept: { type: string, minLength: 1, maxLength: 120 }
 
     # ---------- realtime / push
     RealtimeEventType:

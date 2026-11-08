@@ -4,7 +4,9 @@
 // signup → verify → login → org → KYC (dev auto-approval) → payer + CVU → payin through the
 // bind-mock (signed webhook, worker credits the ledger) → balance + movement + SSE event →
 // quote + payout → a second user approves → dispatch settles → attachment + proof PDF →
-// reconciliation run. Prints a PASS/FAIL table; exit code 1 when any step fails.
+// reconciliation run → "Mis pagos" (a verified person sees the company that registered their
+// CUIT, its payins, hides/shows it and pays it from the personal wallet). Prints a PASS/FAIL
+// table; exit code 1 when any step fails.
 //
 //   node scripts/smoke.mjs
 //   LENAPAY_API_URL=http://localhost:18080 BINDMOCK_URL=http://localhost:8090 node scripts/smoke.mjs
@@ -284,6 +286,79 @@ async function main() {
     check(done.status === 'completed' && done.matchedCount === 2 && items.items.length === done.matchedCount + done.missingInLedgerCount + done.missingAtPspCount,
       `run ${JSON.stringify(done)} items ${items.items.length}`);
     return `matched ${done.matchedCount}, diff ${done.difference.minor}`;
+  });
+
+  await step('Mis pagos: person sees + pays the company', async () => {
+    const companyName = `Smoke ${run} Verificada SA`;
+    const personName = `Persona Smoke ${run}`;
+    const dni = String(30_000_000 + Math.floor(Math.random() * 9_000_000));
+    const token = await newUser(`smoke-persona-${run}@example.com`);
+    const org = await must('POST', '/orgs', 201, { token, body: { kind: 'personal', legalName: personName } });
+    const orgPath = `/orgs/${org.id}`;
+    await must('PUT', `${orgPath}/kyc`, 200, {
+      token, body: { person: { fullName: personName, dni, birthDate: '1990-01-02', address: { street: 'Gorriti', number: '4500', city: 'CABA', province: 'CABA', postalCode: 'C1414' } } },
+    });
+    for (const kind of ['dni_front', 'dni_back', 'selfie']) {
+      const form = new FormData();
+      form.append('kind', kind);
+      form.append('file', pdfBlob(kind), `${kind}.pdf`);
+      await must('POST', `${orgPath}/kyc/documents`, 201, { token, form });
+    }
+    const kyc = await must('POST', `${orgPath}/kyc/submit`, 200, { token });
+    check(kyc.status === 'approved', `person KYC ${kyc.status}`);
+
+    // The company registers the person by a CUIT around the verified DNI, with a CVU and a payin.
+    const payer = await must('POST', `${ctx.orgPath}/payers`, 201, {
+      token: ctx.token, body: { accountId: ctx.account, name: personName, docType: 'cuit', docNumber: `27${dni}4` },
+    });
+    const cvu = await must('POST', `${ctx.orgPath}/payers/${payer.id}/cvus`, 201, {
+      token: ctx.token, body: { currency: 'ARS' }, headers: { 'Idempotency-Key': key('mp-cvu'), 'X-Step-Up-Token': await stepUp(ctx.token) },
+    });
+    const sent = await call('POST', '/_mock/incoming-transfer', { base: BANK, body: { cvu: cvu.cvu, amount: '120000.00', currency: 'ARS', originName: personName } });
+    check(sent.status === 201, `incoming-transfer → ${sent.status}`);
+
+    const company = await waitFor('company with the payin', async () => {
+      const list = await must('GET', '/me/payments/companies', 200, { token });
+      const c = list.items.find((x) => x.companyName === companyName);
+      return c && c.totalPaid.some((t) => t.currency === 'ARS' && t.minor === 12_000_000) ? c : null;
+    }, 30_000);
+    check(Object.keys(company).sort().join() === 'companyName,cvus,erpLinked,hidden,lastPaymentAt,linkId,projectName,totalPaid', `company keys ${Object.keys(company)}`);
+    check(company.cvus.length === 1 && company.cvus[0].cvu === cvu.cvu && company.erpLinked === false, `company ${JSON.stringify(company)}`);
+    const linkPath = `/me/payments/companies/${company.linkId}`;
+    const payins = await must('GET', `${linkPath}/payins`, 200, { token });
+    check(payins.items.length === 1 && payins.items[0].status === 'credited' && payins.items[0].cvu === cvu.cvu, `payins ${JSON.stringify(payins)}`);
+    const plan = await must('GET', `${linkPath}/installments`, 200, { token });
+    check(plan.erpLinked === false && plan.items.length === 0, `installments ${JSON.stringify(plan)}`);
+    const hidden = await must('PATCH', linkPath, 200, { token, body: { hidden: true } });
+    const visible = await must('GET', '/me/payments/companies', 200, { token });
+    check(hidden.hidden === true && !visible.items.some((x) => x.linkId === company.linkId), 'hide removes it from the list');
+    await must('PATCH', linkPath, 200, { token, body: { hidden: false } });
+    const stranger = await call('GET', `${linkPath}/payins`, { token: ctx.token });
+    check(stranger.status === 403 && stranger.json?.error?.code === 'kyc.not_approved', `company user ${stranger.status}`);
+
+    // Fund the personal wallet through its personal CVU at the bank, then pay the company.
+    const personal = await waitFor('personal ARS CVU', async () => {
+      const state = await call('GET', '/_mock/state', { base: BANK });
+      return Object.values(state.json?.cajas ?? {}).find((c) => c.titular?.name === personName && c.moneda === 'ARS');
+    }, 30_000);
+    const funded = await call('POST', '/_mock/incoming-transfer', { base: BANK, body: { cvu: personal.cvu, amount: '500000.00', currency: 'ARS', originName: personName } });
+    check(funded.status === 201, `fund personal → ${funded.status}`);
+    await waitFor('personal balance', async () => {
+      const b = await must('GET', `${orgPath}/balances`, 200, { token });
+      return b.totals.some((t) => t.currency === 'ARS' && t.available.minor > 0);
+    }, 30_000);
+    const unsigned = await call('POST', `${linkPath}/pay`, { token, body: { amount: { minor: 10_000_000, currency: 'ARS' } }, headers: { 'Idempotency-Key': key('mp-pay-nosu') } });
+    check(unsigned.status === 403 && unsigned.json?.error?.code === 'auth.step_up_required', `pay without step-up ${unsigned.status}`);
+    const po = await must('POST', `${linkPath}/pay`, 201, {
+      token, body: { amount: { minor: 10_000_000, currency: 'ARS' }, concept: 'Pago smoke' },
+      headers: { 'Idempotency-Key': key('mp-pay'), 'X-Step-Up-Token': await stepUp(token) },
+    });
+    check(po.destination.accountNumber === cvu.cvu && po.concept === 'Pago smoke', `payout ${JSON.stringify(po).slice(0, 200)}`);
+    const settled = await waitFor('personal payout settled', async () => {
+      const p = await must('GET', `${orgPath}/payouts/${po.id}`, 200, { token });
+      return p.status === 'settled' ? p : null;
+    });
+    return `${companyName}: paid ARS ${po.amount.minor / 100} (${settled.status})`;
   });
 }
 

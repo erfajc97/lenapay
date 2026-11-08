@@ -39,6 +39,18 @@ const (
 	orgCUIT       = "30712345678" // 30-71234567-8, the ERP fixture's CUIT (erp-org-001)
 	projectA      = "Torre Palermo"
 	projectB      = "Barrio Nordelta Lote 12"
+
+	// "Mis pagos": the persona's verified DNI is a payer of the demo org (as a DNI) and of an
+	// ERP-linked second company (as the CUIT 27-30123456-8 of the ERP buyer erp-org-002-buyer-005,
+	// which has 12 installments in the fixtures).
+	personaName   = "Lucía Fernández"
+	personaDNI    = "30123456"
+	personaCUIT   = "27301234568"
+	andinaEmail   = "andina@lenapay.app"
+	andinaName    = "Constructora Andina SRL"
+	andinaCUIT    = "30715532014" // erp-org-002 in the ERP fixtures
+	andinaERPUser = "obras@constructoraandina.com.ar"
+	andinaPayins  = 2
 )
 
 // Demo payers: name, DNI, email, account (A or B), and whether they also get a USD CVU.
@@ -55,6 +67,7 @@ var demoPayers = []struct {
 	{"Valentina Torres", "26789012", "valentina.torres@example.com", projectB, false},
 	{"Joaquín Herrera", "27890123", "joaquin.herrera@example.com", projectA, false},
 	{"Camila Acosta", "28901234", "camila.acosta@example.com", projectB, true},
+	{personaName, personaDNI, personaEmail, projectA, false},
 }
 
 // Demo payins: payer index, currency and amount (decimal text; never the bind-mock's
@@ -79,6 +92,8 @@ var demoPayins = []struct {
 	{3, money.USD, "8500.00"},
 	{7, money.USD, "15000.00"},
 	{1, money.ARS, "325000.00"},
+	{8, money.ARS, "450000.00"},
+	{8, money.ARS, "450000.00"},
 }
 
 // Demo payouts created by the approver user: two wait for the demo user's approval, one is
@@ -100,6 +115,7 @@ type seeder struct {
 	demo     uuid.UUID
 	approver uuid.UUID
 	org      uuid.UUID
+	andina   auth.Principal
 }
 
 func (sd *seeder) admin() auth.Principal {
@@ -125,7 +141,9 @@ func (sd *seeder) run(ctx context.Context) error {
 		{"payouts", sd.payouts},
 		{"internal transfer", sd.transfer},
 		{"reconciliation run", sd.reconciliation},
+		{"ERP-linked company (Mis pagos)", sd.andinaCompany},
 		{"personal wallet", sd.persona},
+		{"personal wallet funds", sd.fundPersona},
 	}
 	for _, st := range steps {
 		start := time.Now()
@@ -177,44 +195,48 @@ func pdf(name string) kyc.DocumentUpload {
 }
 
 func (sd *seeder) company(ctx context.Context) error {
-	o, found, err := sd.orgNamed(ctx, sd.demo, orgName)
+	var err error
+	sd.org, err = sd.approvedCompany(ctx, sd.demo, orgName, orgCUIT)
+	return err
+}
+
+// approvedCompany finds or creates the owner's company org and approves its KYC.
+func (sd *seeder) approvedCompany(ctx context.Context, owner uuid.UUID, name, cuit string) (uuid.UUID, error) {
+	o, found, err := sd.orgNamed(ctx, owner, name)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
-	owner := auth.Principal{UserID: sd.demo}
 	if !found {
-		cuit := orgCUIT
-		if o, err = sd.s.Orgs.Create(ctx, owner, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: orgName, CUIT: &cuit}); err != nil {
-			return err
+		if o, err = sd.s.Orgs.Create(ctx, auth.Principal{UserID: owner}, orgs.CreateInput{Kind: orgs.KindCompany, LegalName: name, CUIT: &cuit}); err != nil {
+			return uuid.Nil, err
 		}
 	}
-	sd.org = o.ID
 	if o.KYCStatus == auth.KYCApproved {
-		return nil
+		return o.ID, nil
 	}
-	p := auth.Principal{UserID: sd.demo, OrgID: o.ID, Role: auth.RoleAdmin}
+	p := auth.Principal{UserID: owner, OrgID: o.ID, Role: auth.RoleAdmin}
 	c, err := sd.s.KYC.Get(ctx, p)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
 	if c.Status == kyc.StatusDraft || c.Status == kyc.StatusRejected {
-		if err := sd.fillCompanyKYC(ctx, p); err != nil {
-			return err
+		if err := sd.fillCompanyKYC(ctx, p, name, cuit); err != nil {
+			return uuid.Nil, err
 		}
 		if c, err = sd.s.KYC.Submit(ctx, p); err != nil {
-			return err
+			return uuid.Nil, err
 		}
 	}
 	if c.Status == kyc.StatusSubmitted { // ops decision (what the internal endpoint does)
 		_, err = sd.s.KYC.Decide(ctx, c.ID, kyc.Decision{Approved: true})
 	}
-	return err
+	return o.ID, err
 }
 
-func (sd *seeder) fillCompanyKYC(ctx context.Context, p auth.Principal) error {
+func (sd *seeder) fillCompanyKYC(ctx context.Context, p auth.Principal, name, cuit string) error {
 	rep := "20111222"
 	_, err := sd.s.KYC.Update(ctx, p, kyc.UpdateInput{Company: &kyc.CompanyData{
-		CUIT: orgCUIT, LegalName: orgName,
+		CUIT: cuit, LegalName: name,
 		LegalAddress:    kyc.Address{Street: "Av. del Libertador", Number: "5800", City: "CABA", Province: "CABA", PostalCode: "C1428", Country: "AR"},
 		Representatives: []kyc.Representative{{FullName: "Diego Morales", DNI: rep, Position: "Presidente"}},
 	}})
@@ -329,14 +351,19 @@ func cvuOf(p payers.Payer, c money.Currency) string {
 	return ""
 }
 
-// count returns how many of the org's movements of a type exist (and are completed when done).
+// count returns how many of the demo org's movements of a type exist (and are completed when done).
 func (sd *seeder) count(ctx context.Context, typ movements.Type, done bool) (int, error) {
+	return sd.countOf(ctx, sd.admin(), typ, done)
+}
+
+// countOf counts the movements of a type of p's org (completed only when done).
+func (sd *seeder) countOf(ctx context.Context, p auth.Principal, typ movements.Type, done bool) (int, error) {
 	f := movements.Filter{Type: &typ, Page: page.Request{Limit: page.MaxLimit}}
 	if done {
 		s := movements.StatusCompleted
 		f.Status = &s
 	}
-	pg, err := sd.s.Movements.List(ctx, sd.admin(), f)
+	pg, err := sd.s.Movements.List(ctx, p, f)
 	return len(pg.Items), err
 }
 
@@ -492,7 +519,7 @@ func (sd *seeder) persona(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	const name = "Lucía Fernández"
+	const name = personaName
 	o, found, err := sd.orgNamed(ctx, userID, name)
 	if err != nil {
 		return err
@@ -511,7 +538,7 @@ func (sd *seeder) persona(ctx context.Context) error {
 		return err
 	}
 	if _, err := sd.s.KYC.Update(ctx, p, kyc.UpdateInput{Person: &kyc.PersonData{
-		FullName: name, DNI: "30123456", BirthDate: time.Date(1988, 3, 14, 0, 0, 0, 0, time.UTC),
+		FullName: name, DNI: personaDNI, BirthDate: time.Date(1988, 3, 14, 0, 0, 0, 0, time.UTC),
 		Address: kyc.Address{Street: "Gorriti", Number: "4500", City: "CABA", Province: "CABA", PostalCode: "C1414", Country: "AR"},
 	}}); err != nil {
 		return err

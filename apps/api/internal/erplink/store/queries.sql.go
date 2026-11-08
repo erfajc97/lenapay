@@ -85,6 +85,30 @@ func (q *Queries) InsertErpLink(ctx context.Context, arg InsertErpLinkParams) er
 	return err
 }
 
+const listLinkedOrgIDs = `-- name: ListLinkedOrgIDs :many
+SELECT org_id FROM erp_links WHERE org_id = ANY($1::uuid[]) ORDER BY org_id
+`
+
+func (q *Queries) ListLinkedOrgIDs(ctx context.Context, orgIds []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listLinkedOrgIDs, orgIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var org_id uuid.UUID
+		if err := rows.Scan(&org_id); err != nil {
+			return nil, err
+		}
+		items = append(items, org_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setErpImportStatus = `-- name: SetErpImportStatus :exec
 UPDATE erp_links
 SET import_status = $1, imported_at = $2, snapshot = $3

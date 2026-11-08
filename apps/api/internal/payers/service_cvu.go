@@ -309,6 +309,23 @@ func (s *service) CreatePersonalCVUs(ctx context.Context, orgID uuid.UUID) error
 	return nil
 }
 
+func (s *service) PersonalCVU(ctx context.Context, orgID uuid.UUID, currency money.Currency) (CVU, error) {
+	account, err := s.personalAccount(ctx, auth.Principal{OrgID: orgID})
+	if err != nil {
+		return CVU{}, err
+	}
+	rows, err := store.New(s.deps.Pool).ListCVUsForAccount(ctx, store.ListCVUsForAccountParams{OrgID: orgID, AccountID: account.ID})
+	if err != nil {
+		return CVU{}, fmt.Errorf("personal cvu: %w", err)
+	}
+	for _, r := range rows {
+		if r.PayerID == nil && r.Status == statusActive && r.Currency == string(currency) {
+			return s.toCVU(r), nil
+		}
+	}
+	return CVU{}, apperr.New(apperr.CodeCVUNotFound, nil)
+}
+
 func (s *service) personalAccount(ctx context.Context, system auth.Principal) (accounts.Account, error) {
 	list, err := s.deps.Accounts.List(ctx, system, false)
 	if err != nil {

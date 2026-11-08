@@ -80,3 +80,7 @@ sql:
     schema: migrations
     queries: internal/notifications/store/queries.sql
     gen: { go: { <<: *go, out: internal/notifications/store } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/payerview/store/queries.sql
+    gen: { go: { <<: *go, out: internal/payerview/store } }

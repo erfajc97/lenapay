@@ -1,8 +1,9 @@
 // Command seed loads the demo dataset (E9) into a running local stack, idempotently, through
 // the real services: users, the company org approved by KYC, project accounts, payers with
 // CVUs at the PSP, payins delivered by the bind-mock's signed webhooks (the worker credits
-// them through the ledger), payouts with approvals, an internal transfer, a reconciliation run
-// and a personal wallet. It needs postgres, bind-mock and the worker up (`docker compose up`).
+// them through the ledger), payouts with approvals, an internal transfer, a reconciliation run,
+// a second company linked to the ERP and a funded personal wallet whose DNI both companies have
+// as a payer ("Mis pagos"). It needs postgres, bind-mock and the worker up (`docker compose up`).
 // Run it again any time: every step checks what already exists.
 package main
 
@@ -78,6 +79,6 @@ func run() error {
 	if err := sd.run(ctx); err != nil {
 		return err
 	}
-	slog.InfoContext(ctx, "seed complete", "demo", demoEmail, "approver", approverEmail, "persona", personaEmail)
+	slog.InfoContext(ctx, "seed complete", "demo", demoEmail, "approver", approverEmail, "persona", personaEmail, "andina", andinaEmail)
 	return nil
 }

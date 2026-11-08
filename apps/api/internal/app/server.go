@@ -14,6 +14,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
 	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
 	"github.com/erfajc97/lenapay/apps/api/internal/payers"
+	"github.com/erfajc97/lenapay/apps/api/internal/payerview"
 	"github.com/erfajc97/lenapay/apps/api/internal/payins"
 	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
@@ -34,6 +35,7 @@ type (
 	ReconciliationHandler = reconciliation.Handler
 	ERPLinkHandler        = erplink.Handler
 	NotificationsHandler  = notifications.Handler
+	PayerViewHandler      = payerview.Handler
 )
 
 // Server is the strict server: one embedded handler per feature, each implementing only its
@@ -50,6 +52,7 @@ type Server struct {
 	*ReconciliationHandler
 	*ERPLinkHandler
 	*NotificationsHandler
+	*PayerViewHandler
 
 	// Health pings the database for GET /healthz (*pgxpool.Pool in cmd/api).
 	Health Pinger

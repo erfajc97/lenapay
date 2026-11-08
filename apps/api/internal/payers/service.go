@@ -19,6 +19,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/idempotency"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/ids"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/jobs"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/page"
 	"github.com/erfajc97/lenapay/apps/api/internal/psp"
 )
@@ -42,6 +43,9 @@ type Service interface {
 	OnKYCApproved(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error
 	// CreatePersonalCVUs is the job behind OnKYCApproved: one CVU per currency (R-CVU-3).
 	CreatePersonalCVUs(ctx context.Context, orgID uuid.UUID) error
+	// PersonalCVU returns the active personal CVU of orgID in a currency (cvu.not_found until the
+	// job above issued it; system scope: the demo seed funds the personal wallet through it).
+	PersonalCVU(ctx context.Context, orgID uuid.UUID, currency money.Currency) (CVU, error)
 }
 
 // Deps are the collaborators of the payers service.

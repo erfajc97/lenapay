@@ -17,6 +17,7 @@ import (
 	"github.com/erfajc97/lenapay/apps/api/internal/notifications"
 	"github.com/erfajc97/lenapay/apps/api/internal/orgs"
 	"github.com/erfajc97/lenapay/apps/api/internal/payers"
+	"github.com/erfajc97/lenapay/apps/api/internal/payerview"
 	"github.com/erfajc97/lenapay/apps/api/internal/payins"
 	"github.com/erfajc97/lenapay/apps/api/internal/payouts"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/audit"
@@ -64,6 +65,7 @@ type Services struct {
 	Reconciliation reconciliation.Service
 	ERPLink        erplink.Service
 	Notifications  notifications.Service
+	PayerView      payerview.Service
 }
 
 // NewServices builds every service in dependency order.
@@ -94,7 +96,7 @@ func NewServices(p Platform, ports Ports) *Services {
 	})
 	s.KYC = kyc.NewService(kyc.Deps{
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Provider: ports.KYC, Documents: ports.KYCDocuments,
-		Orgs: s.Orgs, OnApprove: []kyc.ApprovalHook{s.Accounts, s.Payers},
+		Orgs: s.Orgs, OnApprove: []kyc.ApprovalHook{s.Accounts, s.Payers, payerViewHook{s}},
 		Jobs: p.Jobs, AutoApproveAfter: p.Config.DevKYCAutoApproveDelay(),
 	})
 	s.Payins = payins.NewService(payins.Deps{
@@ -117,6 +119,9 @@ func NewServices(p Platform, ports Ports) *Services {
 		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, Jobs: p.Jobs, Directory: ports.ERP,
 		Orgs: s.Orgs, Accounts: s.Accounts, Payers: s.Payers,
 	})
+	s.PayerView = payerview.NewService(payerview.Deps{
+		Pool: p.Pool, Clock: p.Clock, Audit: auditLog, ERP: s.ERPLink, Payouts: s.Payouts,
+	})
 	return s
 }
 
@@ -134,6 +139,7 @@ func NewServer(s *Services, issuer *auth.Issuer, health Pinger) *Server {
 		ReconciliationHandler: reconciliation.NewHandler(s.Reconciliation),
 		ERPLinkHandler:        erplink.NewHandler(s.ERPLink),
 		NotificationsHandler:  notifications.NewHandler(s.Notifications),
+		PayerViewHandler:      payerview.NewHandler(s.PayerView),
 		Health:                health,
 	}
 }
@@ -147,4 +153,13 @@ func (s *Services) membershipsForUser(ctx context.Context, userID uuid.UUID) ([]
 // reads s.KYC at call time, after both exist).
 func (s *Services) openKYCCase(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
 	return s.KYC.OpenCase(ctx, tx, orgID, orgKind)
+}
+
+// payerViewHook forwards KYC approvals to payerview, which is built after kyc (it needs payouts
+// and erplink); it reads s.PayerView at call time, after every service exists.
+type payerViewHook struct{ s *Services }
+
+// OnKYCApproved implements kyc.ApprovalHook.
+func (h payerViewHook) OnKYCApproved(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, orgKind string) error {
+	return h.s.PayerView.OnKYCApproved(ctx, tx, orgID, orgKind)
 }

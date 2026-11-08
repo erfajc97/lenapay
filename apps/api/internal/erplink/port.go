@@ -2,12 +2,14 @@ package erplink
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/erfajc97/lenapay/apps/api/internal/accounts"
 	"github.com/erfajc97/lenapay/apps/api/internal/payers"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
 // Directory is the ERP port (JSON fixtures in provider/fake now; a CDC read model or the ERP
@@ -21,6 +23,8 @@ type Directory interface {
 	Projects(ctx context.Context, erpOrgID string) ([]Project, error)
 	// Buyers lists the ERP org's buyers with their project.
 	Buyers(ctx context.Context, erpOrgID string) ([]Buyer, error)
+	// Installments lists one buyer's installments (cuotas) by number; none for an unknown buyer.
+	Installments(ctx context.Context, erpOrgID, buyerRef string) ([]Installment, error)
 }
 
 // IdentityEntry is one row of the identity index.
@@ -46,6 +50,26 @@ type Buyer struct {
 	DocType    string
 	DocNumber  string
 	Email      *string
+}
+
+// InstallmentStatus is the ERP's status of an installment.
+type InstallmentStatus string
+
+// Installment statuses (contract InstallmentStatus).
+const (
+	InstallmentPending InstallmentStatus = "pending"
+	InstallmentPaid    InstallmentStatus = "paid"
+	InstallmentOverdue InstallmentStatus = "overdue"
+)
+
+// Installment is one cuota of a buyer's payment plan, as the ERP holds it.
+type Installment struct {
+	Number  int
+	DueDate time.Time // a calendar date (UTC midnight)
+	Amount  money.Amount
+	Status  InstallmentStatus
+	// AdjustmentIndex is the index the amount follows (CAC or UVA); nil for a fixed amount.
+	AdjustmentIndex *string
 }
 
 // Orgs answers the org's CUIT (implemented by orgs.Service).

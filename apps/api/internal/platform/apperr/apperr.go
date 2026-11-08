@@ -115,6 +115,12 @@ const (
 	CodeERPAlreadyLinked          Code = "erp_link.already_linked"
 )
 
+// Payer view ("Mis pagos").
+const (
+	CodePayerLinkNotFound   Code = "payer_link.not_found"
+	CodeInstallmentNotFound Code = "installment.not_found"
+)
+
 type entry struct {
 	status  int
 	message string
@@ -196,6 +202,9 @@ func catalog() map[Code]entry {
 		CodeERPNoCandidate:            {http.StatusNotFound, "The organization is not in the ERP identity index."},
 		CodeERPCredentialsInvalid:     {http.StatusUnprocessableEntity, "The ERP credentials were rejected."},
 		CodeERPAlreadyLinked:          {http.StatusConflict, "The organization is already linked."},
+
+		CodePayerLinkNotFound:   {http.StatusNotFound, "Company not found in your payments."},
+		CodeInstallmentNotFound: {http.StatusNotFound, "Installment not found in your payment plan."},
 	}
 }
 

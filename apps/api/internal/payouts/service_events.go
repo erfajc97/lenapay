@@ -40,7 +40,7 @@ func publishPayout(ctx context.Context, tx pgx.Tx, typ string, payoutID, orgID u
 	if err != nil {
 		return err
 	}
-	ev := payoutEvent{PayoutID: po.ID, Status: po.Status, Payout: payoutToAPI(po)}
+	ev := payoutEvent{PayoutID: po.ID, Status: po.Status, Payout: PayoutToAPI(po)}
 	raw, err := json.Marshal(ev)
 	if err != nil {
 		return fmt.Errorf("payouts: event data: %w", err)

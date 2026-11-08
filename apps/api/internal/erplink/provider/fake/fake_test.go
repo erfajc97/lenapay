@@ -3,10 +3,13 @@ package fake_test
 import (
 	"regexp"
 	"testing"
+	"time"
 
+	"github.com/erfajc97/lenapay/apps/api/internal/erplink"
 	"github.com/erfajc97/lenapay/apps/api/internal/erplink/provider/fake"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/apperr"
 	"github.com/erfajc97/lenapay/apps/api/internal/platform/config"
+	"github.com/erfajc97/lenapay/apps/api/internal/platform/money"
 )
 
 // The real fixtures of apps/api/fixtures/erp, so a malformed fixture fails here first.
@@ -84,6 +87,53 @@ func TestProjectsAndBuyers(t *testing.T) {
 		}
 	}
 	if _, err := d.Projects(t.Context(), "erp-org-999"); !apperr.IsCode(err, apperr.CodeERPLinkNotFound) {
+		t.Fatalf("unknown org err = %v", err)
+	}
+}
+
+func TestInstallmentsOfEveryFixtureBuyerParse(t *testing.T) {
+	t.Parallel()
+	d := fake.NewDirectory(fixtures)
+	ctx := t.Context()
+	for _, org := range []string{"erp-org-001", "erp-org-002"} {
+		buyers, err := d.Buyers(ctx, org)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range buyers {
+			plan, err := d.Installments(ctx, org, b.Ref)
+			if err != nil || len(plan) == 0 {
+				t.Fatalf("%s: plan = %+v, %v", b.Ref, plan, err)
+			}
+			for i, in := range plan {
+				if in.Number != i+1 || !in.Amount.IsPositive() || in.DueDate.IsZero() {
+					t.Errorf("%s: installment %d = %+v", b.Ref, i, in)
+				}
+			}
+		}
+	}
+}
+
+func TestInstallmentsOfThePersonaBuyer(t *testing.T) {
+	t.Parallel()
+	d := fake.NewDirectory(fixtures)
+	plan, err := d.Installments(t.Context(), "erp-org-002", "erp-org-002-buyer-005")
+	if err != nil || len(plan) != 12 {
+		t.Fatalf("plan = %d, %v", len(plan), err)
+	}
+	first, overdue := plan[0], plan[3]
+	if first.Amount != money.New(85_000_000, money.ARS) || first.Status != erplink.InstallmentPaid ||
+		first.DueDate.Format(time.DateOnly) != "2026-07-10" || first.AdjustmentIndex == nil || *first.AdjustmentIndex != "CAC" {
+		t.Fatalf("first = %+v", first)
+	}
+	if overdue.Status != erplink.InstallmentOverdue || plan[11].Status != erplink.InstallmentPending {
+		t.Fatalf("statuses = %s, %s", overdue.Status, plan[11].Status)
+	}
+	none, err := d.Installments(t.Context(), "erp-org-002", "erp-org-002-buyer-999")
+	if err != nil || len(none) != 0 {
+		t.Fatalf("unknown buyer = %+v, %v", none, err)
+	}
+	if _, err := d.Installments(t.Context(), "erp-org-999", "x"); !apperr.IsCode(err, apperr.CodeERPLinkNotFound) {
 		t.Fatalf("unknown org err = %v", err)
 	}
 }

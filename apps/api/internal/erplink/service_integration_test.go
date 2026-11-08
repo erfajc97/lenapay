@@ -133,8 +133,8 @@ func TestCandidateByOrgCUIT(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := e.pool.QueryRow(t.Context(), `SELECT count(*) FROM erp_identity_index`).Scan(&n); err != nil || n != 51 {
-		t.Fatalf("index rows = %d (%v), want 10 orgs + 41 buyers", n, err)
+	if err := e.pool.QueryRow(t.Context(), `SELECT count(*) FROM erp_identity_index`).Scan(&n); err != nil || n != 52 {
+		t.Fatalf("index rows = %d (%v), want 10 orgs + 42 buyers (the persona demo buyer included)", n, err)
 	}
 }
 

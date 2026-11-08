@@ -305,6 +305,17 @@ type Payer struct {
 	UpdatedAt time.Time
 }
 
+type PayerLink struct {
+	ID             uuid.UUID
+	PersonalOrgID  uuid.UUID
+	PayerID        uuid.UUID
+	OrgID          uuid.UUID
+	MatchedDocType string
+	Status         string
+	MatchedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Payin struct {
 	ID                  uuid.UUID
 	OrgID               uuid.UUID

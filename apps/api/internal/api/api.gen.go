@@ -41,6 +41,24 @@ func (e AccountKind) Valid() bool {
 	}
 }
 
+// Defines values for AdjustmentIndex.
+const (
+	AdjustmentIndexCAC AdjustmentIndex = "CAC"
+	AdjustmentIndexUVA AdjustmentIndex = "UVA"
+)
+
+// Valid indicates whether the value is a known member of the AdjustmentIndex enum.
+func (e AdjustmentIndex) Valid() bool {
+	switch e {
+	case AdjustmentIndexCAC:
+		return true
+	case AdjustmentIndexUVA:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Currency.
 const (
 	ARS Currency = "ARS"
@@ -152,6 +170,27 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstallmentStatus.
+const (
+	InstallmentStatusOverdue InstallmentStatus = "overdue"
+	InstallmentStatusPaid    InstallmentStatus = "paid"
+	InstallmentStatusPending InstallmentStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the InstallmentStatus enum.
+func (e InstallmentStatus) Valid() bool {
+	switch e {
+	case InstallmentStatusOverdue:
+		return true
+	case InstallmentStatusPaid:
+		return true
+	case InstallmentStatusPending:
 		return true
 	default:
 		return false
@@ -365,6 +404,24 @@ func (e MovementType) Valid() bool {
 	case MovementTypePayin:
 		return true
 	case MovementTypePayout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MyPaymentInstallmentAdjustmentIndex.
+const (
+	MyPaymentInstallmentAdjustmentIndexCAC MyPaymentInstallmentAdjustmentIndex = "CAC"
+	MyPaymentInstallmentAdjustmentIndexUVA MyPaymentInstallmentAdjustmentIndex = "UVA"
+)
+
+// Valid indicates whether the value is a known member of the MyPaymentInstallmentAdjustmentIndex enum.
+func (e MyPaymentInstallmentAdjustmentIndex) Valid() bool {
+	switch e {
+	case MyPaymentInstallmentAdjustmentIndexCAC:
+		return true
+	case MyPaymentInstallmentAdjustmentIndexUVA:
 		return true
 	default:
 		return false
@@ -673,6 +730,9 @@ type Address struct {
 	Street     string  `json:"street"`
 }
 
+// AdjustmentIndex Index the installment is adjusted by (CAC construction cost, UVA purchasing power).
+type AdjustmentIndex string
+
 // Balances defines model for Balances.
 type Balances struct {
 	Accounts []AccountBalances `json:"accounts"`
@@ -838,6 +898,9 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// InstallmentStatus defines model for InstallmentStatus.
+type InstallmentStatus string
 
 // InternalTransfer defines model for InternalTransfer.
 type InternalTransfer struct {
@@ -1049,6 +1112,71 @@ type MovementStatus string
 // MovementType defines model for MovementType.
 type MovementType string
 
+// MyPaymentCompany defines model for MyPaymentCompany.
+type MyPaymentCompany struct {
+	CompanyName string `json:"companyName"`
+
+	// Cvus The caller's active CVUs at this company.
+	Cvus          []MyPaymentCvu     `json:"cvus"`
+	ErpLinked     bool               `json:"erpLinked"`
+	Hidden        bool               `json:"hidden"`
+	LastPaymentAt *time.Time         `json:"lastPaymentAt"`
+	LinkId        openapi_types.UUID `json:"linkId"`
+
+	// ProjectName The project account the caller pays into; null for the company's main account.
+	ProjectName *string `json:"projectName"`
+
+	// TotalPaid Sum of the caller's credited payins, one entry per currency paid.
+	TotalPaid []Money `json:"totalPaid"`
+}
+
+// MyPaymentCompanyList defines model for MyPaymentCompanyList.
+type MyPaymentCompanyList struct {
+	Items []MyPaymentCompany `json:"items"`
+}
+
+// MyPaymentCvu defines model for MyPaymentCvu.
+type MyPaymentCvu struct {
+	Alias    *string  `json:"alias"`
+	Currency Currency `json:"currency"`
+	Cvu      string   `json:"cvu"`
+}
+
+// MyPaymentInstallment defines model for MyPaymentInstallment.
+type MyPaymentInstallment struct {
+	// AdjustmentIndex Index the installment is adjusted by (CAC construction cost, UVA purchasing power); null when fixed.
+	AdjustmentIndex *MyPaymentInstallmentAdjustmentIndex `json:"adjustmentIndex"`
+	Amount          Money                                `json:"amount"`
+	DueDate         openapi_types.Date                   `json:"dueDate"`
+	Number          int                                  `json:"number"`
+	Status          InstallmentStatus                    `json:"status"`
+}
+
+// MyPaymentInstallmentAdjustmentIndex Index the installment is adjusted by (CAC construction cost, UVA purchasing power); null when fixed.
+type MyPaymentInstallmentAdjustmentIndex string
+
+// MyPaymentInstallments defines model for MyPaymentInstallments.
+type MyPaymentInstallments struct {
+	ErpLinked bool                   `json:"erpLinked"`
+	Items     []MyPaymentInstallment `json:"items"`
+}
+
+// MyPaymentPayin defines model for MyPaymentPayin.
+type MyPaymentPayin struct {
+	Amount     Money              `json:"amount"`
+	CreatedAt  time.Time          `json:"createdAt"`
+	CreditedAt *time.Time         `json:"creditedAt"`
+	Cvu        string             `json:"cvu"`
+	Id         openapi_types.UUID `json:"id"`
+	Status     PayinStatus        `json:"status"`
+}
+
+// MyPaymentPayinList defines model for MyPaymentPayinList.
+type MyPaymentPayinList struct {
+	Items      []MyPaymentPayin `json:"items"`
+	NextCursor *string          `json:"nextCursor"`
+}
+
 // OrgKind defines model for OrgKind.
 type OrgKind string
 
@@ -1066,6 +1194,13 @@ type Organization struct {
 // OrganizationList defines model for OrganizationList.
 type OrganizationList struct {
 	Items []Organization `json:"items"`
+}
+
+// PayMyPaymentCompanyRequest defines model for PayMyPaymentCompanyRequest.
+type PayMyPaymentCompanyRequest struct {
+	Amount            Money   `json:"amount"`
+	Concept           *string `json:"concept,omitempty"`
+	InstallmentNumber *int    `json:"installmentNumber,omitempty"`
 }
 
 // Payer defines model for Payer.
@@ -1376,6 +1511,11 @@ type UpdateMemberRequest struct {
 	Role Role `json:"role"`
 }
 
+// UpdateMyPaymentCompanyRequest defines model for UpdateMyPaymentCompanyRequest.
+type UpdateMyPaymentCompanyRequest struct {
+	Hidden bool `json:"hidden"`
+}
+
 // UpdatePayerRequest defines model for UpdatePayerRequest.
 type UpdatePayerRequest struct {
 	// Email `null` clears the email; absent keeps it.
@@ -1413,6 +1553,9 @@ type IdempotencyKeyHeader = string
 // Limit defines model for Limit.
 type Limit = int
 
+// LinkId defines model for LinkId.
+type LinkId = openapi_types.UUID
+
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
 
@@ -1427,6 +1570,28 @@ type StepUpTokenHeader = string
 
 // UserId defines model for UserId.
 type UserId = openapi_types.UUID
+
+// ListMyPaymentCompaniesParams defines parameters for ListMyPaymentCompanies.
+type ListMyPaymentCompaniesParams struct {
+	// IncludeHidden Also list the companies the caller hid.
+	IncludeHidden *bool `form:"includeHidden,omitempty" json:"includeHidden,omitempty"`
+}
+
+// PayMyPaymentCompanyParams defines parameters for PayMyPaymentCompany.
+type PayMyPaymentCompanyParams struct {
+	// IdempotencyKey Client-generated (UUID recommended), persisted by the client until the action is confirmed.
+	IdempotencyKey IdempotencyKeyHeader `json:"Idempotency-Key"`
+
+	// XStepUpToken Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes.
+	XStepUpToken StepUpTokenHeader `json:"X-Step-Up-Token"`
+}
+
+// ListMyPaymentCompanyPayinsParams defines parameters for ListMyPaymentCompanyPayins.
+type ListMyPaymentCompanyPayinsParams struct {
+	// Cursor Opaque cursor from a previous page's `nextCursor`.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -1564,6 +1729,12 @@ type DecideKycJSONRequestBody = KycDecisionRequest
 // RunReconciliationJSONRequestBody defines body for RunReconciliation for application/json ContentType.
 type RunReconciliationJSONRequestBody = RunReconciliationRequest
 
+// UpdateMyPaymentCompanyJSONRequestBody defines body for UpdateMyPaymentCompany for application/json ContentType.
+type UpdateMyPaymentCompanyJSONRequestBody = UpdateMyPaymentCompanyRequest
+
+// PayMyPaymentCompanyJSONRequestBody defines body for PayMyPaymentCompany for application/json ContentType.
+type PayMyPaymentCompanyJSONRequestBody = PayMyPaymentCompanyRequest
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = CreateOrgRequest
 
@@ -1671,6 +1842,21 @@ type ServerInterface interface {
 
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+
+	// (GET /me/payments/companies)
+	ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams)
+
+	// (PATCH /me/payments/companies/{linkId})
+	UpdateMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId)
+
+	// (GET /me/payments/companies/{linkId}/installments)
+	ListMyPaymentCompanyInstallments(w http.ResponseWriter, r *http.Request, linkId LinkId)
+
+	// (POST /me/payments/companies/{linkId}/pay)
+	PayMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId, params PayMyPaymentCompanyParams)
+
+	// (GET /me/payments/companies/{linkId}/payins)
+	ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request, linkId LinkId, params ListMyPaymentCompanyPayinsParams)
 
 	// (GET /orgs)
 	ListOrgs(w http.ResponseWriter, r *http.Request)
@@ -1881,6 +2067,31 @@ func (_ Unimplemented) AcceptInvite(w http.ResponseWriter, r *http.Request, toke
 
 // (GET /me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /me/payments/companies)
+func (_ Unimplemented) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PATCH /me/payments/companies/{linkId})
+func (_ Unimplemented) UpdateMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /me/payments/companies/{linkId}/installments)
+func (_ Unimplemented) ListMyPaymentCompanyInstallments(w http.ResponseWriter, r *http.Request, linkId LinkId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /me/payments/companies/{linkId}/pay)
+func (_ Unimplemented) PayMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId, params PayMyPaymentCompanyParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /me/payments/companies/{linkId}/payins)
+func (_ Unimplemented) ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request, linkId LinkId, params ListMyPaymentCompanyPayinsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2338,6 +2549,223 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyPaymentCompanies operation middleware
+func (siw *ServerInterfaceWrapper) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyPaymentCompaniesParams
+
+	// ------------- Optional query parameter "includeHidden" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeHidden", r.URL.Query(), &params.IncludeHidden, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeHidden"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeHidden", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyPaymentCompanies(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMyPaymentCompany operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMyPaymentCompany(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMyPaymentCompany(w, r, linkId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyPaymentCompanyInstallments operation middleware
+func (siw *ServerInterfaceWrapper) ListMyPaymentCompanyInstallments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyPaymentCompanyInstallments(w, r, linkId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PayMyPaymentCompany operation middleware
+func (siw *ServerInterfaceWrapper) PayMyPaymentCompany(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PayMyPaymentCompanyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKeyHeader
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-Step-Up-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Step-Up-Token")]; found {
+		var XStepUpToken StepUpTokenHeader
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Step-Up-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Step-Up-Token", valueList[0], &XStepUpToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Step-Up-Token", Err: err})
+			return
+		}
+
+		params.XStepUpToken = XStepUpToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Step-Up-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Step-Up-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PayMyPaymentCompany(w, r, linkId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyPaymentCompanyPayins operation middleware
+func (siw *ServerInterfaceWrapper) ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyPaymentCompanyPayinsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyPaymentCompanyPayins(w, r, linkId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4424,6 +4852,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/push-tokens", wrapper.RegisterPushToken)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/payments/companies", wrapper.ListMyPaymentCompanies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me/payments/companies/{linkId}", wrapper.UpdateMyPaymentCompany)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/payments/companies/{linkId}/payins", wrapper.ListMyPaymentCompanyPayins)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/payments/companies/{linkId}/installments", wrapper.ListMyPaymentCompanyInstallments)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/me/payments/companies/{linkId}/pay", wrapper.PayMyPaymentCompany)
+	})
 
 	return r
 }
@@ -4983,6 +5426,205 @@ type GetMedefaultJSONResponse struct {
 }
 
 func (response GetMedefaultJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompaniesRequestObject struct {
+	Params ListMyPaymentCompaniesParams
+}
+
+type ListMyPaymentCompaniesResponseObject interface {
+	VisitListMyPaymentCompaniesResponse(w http.ResponseWriter) error
+}
+
+type ListMyPaymentCompanies200JSONResponse MyPaymentCompanyList
+
+func (response ListMyPaymentCompanies200JSONResponse) VisitListMyPaymentCompaniesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompaniesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListMyPaymentCompaniesdefaultJSONResponse) VisitListMyPaymentCompaniesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPaymentCompanyRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+	Body   *UpdateMyPaymentCompanyJSONRequestBody
+}
+
+type UpdateMyPaymentCompanyResponseObject interface {
+	VisitUpdateMyPaymentCompanyResponse(w http.ResponseWriter) error
+}
+
+type UpdateMyPaymentCompany200JSONResponse MyPaymentCompany
+
+func (response UpdateMyPaymentCompany200JSONResponse) VisitUpdateMyPaymentCompanyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPaymentCompanydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateMyPaymentCompanydefaultJSONResponse) VisitUpdateMyPaymentCompanyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompanyInstallmentsRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+}
+
+type ListMyPaymentCompanyInstallmentsResponseObject interface {
+	VisitListMyPaymentCompanyInstallmentsResponse(w http.ResponseWriter) error
+}
+
+type ListMyPaymentCompanyInstallments200JSONResponse MyPaymentInstallments
+
+func (response ListMyPaymentCompanyInstallments200JSONResponse) VisitListMyPaymentCompanyInstallmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompanyInstallmentsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListMyPaymentCompanyInstallmentsdefaultJSONResponse) VisitListMyPaymentCompanyInstallmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PayMyPaymentCompanyRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+	Params PayMyPaymentCompanyParams
+	Body   *PayMyPaymentCompanyJSONRequestBody
+}
+
+type PayMyPaymentCompanyResponseObject interface {
+	VisitPayMyPaymentCompanyResponse(w http.ResponseWriter) error
+}
+
+type PayMyPaymentCompany201JSONResponse Payout
+
+func (response PayMyPaymentCompany201JSONResponse) VisitPayMyPaymentCompanyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PayMyPaymentCompanydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response PayMyPaymentCompanydefaultJSONResponse) VisitPayMyPaymentCompanyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompanyPayinsRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+	Params ListMyPaymentCompanyPayinsParams
+}
+
+type ListMyPaymentCompanyPayinsResponseObject interface {
+	VisitListMyPaymentCompanyPayinsResponse(w http.ResponseWriter) error
+}
+
+type ListMyPaymentCompanyPayins200JSONResponse MyPaymentPayinList
+
+func (response ListMyPaymentCompanyPayins200JSONResponse) VisitListMyPaymentCompanyPayinsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyPaymentCompanyPayinsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListMyPaymentCompanyPayinsdefaultJSONResponse) VisitListMyPaymentCompanyPayinsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6792,6 +7434,21 @@ type StrictServerInterface interface {
 	// (GET /me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
 
+	// (GET /me/payments/companies)
+	ListMyPaymentCompanies(ctx context.Context, request ListMyPaymentCompaniesRequestObject) (ListMyPaymentCompaniesResponseObject, error)
+
+	// (PATCH /me/payments/companies/{linkId})
+	UpdateMyPaymentCompany(ctx context.Context, request UpdateMyPaymentCompanyRequestObject) (UpdateMyPaymentCompanyResponseObject, error)
+
+	// (GET /me/payments/companies/{linkId}/installments)
+	ListMyPaymentCompanyInstallments(ctx context.Context, request ListMyPaymentCompanyInstallmentsRequestObject) (ListMyPaymentCompanyInstallmentsResponseObject, error)
+
+	// (POST /me/payments/companies/{linkId}/pay)
+	PayMyPaymentCompany(ctx context.Context, request PayMyPaymentCompanyRequestObject) (PayMyPaymentCompanyResponseObject, error)
+
+	// (GET /me/payments/companies/{linkId}/payins)
+	ListMyPaymentCompanyPayins(ctx context.Context, request ListMyPaymentCompanyPayinsRequestObject) (ListMyPaymentCompanyPayinsResponseObject, error)
+
 	// (GET /orgs)
 	ListOrgs(ctx context.Context, request ListOrgsRequestObject) (ListOrgsResponseObject, error)
 
@@ -7391,6 +8048,152 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyPaymentCompanies operation middleware
+func (sh *strictHandler) ListMyPaymentCompanies(w http.ResponseWriter, r *http.Request, params ListMyPaymentCompaniesParams) {
+	var request ListMyPaymentCompaniesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyPaymentCompanies(ctx, request.(ListMyPaymentCompaniesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyPaymentCompanies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyPaymentCompaniesResponseObject); ok {
+		if err := validResponse.VisitListMyPaymentCompaniesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMyPaymentCompany operation middleware
+func (sh *strictHandler) UpdateMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId) {
+	var request UpdateMyPaymentCompanyRequestObject
+
+	request.LinkId = linkId
+
+	var body UpdateMyPaymentCompanyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMyPaymentCompany(ctx, request.(UpdateMyPaymentCompanyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMyPaymentCompany")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMyPaymentCompanyResponseObject); ok {
+		if err := validResponse.VisitUpdateMyPaymentCompanyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyPaymentCompanyInstallments operation middleware
+func (sh *strictHandler) ListMyPaymentCompanyInstallments(w http.ResponseWriter, r *http.Request, linkId LinkId) {
+	var request ListMyPaymentCompanyInstallmentsRequestObject
+
+	request.LinkId = linkId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyPaymentCompanyInstallments(ctx, request.(ListMyPaymentCompanyInstallmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyPaymentCompanyInstallments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyPaymentCompanyInstallmentsResponseObject); ok {
+		if err := validResponse.VisitListMyPaymentCompanyInstallmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PayMyPaymentCompany operation middleware
+func (sh *strictHandler) PayMyPaymentCompany(w http.ResponseWriter, r *http.Request, linkId LinkId, params PayMyPaymentCompanyParams) {
+	var request PayMyPaymentCompanyRequestObject
+
+	request.LinkId = linkId
+	request.Params = params
+
+	var body PayMyPaymentCompanyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PayMyPaymentCompany(ctx, request.(PayMyPaymentCompanyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PayMyPaymentCompany")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PayMyPaymentCompanyResponseObject); ok {
+		if err := validResponse.VisitPayMyPaymentCompanyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyPaymentCompanyPayins operation middleware
+func (sh *strictHandler) ListMyPaymentCompanyPayins(w http.ResponseWriter, r *http.Request, linkId LinkId, params ListMyPaymentCompanyPayinsParams) {
+	var request ListMyPaymentCompanyPayinsRequestObject
+
+	request.LinkId = linkId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyPaymentCompanyPayins(ctx, request.(ListMyPaymentCompanyPayinsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyPaymentCompanyPayins")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyPaymentCompanyPayinsResponseObject); ok {
+		if err := validResponse.VisitListMyPaymentCompanyPayinsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

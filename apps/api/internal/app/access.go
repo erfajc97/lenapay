@@ -90,6 +90,14 @@ func AccessRules() auth.Rules {
 		"getErpLinkCandidate": auth.OrgRole(admin).WithKYC(),
 		"createErpLink":       auth.OrgRole(admin).WithKYC(),
 
+		// my payments (payer view): the guard authenticates; the service resolves the caller's
+		// own verified personal org (no org in the path, T3) and answers others' links as 404.
+		"listMyPaymentCompanies":           auth.Authenticated(),
+		"updateMyPaymentCompany":           auth.Authenticated(),
+		"listMyPaymentCompanyPayins":       auth.Authenticated(),
+		"listMyPaymentCompanyInstallments": auth.Authenticated(),
+		"payMyPaymentCompany":              auth.Authenticated().WithStepUp(),
+
 		// realtime / notifications
 		"streamOrgEvents":   auth.OrgRole(viewer),
 		"registerPushToken": auth.Authenticated(),

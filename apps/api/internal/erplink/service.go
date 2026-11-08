@@ -34,6 +34,12 @@ type Service interface {
 	Import(ctx context.Context, orgID uuid.UUID) error
 	// LoadIdentityIndex refreshes erp_identity_index from the Directory (periodic job).
 	LoadIdentityIndex(ctx context.Context) error
+	// LinkedOrgs reports which of orgIDs are linked to the ERP (system scope: the caller already
+	// decided the person may see these orgs; payerview).
+	LinkedOrgs(ctx context.Context, orgIDs []uuid.UUID) (map[uuid.UUID]bool, error)
+	// BuyerInstallments returns the plan of the ERP buyer behind a payer of orgID. linked is false
+	// (and the plan empty) when orgID has no ERP link; a payer without an ERP ref has no plan.
+	BuyerInstallments(ctx context.Context, orgID uuid.UUID, buyerRef *string) (linked bool, plan []Installment, err error)
 }
 
 // Deps are the collaborators of the ERP link service.
@@ -284,6 +290,39 @@ func (s *service) LoadIdentityIndex(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+func (s *service) LinkedOrgs(ctx context.Context, orgIDs []uuid.UUID) (map[uuid.UUID]bool, error) {
+	linked := make(map[uuid.UUID]bool, len(orgIDs))
+	if len(orgIDs) == 0 {
+		return linked, nil
+	}
+	rows, err := store.New(s.deps.Pool).ListLinkedOrgIDs(ctx, orgIDs)
+	if err != nil {
+		return nil, fmt.Errorf("erplink: linked orgs: %w", err)
+	}
+	for _, id := range rows {
+		linked[id] = true
+	}
+	return linked, nil
+}
+
+func (s *service) BuyerInstallments(ctx context.Context, orgID uuid.UUID, buyerRef *string) (bool, []Installment, error) {
+	link, err := store.New(s.deps.Pool).GetErpLinkByOrg(ctx, orgID)
+	if db.IsNoRows(err) {
+		return false, []Installment{}, nil
+	}
+	if err != nil {
+		return false, nil, fmt.Errorf("erplink: get link: %w", err)
+	}
+	if buyerRef == nil {
+		return true, []Installment{}, nil
+	}
+	plan, err := s.deps.Directory.Installments(ctx, link.ErpOrgID, *buyerRef)
+	if err != nil {
+		return true, nil, fmt.Errorf("erplink: installments: %w", err)
+	}
+	return true, plan, nil
 }
 
 // digits keeps the digits of a document ("30-71234567-8" → "30712345678").

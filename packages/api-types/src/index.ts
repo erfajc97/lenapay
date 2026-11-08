@@ -940,6 +940,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/payments/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description "Mis pagos": the companies the caller pays to. The caller must own a personal org whose
+         *     KYC is approved with a verified DNI; payers of any company whose document is that DNI
+         *     (or a CUIT/CUIL whose middle 8 digits are it) are linked on KYC approval and again on
+         *     every read. Only the company's display name, the project, the caller's own CVUs and
+         *     the caller's own payins are exposed. `kyc.not_approved` when the caller has no
+         *     verified personal org.
+         */
+        get: operations["listMyPaymentCompanies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payments/companies/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Hides or shows a company in the list (`payer_link.not_found` when not the caller's). */
+        patch: operations["updateMyPaymentCompany"];
+        trace?: never;
+    };
+    "/me/payments/companies/{linkId}/payins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        /** @description The caller's payins to that company's CVUs, newest first. */
+        get: operations["listMyPaymentCompanyPayins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payments/companies/{linkId}/installments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The caller's installments (cuotas) from the company's ERP. `erpLinked` is false and
+         *     `items` empty when the company is not linked to the ERP.
+         */
+        get: operations["listMyPaymentCompanyInstallments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/payments/companies/{linkId}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Pays the company from the caller's personal account to the caller's CVU at that
+         *     company in the amount's currency (`money.currency_mismatch` when there is none). A
+         *     personal payout is sent directly (no approval). `installmentNumber` must be one of the
+         *     caller's installments (`installment.not_found`) and is written in the concept.
+         */
+        post: operations["payMyPaymentCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1601,6 +1709,75 @@ export interface components {
             /** Format: date-time */
             importedAt: string | null;
         };
+        MyPaymentCvu: {
+            currency: components["schemas"]["Currency"];
+            cvu: string;
+            alias: string | null;
+        };
+        MyPaymentCompany: {
+            /** Format: uuid */
+            linkId: string;
+            companyName: string;
+            /** @description The project account the caller pays into; null for the company's main account. */
+            projectName: string | null;
+            /** @description The caller's active CVUs at this company. */
+            cvus: components["schemas"]["MyPaymentCvu"][];
+            /** @description Sum of the caller's credited payins, one entry per currency paid. */
+            totalPaid: components["schemas"]["Money"][];
+            /** Format: date-time */
+            lastPaymentAt: string | null;
+            erpLinked: boolean;
+            hidden: boolean;
+        };
+        MyPaymentCompanyList: {
+            items: components["schemas"]["MyPaymentCompany"][];
+        };
+        UpdateMyPaymentCompanyRequest: {
+            hidden: boolean;
+        };
+        MyPaymentPayin: {
+            /** Format: uuid */
+            id: string;
+            cvu: string;
+            amount: components["schemas"]["Money"];
+            status: components["schemas"]["PayinStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            creditedAt: string | null;
+        };
+        MyPaymentPayinList: {
+            items: components["schemas"]["MyPaymentPayin"][];
+            nextCursor: string | null;
+        };
+        /** @enum {string} */
+        InstallmentStatus: "pending" | "paid" | "overdue";
+        /**
+         * @description Index the installment is adjusted by (CAC construction cost, UVA purchasing power).
+         * @enum {string}
+         */
+        AdjustmentIndex: "CAC" | "UVA";
+        MyPaymentInstallment: {
+            number: number;
+            /** Format: date */
+            dueDate: string;
+            amount: components["schemas"]["Money"];
+            status: components["schemas"]["InstallmentStatus"];
+            /**
+             * @description Index the installment is adjusted by (CAC construction cost, UVA purchasing power); null when fixed.
+             * @enum {string|null}
+             */
+            adjustmentIndex: "CAC" | "UVA" | null;
+        };
+        MyPaymentInstallments: {
+            erpLinked: boolean;
+            items: components["schemas"]["MyPaymentInstallment"][];
+        };
+        PayMyPaymentCompanyRequest: {
+            amount: components["schemas"]["Money"];
+            installmentNumber?: number;
+            concept?: string;
+        };
         /** @enum {string} */
         RealtimeEventType: "payin.credited" | "payout.updated" | "approval.requested" | "balance.changed";
         RealtimeEvent: {
@@ -1642,6 +1819,7 @@ export interface components {
         AccountId: string;
         PayerId: string;
         CvuId: string;
+        LinkId: string;
         PayoutId: string;
         UserId: string;
         /** @description Client-generated (UUID recommended), persisted by the client until the action is confirmed. */
@@ -3219,6 +3397,139 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMyPaymentCompanies: {
+        parameters: {
+            query?: {
+                /** @description Also list the companies the caller hid. */
+                includeHidden?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linked companies, newest match first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPaymentCompanyList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMyPaymentCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMyPaymentCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The company with its new visibility. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPaymentCompany"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMyPaymentCompanyPayins: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payins page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPaymentPayinList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMyPaymentCompanyInstallments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installments by number. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPaymentInstallments"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    payMyPaymentCompany: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Client-generated (UUID recommended), persisted by the client until the action is confirmed. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyHeader"];
+                /** @description Token from `/auth/step-up/verify`, bound to the session, valid 5 minutes. */
+                "X-Step-Up-Token": components["parameters"]["StepUpTokenHeader"];
+            };
+            path: {
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayMyPaymentCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description Payout created from the personal account (or the stored response replayed). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Payout"];
+                };
             };
             default: components["responses"]["Error"];
         };

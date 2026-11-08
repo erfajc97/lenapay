@@ -32,7 +32,8 @@ apps/api/
   internal/<feature>/               handler.go · service.go · store.go (+ queries.sql → sqlc gen
                                     in internal/<feature>/db) · service_test.go · fake_*.go
      identity  orgs  kyc  accounts  ledger  payers  payins  payouts  fees  reconciliation
-     erplink  movements  notifications  realtime  providers/psp (port + bind http adapter)
+     erplink  movements  notifications  realtime  payerview ("Mis pagos")
+     providers/psp (port + bind http adapter)
      providers/kyc  providers/erp  providers/notify
   migrations/                       goose SQL, numbered, hand-written
   sqlc.yaml                         one sql entry per feature → its own package
@@ -80,6 +81,7 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 | `reconciliation_runs` / `reconciliation_items` | per currency/day, counts, difference |
 | `erp_identity_index` | doc_type, doc_number PK → erp_org_id, erp_client_id, display name |
 | `erp_links` | org ↔ erp org, linked_by, linked_at; imported snapshot refs |
+| `payer_links` | "Mis pagos": personal_org_id (tenant) ↔ a company's payer (payer_id, org_id), matched_doc_type `dni`/`cuit`/`cuil`, status `active`/`hidden`, matched_at; UNIQUE (personal_org_id, payer_id); payers get the expression index `payers_person_dni_idx` (the 8-digit DNI a payer document carries) |
 | `idempotency_keys` | (scope, key) PK, request hash, response status/body, expires_at |
 | `audit_log` | actor, action, target, request id, idempotency key, payload hash |
 | `notifications` / `push_tokens` | outbox of user notifications, Expo push tokens |
@@ -103,6 +105,20 @@ All ids are UUIDv7; all money columns `bigint` minor units + `currency char(3)`;
 - **ERP link**: `GET /orgs/{org}/erp-link/candidate` looks up `erp_identity_index` by CUIT →
   `POST /orgs/{org}/erp-link` with ERP credentials → ERP adapter verifies (fake) → import job
   copies projects/buyers from the ERP adapter (fake reads `apps/api/fixtures/erp/*.json`).
+- **Mis pagos (payer view, B2C bridge, `internal/payerview`)**: when a person's personal org is
+  KYC-approved, the approval copies the verified DNI onto the org and the `payerview` approval
+  hook (same transaction) links every company payer whose document carries it: a DNI equal to
+  it (7-digit DNIs left-padded) or an 11-digit CUIT/CUIL whose middle 8 digits are it. Every
+  `GET /me/payments/companies` links new matches again (payers created later). Only verified
+  data matches (never the KYC case in draft or a company's self-declared CUIT). The person sees
+  only the company's legal name, the project account, their own active CVUs, their own payins
+  and, when the company is ERP-linked, their installments from `erplink.Directory.Installments`
+  (by the payer's `erp_ref`). Paying reuses `payouts.Create` on the person's personal org
+  (Idempotency-Key + step-up; personal payouts are sent without approval) towards their CVU at
+  the company, with `Cuota N - …` in the concept when an installment is named. The read side is
+  a read model like movements (it never writes payers, CVUs or payins). Known gap: a payout to a
+  Lenapay CVU goes out through the PSP and the bind-mock does not loop it back as a payin, so it
+  does not show in the company's history yet (backlog P5).
 
 ## 5. API surface (contract summary)
 
@@ -128,6 +144,14 @@ Movements: `GET /orgs/{org}/movements?account=&type=&status=&currency=&from=&to=
 Reconciliation: `GET/POST /orgs/{org}/reconciliation/runs`, `GET /orgs/{org}/reconciliation/runs/{id}/items`,
 `POST /internal/reconciliation/run`.
 ERP: `GET /orgs/{org}/erp-link/candidate`, `POST /orgs/{org}/erp-link`, `GET /orgs/{org}/erp-link`.
+Mis pagos (authenticated; the service resolves the caller's own verified personal org, another
+person's link is `payer_link.not_found` 404, no verified personal org is `kyc.not_approved` 403):
+`GET /me/payments/companies?includeHidden=` → `{items: [{linkId, companyName, projectName, cvus[{currency, cvu, alias}],
+totalPaid[Money], lastPaymentAt, erpLinked, hidden}]}`, `PATCH /me/payments/companies/{linkId}` `{hidden}`,
+`GET /me/payments/companies/{linkId}/payins?cursor=&limit=` → `{items: [{id, cvu, amount, status, createdAt, creditedAt}], nextCursor}`,
+`GET /me/payments/companies/{linkId}/installments` → `{erpLinked, items: [{number, dueDate, amount, status pending|paid|overdue, adjustmentIndex CAC|UVA|null}]}`,
+`POST /me/payments/companies/{linkId}/pay` (Idempotency-Key + step-up) `{amount, installmentNumber?, concept?}` → `Payout`
+(`installment.not_found` 404, `money.currency_mismatch` 422 without a CVU in that currency).
 Realtime/push: `GET /orgs/{org}/events` (SSE: unnamed `message` frames whose data is
 `{type, orgId, occurredAt, data, ...data copied top-level}`; types `payin.credited`, `payout.updated`
 (carries the `payout`), `approval.requested`, `balance.changed`), `POST /push-tokens`.
@@ -159,7 +183,7 @@ react-native-sse (EventSource), i18n es-AR, Vitest. Features: `auth`, `onboardin
 |---|---|---|
 | `psp.Provider` | HTTP adapter → `apps/bind-mock` | same HTTP adapter → BIND base URLs + Entra OAuth |
 | `kyc.Provider` | in-process fake | RENAPER validation vendor |
-| `erp.Directory` | JSON fixtures / dump import | CDC (Debezium) read model or ERP API |
+| `erp.Directory` (identity index, projects, buyers, buyer installments) | JSON fixtures / dump import | CDC (Debezium) read model or ERP API |
 | `idp` | local EdDSA IdP | Cognito user pool shared with the ERP |
 | `notify.Sender` | log + dev inbox endpoint | SES / Expo push service |
 
