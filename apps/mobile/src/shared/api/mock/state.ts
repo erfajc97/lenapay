@@ -37,7 +37,7 @@ interface MockMembership {
 }
 
 /** The stored policy; `ownerSelfApprovalEffective` is derived from the members on read. */
-export type MockApprovalPolicy = Omit<ApprovalPolicy, 'ownerSelfApprovalEffective'>;
+type MockApprovalPolicy = Omit<ApprovalPolicy, 'ownerSelfApprovalEffective'>;
 
 export interface MockAccount {
   id: string;
@@ -75,7 +75,7 @@ export interface MockTransfer {
   createdAt: string;
 }
 
-export interface MockErpPayer {
+interface MockErpPayer {
   name: string;
   docType: Payer['docType'];
   docNumber: string;
@@ -83,7 +83,7 @@ export interface MockErpPayer {
 }
 
 /** An ERP user: `role` is mapped from their Lebane permissions; null = no payments access. */
-export interface MockErpUser {
+interface MockErpUser {
   email: string;
   role: Role | null;
 }

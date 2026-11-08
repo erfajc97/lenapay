@@ -7,7 +7,7 @@ import type { MockPayerLink, MockState } from './state';
  * belongs to the person when its document carries the verified DNI — a DNI equal to it
  * (7 digits left-padded) or an 11-digit CUIT/CUIL whose middle 8 digits are it.
  */
-export function documentCarriesDni(payer: Pick<Payer, 'docType' | 'docNumber'>, dni: string): boolean {
+function documentCarriesDni(payer: Pick<Payer, 'docType' | 'docNumber'>, dni: string): boolean {
   const wanted = dni.padStart(8, '0');
   const digits = payer.docNumber.replace(/\D/g, '');
   if (payer.docType === 'dni') return digits.padStart(8, '0') === wanted;

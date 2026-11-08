@@ -70,7 +70,18 @@ Lanes run in parallel once E0 is done; a lane only touches its own packages/fold
   personal wallet. Not linked to the ERP on purpose (the demo shows the link flow).
 - [x] End-to-end smoke script driving the bind-mock (`scripts/smoke.mjs`); p95 check (`scripts/p95.mjs`).
 - [x] README with the demo path and credentials.
-- [ ] Screenshots (after the app runs in live mode).
+- [x] Screenshots (after the app runs in live mode): final presentation set in `docs/screens/final/`
+  (21 light + 3 dark, live mode, index `docs/screens/final/README.md`).
+- [x] README "Demo en 5 minutos" (es-AR, for the owner's presentation): prerequisites, boot, seed,
+  smoke, mock vs live and the Desarrollador switch, LAN IP + firewall, demo users and what to show,
+  what is simulated.
+- [x] EAS readiness without builds: `apps/mobile/eas.json` (development + development-simulator,
+  preview, production; `appVersionSource: remote`; env per profile), `app.json` owner `lenapay`,
+  `runtimeVersion` policy `appVersion`, iOS Face ID and local-network strings, `expo-dev-client`.
+  Open for the owner: `eas init` (project id), `eas update:configure` (expo-updates + `updates.url`),
+  real preview/production API URLs.
+- [x] Kit architecture census (`arch-check --all`) clean in `apps/mobile`: one root per feature (M1),
+  shared pieces moved to `src/shared/` (kyc, helpers, ui), unused exports removed (G4).
 
 ## P — "Mis pagos": payer view, B2C bridge (api) · 6 pts
 A person whose personal org passed KYC sees the companies that registered them as a payer and

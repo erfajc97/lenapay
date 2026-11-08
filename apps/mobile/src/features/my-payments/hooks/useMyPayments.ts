@@ -10,7 +10,7 @@ import { useOrgs } from '@/shared/queries/orgs';
 import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
 
-import { useSetCompanyHidden } from '../mutations/useMyPaymentsMutations';
+import { useSetCompanyHidden } from '../mutations/useSetCompanyHidden';
 
 /** "Mis pagos" list (R-MP-2): the companies the person pays, their CVUs there and totals. */
 export function useMyPayments() {

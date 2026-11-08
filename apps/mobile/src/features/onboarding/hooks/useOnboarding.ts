@@ -8,7 +8,7 @@ import { useMe } from '@/shared/queries/session';
 import { usePreferencesStore } from '@/shared/stores/usePreferencesStore';
 
 import { onboardingTarget } from '../helpers/onboardingTarget';
-import { useCreateOrg } from '../mutations/useKycMutations';
+import { useCreateOrg } from '../mutations/useCreateOrg';
 
 function legalNameError(name: string): 'validation.legalName' | null {
   return name.trim().length >= 3 ? null : 'validation.legalName';

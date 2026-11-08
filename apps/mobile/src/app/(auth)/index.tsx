@@ -1,4 +1,4 @@
-import { Welcome } from '@/features/auth/Welcome';
+import { Welcome } from '@/features/welcome/Welcome';
 
 export default function WelcomeRoute() {
   return <Welcome />;

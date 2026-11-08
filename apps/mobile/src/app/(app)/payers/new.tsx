@@ -1,4 +1,4 @@
-import { PayerForm } from '@/features/payers/PayerForm';
+import { PayerForm } from '@/features/payer-form/PayerForm';
 
 export default function PayerFormRoute() {
   return <PayerForm />;

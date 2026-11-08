@@ -1,4 +1,4 @@
-import { MyPaymentsCompany } from '@/features/my-payments/MyPaymentsCompany';
+import { MyPaymentsCompany } from '@/features/my-payments-company/MyPaymentsCompany';
 
 export default function MyPaymentsCompanyRoute() {
   return <MyPaymentsCompany />;

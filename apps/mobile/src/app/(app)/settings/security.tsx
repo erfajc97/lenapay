@@ -1,4 +1,4 @@
-import { Security } from '@/features/settings/Security';
+import { Security } from '@/features/security/Security';
 
 export default function SecurityRoute() {
   return <Security />;

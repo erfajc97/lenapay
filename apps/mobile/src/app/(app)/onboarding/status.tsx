@@ -1,4 +1,4 @@
-import { KycStatus } from '@/features/onboarding/KycStatus';
+import { KycStatus } from '@/features/kyc-status/KycStatus';
 
 export default function KycStatusRoute() {
   return <KycStatus />;

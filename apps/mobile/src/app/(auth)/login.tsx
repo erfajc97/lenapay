@@ -1,4 +1,4 @@
-import { Login } from '@/features/auth/Login';
+import { Login } from '@/features/login/Login';
 
 export default function LoginRoute() {
   return <Login />;

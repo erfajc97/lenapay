@@ -3,13 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type { ReconciliationRun } from '@/shared/api/types';
+import { needsAttention, runDifference } from '@/shared/helpers/reconciliation';
 import { formatDay } from '@/shared/i18n/dates';
 import { formatMoney } from '@/shared/money/format';
 import { AppText } from '@/shared/ui/AppText';
 import { PressableCard } from '@/shared/ui/Card';
 import { Chip, CurrencyChip } from '@/shared/ui/Chip';
-
-import { needsAttention, runDifference } from '../helpers/reconRules';
 
 /** One day × currency: matched and missing counts, the difference highlighted (R-REC-2). */
 export const RunCard = memo(function RunCard({ run, onPress }: { run: ReconciliationRun; onPress: (run: ReconciliationRun) => void }) {

@@ -2,12 +2,12 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import type { Account } from '@/shared/api/types';
+import { accountNameError, sortAccounts } from '@/shared/helpers/accounts';
 import { moneyActionBlocker } from '@/shared/helpers/permissions';
 import { useAccounts as useAccountsQuery } from '@/shared/queries/accounts';
 import { useActiveOrg } from '@/shared/queries/orgs';
 
-import { accountNameError, sortAccounts } from '../helpers/accountRules';
-import { useCreateAccount } from '../mutations/useAccountMutations';
+import { useCreateAccount } from '../mutations/useCreateAccount';
 
 export function useAccountsScreen() {
   const { org } = useActiveOrg();

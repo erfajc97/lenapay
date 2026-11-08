@@ -1,4 +1,4 @@
-import { PersonKyc } from '@/features/onboarding/PersonKyc';
+import { PersonKyc } from '@/features/person-kyc/PersonKyc';
 
 export default function PersonKycRoute() {
   return <PersonKyc />;

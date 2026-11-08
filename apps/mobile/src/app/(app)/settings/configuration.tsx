@@ -1,4 +1,4 @@
-import { Configuration } from '@/features/settings/Configuration';
+import { Configuration } from '@/features/configuration/Configuration';
 
 export default function ConfigurationRoute() {
   return <Configuration />;

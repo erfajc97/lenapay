@@ -1,5 +1,5 @@
-import { LebaneLogin } from '@/features/auth/LebaneLogin';
+import { Login } from '@/features/login/Login';
 
 export default function LebaneLoginRoute() {
-  return <LebaneLogin />;
+  return <Login provider="lebane" />;
 }

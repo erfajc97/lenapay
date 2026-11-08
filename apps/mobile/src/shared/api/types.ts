@@ -46,7 +46,6 @@ export type PushPlatform = Schemas['RegisterPushTokenRequest']['platform'];
 export type Rail = Schemas['Rail'];
 export const RAILS = enumValues<Rail>()(['bank', 'internal']);
 export type InstallmentStatus = Schemas['InstallmentStatus'];
-export const INSTALLMENT_STATUSES = enumValues<InstallmentStatus>()(['pending', 'paid', 'overdue']);
 export type AdjustmentIndex = Schemas['AdjustmentIndex'];
 
 // ── Contract DTOs used as they are ──────────────────────────────────────────────────────
@@ -339,7 +338,7 @@ export interface ErpLink {
 }
 
 // ── Mis pagos (payer view) ──────────────────────────────────────────────────────────────
-export interface MoneyAmount {
+interface MoneyAmount {
   currency: Currency;
   amount: number;
 }

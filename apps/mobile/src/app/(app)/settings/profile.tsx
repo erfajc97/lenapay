@@ -1,4 +1,4 @@
-import { Profile } from '@/features/settings/Profile';
+import { Profile } from '@/features/profile/Profile';
 
 export default function ProfileRoute() {
   return <Profile />;

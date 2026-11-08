@@ -4,7 +4,7 @@ import { MOVEMENTS_KEY } from '@/shared/queries/movements';
 import { PAYERS_KEY } from '@/shared/queries/payers';
 import { APPROVALS_KEY, PAYOUT_KEY } from '@/shared/queries/payouts';
 
-export interface LiveEventEffects {
+interface LiveEventEffects {
   /** Query keys whose data the event made stale. */
   invalidate: (readonly unknown[])[];
   /** A payin to announce in the banner (R-IN-3). */

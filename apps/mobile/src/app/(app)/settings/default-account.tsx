@@ -1,4 +1,4 @@
-import { DefaultAccount } from '@/features/settings/DefaultAccount';
+import { DefaultAccount } from '@/features/default-account/DefaultAccount';
 
 export default function DefaultAccountRoute() {
   return <DefaultAccount />;

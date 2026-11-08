@@ -1,4 +1,4 @@
-import { Unlock } from '@/features/auth/Unlock';
+import { Unlock } from '@/features/unlock/Unlock';
 
 export default function UnlockRoute() {
   return <Unlock />;

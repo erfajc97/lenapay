@@ -2,14 +2,22 @@
   "expo": {
     "name": "Lenapay",
     "slug": "lenapay",
+    "owner": "lenapay",
     "scheme": "lenapay",
     "version": "0.1.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.lenapay.mobile"
+      "bundleIdentifier": "app.lenapay.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Lenapay usa Face ID para confirmar tus operaciones.",
+        "NSLocalNetworkUsageDescription": "Lenapay se conecta a tu red local solo en las versiones de desarrollo, para hablar con el servidor de prueba de tu computadora."
+      }
     },
     "android": {
       "package": "app.lenapay.mobile",

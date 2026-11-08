@@ -1,4 +1,4 @@
-import { PayerDetail } from '@/features/payers/PayerDetail';
+import { PayerDetail } from '@/features/payer-detail/PayerDetail';
 
 export default function PayerDetailRoute() {
   return <PayerDetail />;

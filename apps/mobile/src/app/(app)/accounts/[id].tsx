@@ -1,4 +1,4 @@
-import { AccountDetail } from '@/features/accounts/AccountDetail';
+import { AccountDetail } from '@/features/account-detail/AccountDetail';
 
 export default function AccountDetailRoute() {
   return <AccountDetail />;
