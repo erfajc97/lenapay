@@ -16,7 +16,8 @@
       "bundleIdentifier": "app.lenapay.mobile",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Lenapay usa Face ID para confirmar tus operaciones.",
-        "NSLocalNetworkUsageDescription": "Lenapay se conecta a tu red local solo en las versiones de desarrollo, para hablar con el servidor de prueba de tu computadora."
+        "NSLocalNetworkUsageDescription": "Lenapay se conecta a tu red local solo en las versiones de desarrollo, para hablar con el servidor de prueba de tu computadora.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -80,6 +81,9 @@
       "eas": {
         "projectId": "c4a7cd1c-90e2-4acf-8195-3e2880151ea4"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4a7cd1c-90e2-4acf-8195-3e2880151ea4"
     }
   }
 }
