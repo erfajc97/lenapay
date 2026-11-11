@@ -54,7 +54,16 @@ Git Bash, macOS o Linux salvo donde se indica.
 
 ### 2. Levantar el backend, cargar datos y verificarlo
 
-Desde la raíz del repo:
+Desde la raíz del repo (`C:\dev\lenapay`), un solo comando:
+
+```powershell
+pnpm dev:up      # abre Docker Desktop si está cerrado, levanta el stack, espera que esté sano y carga el seed
+pnpm dev:smoke   # opcional: recorrido punta a punta, 16/16 PASS
+```
+
+Otros atajos de la raíz: `pnpm dev:down` (apaga sin borrar datos), `pnpm dev:reset` (borra la base y
+vuelve a sembrar), `pnpm dev:logs`, `pnpm dev:ps`, `pnpm dev:mobile`, `pnpm dev:mobile:clear`
+(Metro limpiando caché) y `pnpm dev:web`. Paso a paso, lo mismo es:
 
 ```powershell
 docker compose up -d --build --wait     # postgres, api (:18080), worker, bind-mock (:8090); espera a que estén sanos

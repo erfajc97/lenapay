@@ -1,0 +1,16 @@
+{
+  "name": "lenapay",
+  "private": true,
+  "description": "Root shortcuts for the local stack. The mobile app keeps its own package.json in apps/mobile.",
+  "scripts": {
+    "dev:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-up.ps1",
+    "dev:down": "docker compose down",
+    "dev:reset": "docker compose down -v && pnpm dev:up",
+    "dev:logs": "docker compose logs -f api worker",
+    "dev:ps": "docker compose ps",
+    "dev:smoke": "node scripts/smoke.mjs",
+    "dev:mobile": "pnpm --dir apps/mobile dev",
+    "dev:mobile:clear": "pnpm --dir apps/mobile exec expo start -c",
+    "dev:web": "pnpm --dir apps/mobile web"
+  }
+}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"lenapay/apps/api/internal/orgs"
 	"lenapay/apps/api/internal/payouts"
 	"lenapay/apps/api/internal/platform/auth"
@@ -28,6 +30,12 @@ const (
 // not invite her, or the auto-accept did not run).
 var errNotJoined = errors.New("seed: the ERP invitee did not join Constructora Andina on verification")
 
+// isUniqueViolation reports a Postgres unique_violation (23505) anywhere in err's chain.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
 // approvalPolicy sets the threshold policy once (re-runs see it in place) and creates the demo
 // payout below it, idempotent by its key.
 func (sd *seeder) approvalPolicy(ctx context.Context) error {
@@ -50,6 +58,10 @@ func (sd *seeder) approvalPolicy(ctx context.Context) error {
 		AccountID: acc.ID, Amount: money.New(belowThresholdMinor, money.ARS), To: "pinturas.belgrano",
 		Concept: "Pintura hall torre A (bajo el umbral)", IdempotencyKey: belowThresholdKey,
 	})
+	if isUniqueViolation(err) {
+		// A previous run created it and its idempotency record expired (24 h): already seeded.
+		return nil
+	}
 	if err != nil {
 		return err
 	}
