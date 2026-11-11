@@ -9,8 +9,7 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_MODE": "live",
-        "EXPO_PUBLIC_API_URL": ""
+        "EXPO_PUBLIC_API_MODE": "live"
       }
     },
     "development-simulator": {
