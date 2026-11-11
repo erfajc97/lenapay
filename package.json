@@ -9,8 +9,8 @@
     "dev:logs": "docker compose logs -f api worker",
     "dev:ps": "docker compose ps",
     "dev:smoke": "node scripts/smoke.mjs",
-    "dev:mobile": "pnpm --dir apps/mobile dev",
-    "dev:mobile:clear": "pnpm --dir apps/mobile exec expo start -c",
+    "dev:mobile": "pnpm --dir apps/mobile exec expo start --go",
+    "dev:mobile:clear": "pnpm --dir apps/mobile exec expo start --go -c",
     "dev:web": "pnpm --dir apps/mobile web"
   }
 }
