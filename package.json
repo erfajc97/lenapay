@@ -11,6 +11,8 @@
     "dev:smoke": "node scripts/smoke.mjs",
     "dev:mobile": "pnpm --dir apps/mobile exec expo start --go",
     "dev:mobile:clear": "pnpm --dir apps/mobile exec expo start --go -c",
+    "dev:build": "pnpm --dir apps/mobile exec expo start --dev-client",
+    "dev:build:tunnel": "pnpm --dir apps/mobile exec expo start --dev-client --tunnel",
     "dev:web": "pnpm --dir apps/mobile web"
   }
 }
